@@ -25,8 +25,8 @@ export default function HomeworkSettingsPanel({ classId, settings, onSaved }: Ho
 
   const handleSave = async () => {
     setSaving(true);
-    await upsertClassHomeworkSettings(supabase, { classId, ...values });
-    onSaved({ id: settings.id, classId, ...values });
+    await upsertClassHomeworkSettings(supabase, { classId, homeworkRestartedAt: settings.homeworkRestartedAt, ...values });
+    onSaved({ ...settings, classId, ...values });
     setSaving(false);
   };
 
