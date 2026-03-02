@@ -57,6 +57,20 @@ export async function updateLessonPlan(
   return true;
 }
 
+export async function duplicateLessonPlan(
+  supabase: SupabaseClient,
+  teacherId: string,
+  plan: GeneratedLessonPlan
+): Promise<GeneratedLessonPlan | null> {
+  return insertLessonPlan(
+    supabase,
+    teacherId,
+    `Copy of ${plan.title}`,
+    plan.content,
+    plan.metadata!
+  );
+}
+
 export async function deleteLessonPlan(
   supabase: SupabaseClient,
   planId: string

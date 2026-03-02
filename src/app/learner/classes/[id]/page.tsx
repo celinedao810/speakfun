@@ -10,6 +10,7 @@ import { ArrowLeft, BookOpen, FileText, Users, Video } from 'lucide-react';
 import Link from 'next/link';
 import HomeworkHub from '@/components/homework/learner/HomeworkHub';
 import HomeworkProgress from '@/components/homework/learner/HomeworkProgress';
+import HomeworkSessionMap from '@/components/homework/learner/HomeworkSessionMap';
 import VocabNotebook from '@/components/homework/learner/VocabNotebook';
 import HomeworkLeaderboard from '@/components/homework/shared/HomeworkLeaderboard';
 
@@ -127,6 +128,11 @@ export default function LearnerClassDetailPage() {
       {/* Homework Hub */}
       <div className="mt-6">
         <HomeworkHub classId={classId} />
+      </div>
+
+      {/* Session Map */}
+      <div className="mt-6">
+        <HomeworkSessionMap classId={classId} />
       </div>
 
       {/* Homework Progress */}

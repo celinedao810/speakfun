@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { ExercisePack, PhonicSound, LearnerPreferences } from '@/lib/types';
-import { generateDailyPack, generateEndingSoundPack, generateLinkingSoundPack, scorePronunciation, scoreEndingSoundPronunciation, PronunciationResult } from '@/lib/services/geminiService';
+import { generateDailyPack, generateEndingSoundPack, generateLinkingSoundPack, scorePronunciation, scoreEndingSoundPronunciation } from '@/lib/ai/aiClient';
+import type { PronunciationResult } from '@/lib/services/geminiService';
 import AudioPlayer from '@/components/AudioPlayer';
 import AudioRecorder, { AudioRecorderHandle } from '@/components/AudioRecorder';
 import { 

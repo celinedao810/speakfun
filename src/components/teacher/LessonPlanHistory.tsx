@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { Trash2, FileText, Clock, BookOpen } from 'lucide-react';
+import { Trash2, FileText, Clock, BookOpen, Copy } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
-import { fetchLessonPlans, deleteLessonPlan } from '@/lib/supabase/queries/lessonPlans';
+import { fetchLessonPlans, deleteLessonPlan, duplicateLessonPlan } from '@/lib/supabase/queries/lessonPlans';
 import { GeneratedLessonPlan } from '@/lib/types';
 
 interface LessonPlanHistoryProps {
@@ -15,6 +15,7 @@ export default function LessonPlanHistory({ teacherId, onLoad }: LessonPlanHisto
   const [plans, setPlans] = useState<GeneratedLessonPlan[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [duplicating, setDuplicating] = useState<string | null>(null);
 
   useEffect(() => {
     fetchLessonPlans(supabase, teacherId).then(data => {
@@ -22,6 +23,15 @@ export default function LessonPlanHistory({ teacherId, onLoad }: LessonPlanHisto
       setLoading(false);
     });
   }, [teacherId]);
+
+  const handleDuplicate = async (plan: GeneratedLessonPlan) => {
+    setDuplicating(plan.id);
+    const newPlan = await duplicateLessonPlan(supabase, teacherId, plan);
+    if (newPlan) {
+      setPlans(prev => [newPlan, ...prev]);
+    }
+    setDuplicating(null);
+  };
 
   const handleDelete = async (planId: string, title: string) => {
     if (!confirm(`Delete "${title}"? This cannot be undone.`)) return;
@@ -111,6 +121,14 @@ export default function LessonPlanHistory({ teacherId, onLoad }: LessonPlanHisto
                   className="px-3 py-1.5 text-xs font-medium rounded-md border border-border hover:bg-muted transition-colors"
                 >
                   Load
+                </button>
+                <button
+                  onClick={() => handleDuplicate(plan)}
+                  disabled={duplicating === plan.id}
+                  title="Duplicate plan"
+                  className="p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-md transition-colors disabled:opacity-50"
+                >
+                  <Copy className="w-4 h-4" />
                 </button>
                 <button
                   onClick={() => handleDelete(plan.id, plan.title)}

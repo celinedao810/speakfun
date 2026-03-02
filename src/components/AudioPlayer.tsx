@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { Play, Square, Loader2, Volume2, AlertCircle } from 'lucide-react';
-import { generateAudio, decodePCM, createAudioBuffer } from '@/lib/services/geminiService';
+import { generateAudio, decodePCM, createAudioBuffer } from '@/lib/ai/aiClient';
 
 interface AudioPlayerProps {
   text: string;

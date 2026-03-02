@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { PlacementSentence, DiagnosticResult, PhonicSound } from '@/lib/types';
-import { generatePlacementSentences, analyzePlacementDiagnostic } from '@/lib/services/geminiService';
+import { generatePlacementSentences, analyzePlacementDiagnostic } from '@/lib/ai/aiClient';
 import AudioRecorder from '@/components/AudioRecorder';
 import { Loader2, Sparkles, Mic, Activity, CheckCircle2, Trophy, Brain, ChevronRight, AlertCircle, Headphones } from 'lucide-react';
 

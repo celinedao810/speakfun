@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { PhonicSound, LearnerPreferences, SoundDrillPack, TargetSoundResult, MinimalPairItem, MinimalPairAnswer, SoundDrillStep, SoundDrillExerciseResult } from '@/lib/types';
-import { generateSoundDrillPack, scoreTargetSoundPronunciation, generateAudio, decodePCM, createAudioBuffer } from '@/lib/services/geminiService';
+import { generateSoundDrillPack, scoreTargetSoundPronunciation, generateAudio, decodePCM, createAudioBuffer } from '@/lib/ai/aiClient';
 import AudioPlayer from '@/components/AudioPlayer';
 import AudioRecorder, { AudioRecorderHandle } from '@/components/AudioRecorder';
 import {

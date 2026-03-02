@@ -2,14 +2,14 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { ExperienceLevel, LearnerProgress, InterviewQA, QuestionType, InterviewSession, DrillSession, DrillAttempt, WordHighlight, LiveInterviewSession } from '@/lib/types';
-import { 
-  generateInterviewQuestions, 
-  polishInterviewAnswer, 
+import {
+  generateInterviewQuestions,
+  polishInterviewAnswer,
   getAISuggestion,
   scorePronunciation,
-  AISuggestion,
-  fixUserQuestions
-} from '@/lib/services/geminiService';
+  fixUserQuestions,
+} from '@/lib/ai/aiClient';
+import type { AISuggestion } from '@/lib/services/geminiService';
 import { 
   Briefcase, Search, Sparkles, Wand2, Mic, Save, SaveAll, Loader2, 
   ChevronRight, ArrowLeft, MessageSquare, BookOpen, CheckCircle2,

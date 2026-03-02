@@ -75,22 +75,19 @@ export function computeMaxPoints(
  *
  * Session algorithm:
  *   N = course.homework_lesson_count (teacher-set; null → generation blocked)
- *   effectiveN = min(N, readyLessons.length)   — auto-adjusts if exercises not ready yet
  *   nonReviewCount = number of past non-review windows
  *
- *   if nonReviewCount >= effectiveN × 3:
- *     — all lessons covered; check for final review
- *     trailingReviews >= 1 → courseComplete
- *     trailingReviews == 0 → generate the final review session
+ *   if nonReviewCount >= N × 3:
+ *     — all N lessons covered → courseComplete immediately
  *   else:
- *     nextSessionNumber % 7 == 0 → forced mid-course review
+ *     nextSessionNumber % 7 == 0 → review session
  *     else → regular lesson session (lessonCycleIndex = floor(nonReviewCount / 3))
+ *     if lesson exercises not ready yet → skip generation (no window created)
  *
  * Lessons are ordered by curriculum order (sort_order), not by exercise generation time.
  *
  * If N is not set on the course: returns notConfigured: true and no window is created.
- * If teacher sets N > ready exercises: behaves as effectiveN = readyExercises.length
- *   and auto-resumes when more exercises become ready.
+ * If lesson exercises are not yet generated: generation is blocked until they are ready.
  *
  * Reading carry-forward for sessions 2–3:
  *   Carries pendingReadingLessonId from the previous window without a per-learner
@@ -144,9 +141,6 @@ export async function generateWindowForClass(
     return { created: false, window: null, courseComplete: false, notConfigured: false };
   }
 
-  // effectiveN: use teacher's N, but cap at how many lessons actually have exercises
-  const effectiveN = Math.min(N, readyExercises.length);
-
   // 5. Determine next session
   const nextSessionNumber = allWindows.length + 1;
   const settings = await fetchClassHomeworkSettings(supabase, classId);
@@ -157,20 +151,9 @@ export async function generateWindowForClass(
   let cycleLesson: LessonExercises | null = null;
   let lessonCycleSession: number | null = null;
 
-  if (nonReviewCount >= effectiveN * 3) {
-    // All effectiveN lessons have been covered by regular sessions.
-    // Count consecutive trailing reviews (allWindows is DESC by session_number).
-    let trailingReviews = 0;
-    for (const w of allWindows) {
-      if (w.isReviewSession) trailingReviews++;
-      else break;
-    }
-    if (trailingReviews >= 1) {
-      // Final review already happened → course complete
-      return { created: false, window: null, courseComplete: true, notConfigured: false };
-    }
-    // No review yet since lessons completed → generate the final review
-    isReviewSession = true;
+  if (nonReviewCount >= N * 3) {
+    // All N lessons covered — course complete.
+    return { created: false, window: null, courseComplete: true, notConfigured: false };
   } else {
     // Normal generation: mid-course modulo review or regular lesson session
     isReviewSession = nextSessionNumber % 7 === 0;
@@ -181,8 +164,8 @@ export async function generateWindowForClass(
       cycleLesson = readyExercises[lessonCycleIndex] ?? null;
       lessonCycleSession = cycleLesson ? sessionInCycle : null;
       if (!cycleLesson) {
-        // Safety: exercises unexpectedly missing — generate a review while waiting
-        isReviewSession = true;
+        // No lesson available yet — skip generation
+        return { created: false, window: null, courseComplete: false, notConfigured: false };
       }
     }
   }
@@ -229,7 +212,20 @@ export async function generateWindowForClass(
     settings.reviewStructureCount
   );
 
-  // 9. Create the window
+  // 9. Race-condition guard: check if a concurrent request already created this session.
+  //    (React Strict Mode fires useEffect twice on mount; both calls can race past step 1.)
+  const { data: alreadyExists } = await supabase
+    .from('daily_homework_windows')
+    .select('id')
+    .eq('class_id', classId)
+    .eq('session_number', nextSessionNumber)
+    .maybeSingle();
+  if (alreadyExists) {
+    const freshOpen = await fetchOpenWindow(supabase, classId);
+    return { created: false, window: freshOpen, courseComplete: false, notConfigured: false };
+  }
+
+  // 10. Create the window
   const now = new Date().toISOString();
   const closesAt = computeClosesAt();
   const windowDate = todayUtc7();

@@ -3,7 +3,7 @@
 import { useState, useCallback } from 'react';
 import { BookOpen, CheckCircle, XCircle, Eye, EyeOff } from 'lucide-react';
 import { ReadingExerciseItem, ReadingScoringResult } from '@/lib/types';
-import { scoreReadingPassage } from '@/lib/services/geminiService';
+import { scoreReadingPassage } from '@/lib/ai/aiClient';
 import AudioRecorder from '@/components/AudioRecorder';
 
 interface Exercise3ReadingProps {

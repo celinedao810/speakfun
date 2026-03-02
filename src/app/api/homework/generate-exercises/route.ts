@@ -6,6 +6,7 @@ import {
   upsertLessonExercises,
 } from '@/lib/supabase/queries/homework';
 import { StructureExerciseItem } from '@/lib/types';
+import { triggerWindowGenerationForLesson } from '@/lib/homework/scheduler';
 
 export const maxDuration = 60; // seconds
 
@@ -57,7 +58,6 @@ export async function POST(request: NextRequest) {
     const now = new Date().toISOString();
 
     // Save exercises to DB
-    // Windows are created lazily by GET /api/homework/window when the learner opens homework.
     await upsertLessonExercises(supabase, lessonId, {
       vocabItems,
       structureItems,
@@ -65,6 +65,12 @@ export async function POST(request: NextRequest) {
       generationStatus: 'DONE',
       generatedAt: now,
     });
+
+    // Immediately create homework windows for all classes using this lesson (server-side, no learner action needed).
+    // GET /api/homework/window still creates lazily as a fallback, but this is the primary trigger.
+    triggerWindowGenerationForLesson(lessonId).catch((err) =>
+      console.error('[generate-exercises] Window trigger error:', err)
+    );
 
     return NextResponse.json({
       success: true,

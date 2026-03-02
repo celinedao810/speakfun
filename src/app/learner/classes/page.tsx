@@ -48,6 +48,10 @@ export default function LearnerClassesPage() {
       setSuccess('Successfully joined the class!');
       setClassCode('');
       loadClasses();
+      // Fire-and-forget: pre-generate first homework window so it's ready immediately
+      if (result.data?.class_id) {
+        fetch(`/api/homework/window?classId=${result.data.class_id}`).catch(() => {});
+      }
     }
     setJoining(false);
   };

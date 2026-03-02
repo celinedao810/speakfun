@@ -3,7 +3,9 @@ import { createClient as createServerClient } from '@/lib/supabase/server';
 import {
   fetchLearnerProgressForClass,
   fetchAllLearnersProgressForClass,
+  fetchLessonExercisesForLessons,
 } from '@/lib/supabase/queries/homework';
+import { fetchLessonsForClassCourses } from '@/lib/supabase/queries/sessions';
 
 /**
  * GET /api/homework/progress?classId=xxx
@@ -46,6 +48,28 @@ export async function GET(request: NextRequest) {
 
     const pairs = await fetchLearnerProgressForClass(supabase, user.id, classId);
 
+    // Fetch homework_lesson_count from the class's active course
+    const { data: ccRow } = await supabase
+      .from('class_courses')
+      .select('courses(homework_lesson_count)')
+      .eq('class_id', classId)
+      .order('position', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    const coursesJoin = ccRow?.courses;
+    const homeworkLessonCount: number | null = Array.isArray(coursesJoin)
+      ? ((coursesJoin[0] as { homework_lesson_count: number | null } | undefined)?.homework_lesson_count ?? null)
+      : ((coursesJoin as { homework_lesson_count: number | null } | null | undefined)?.homework_lesson_count ?? null);
+
+    // Count lessons with ready exercises (in curriculum order)
+    let readyLessonCount = 0;
+    if (homeworkLessonCount) {
+      const courseLessons = await fetchLessonsForClassCourses(supabase, classId);
+      const allLessonIds = [...new Set(courseLessons.map((cl: { lessonId: string }) => cl.lessonId))];
+      const allExercises = await fetchLessonExercisesForLessons(supabase, allLessonIds);
+      readyLessonCount = allExercises.filter(e => e.generationStatus === 'DONE' && e.generatedAt).length;
+    }
+
     // Fetch lesson titles for regular sessions
     const lessonIds = [...new Set(
       pairs.map(p => p.window.cycleLessonId).filter((id): id is string => !!id)
@@ -63,7 +87,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({ pairs, lessons: lessonMap });
+    return NextResponse.json({ pairs, lessons: lessonMap, homeworkLessonCount, readyLessonCount });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to fetch progress';
     console.error('[homework/progress] Error:', message);

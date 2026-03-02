@@ -53,6 +53,54 @@ global.__schedulerVersion = (global.__schedulerVersion ?? 0) + 1;
 const myVersion = global.__schedulerVersion;
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ─── On-demand triggers ───────────────────────────────────────────────────────
+
+function makeServiceClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new Error('Missing Supabase env vars');
+  return createClient(url, key);
+}
+
+/** Immediately generate a homework window for a single class (fire-and-forget safe). */
+export async function triggerWindowGenerationForClass(classId: string): Promise<void> {
+  const supabase = makeServiceClient();
+  const result = await generateWindowForClass(supabase, classId);
+  if (result.created) {
+    console.log(`[homework-trigger] Created window for class ${classId} — session #${result.window?.sessionNumber}`);
+  }
+}
+
+/** Immediately generate homework windows for all classes that include the given lesson. */
+export async function triggerWindowGenerationForLesson(lessonId: string): Promise<void> {
+  const supabase = makeServiceClient();
+
+  const { data: lesson } = await supabase
+    .from('lessons')
+    .select('course_id')
+    .eq('id', lessonId)
+    .maybeSingle();
+  if (!lesson?.course_id) return;
+
+  const { data: classCourses } = await supabase
+    .from('class_courses')
+    .select('class_id')
+    .eq('course_id', lesson.course_id);
+  const classIds = [...new Set((classCourses ?? []).map((r: { class_id: string }) => r.class_id))];
+  if (classIds.length === 0) return;
+
+  await Promise.allSettled(
+    classIds.map(async (classId) => {
+      const result = await generateWindowForClass(supabase, classId);
+      if (result.created) {
+        console.log(`[homework-trigger] Created window for class ${classId} — session #${result.window?.sessionNumber}`);
+      }
+    })
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export function scheduleHomeworkGeneration() {
   // Cancel timers that were tracked by the previous module instance
   if (global.__homeworkSchedulerInterval) {

@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { InterviewQA, LiveTurn, LiveInterviewSession, WordHighlight } from '@/lib/types';
-import { evaluateLiveResponse } from '@/lib/services/geminiService';
+import { evaluateLiveResponse } from '@/lib/ai/aiClient';
 import AudioPlayer from '@/components/AudioPlayer';
 import AudioRecorder from '@/components/AudioRecorder';
 import { 

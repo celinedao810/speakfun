@@ -3,7 +3,7 @@
 import React, { useState, useCallback } from 'react';
 import { MessageCircle, Timer, CheckCircle, XCircle, ChevronRight } from 'lucide-react';
 import { StructureExerciseItem, StructureScoringResult } from '@/lib/types';
-import { scoreStructureReading, scoreOwnSentence } from '@/lib/services/geminiService';
+import { scoreStructureReading, scoreOwnSentence } from '@/lib/ai/aiClient';
 import AudioPlayer from '@/components/AudioPlayer';
 import AudioRecorder from '@/components/AudioRecorder';
 

@@ -3,7 +3,7 @@
 import { useState, useRef, useCallback } from 'react';
 import { BookOpen, Timer, CheckCircle, XCircle, ChevronRight, RotateCcw } from 'lucide-react';
 import { VocabExerciseItem, VocabScoringResult } from '@/lib/types';
-import { scoreVocabGuess } from '@/lib/services/geminiService';
+import { scoreVocabGuess } from '@/lib/ai/aiClient';
 import AudioPlayer from '@/components/AudioPlayer';
 import AudioRecorder, { AudioRecorderHandle } from '@/components/AudioRecorder';
 
