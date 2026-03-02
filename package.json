@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build --webpack",
+    "vercel-build": "supabase db push && next build --webpack",
     "start": "next start"
   },
   "dependencies": {
