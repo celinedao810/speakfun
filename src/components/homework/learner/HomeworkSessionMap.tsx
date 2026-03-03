@@ -236,8 +236,11 @@ export default function HomeworkSessionMap({ classId }: { classId: string }) {
   const doneCount = cells.filter(c => c.status === 'done').length;
   const missedCount = cells.filter(c => c.status === 'missed').length;
 
-  // 3 columns when total > 10
-  const useColumns = total > 10;
+  // Only show sessions that have been unlocked (not locked)
+  const visibleCells = cells.filter(c => c.status !== 'locked');
+
+  // 3 columns when visible count > 10
+  const useColumns = visibleCells.length > 10;
 
   return (
     <div className="bg-card rounded-xl border border-border p-5">
@@ -273,17 +276,17 @@ export default function HomeworkSessionMap({ classId }: { classId: string }) {
         {useColumns ? (
           // 3-column layout: split into 3 vertical strips
           (() => {
-            const colSize = Math.ceil(total / 3);
+            const colSize = Math.ceil(visibleCells.length / 3);
             return [0, 1, 2].map(col => (
               <div key={col} className="flex flex-col gap-1.5">
-                {cells.slice(col * colSize, (col + 1) * colSize).map(c => (
+                {visibleCells.slice(col * colSize, (col + 1) * colSize).map(c => (
                   <SessionCell key={c.planned.sessionNumber} {...c} />
                 ))}
               </div>
             ));
           })()
         ) : (
-          cells.map(c => <SessionCell key={c.planned.sessionNumber} {...c} />)
+          visibleCells.map(c => <SessionCell key={c.planned.sessionNumber} {...c} />)
         )}
       </div>
 
