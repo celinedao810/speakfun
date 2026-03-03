@@ -64,7 +64,12 @@ function getStatus(
     return 'active';
   }
 
-  // No window yet
+  // No window yet — for cycle sessions 2 & 3, the previous session must be closed first
+  if (!planned.isReview && planned.cycleSession && planned.cycleSession > 1) {
+    const prevWindow = windowBySession.get(planned.sessionNumber - 1);
+    if (!prevWindow || new Date(prevWindow.closesAt) >= now) return 'locked';
+  }
+
   if (planned.isReview) {
     return readyLessonCount > 0 ? 'upcoming' : 'locked';
   }
