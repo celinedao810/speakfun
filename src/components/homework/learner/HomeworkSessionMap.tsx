@@ -71,6 +71,8 @@ function getStatus(
   }
 
   if (planned.isReview) {
+    const prevWindow = windowBySession.get(planned.sessionNumber - 1);
+    if (!prevWindow || new Date(prevWindow.closesAt) >= now) return 'locked';
     return readyLessonCount > 0 ? 'upcoming' : 'locked';
   }
   if (planned.lessonIndex !== null && planned.lessonIndex < readyLessonCount) return 'upcoming';
