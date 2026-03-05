@@ -30,10 +30,10 @@ export default function Exercise1Vocab({ vocabPool, timedMode, onComplete }: Exe
   const [attempts, setAttempts] = useState<WordAttempt[]>([]);
   const [wrongThisSession, setWrongThisSession] = useState<string[]>([]);
   const [allItems, setAllItems] = useState(vocabPool);  // May grow with wrong repeats
-  const [timerStartMs, setTimerStartMs] = useState(0);
   const [recordingUrl, setRecordingUrl] = useState<string | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const recorderRef = useRef<AudioRecorderHandle>(null);
+  const timerStartMsRef = useRef(0);
 
   const currentItem = allItems[currentIndex];
   const totalItems = allItems.length;
@@ -45,7 +45,7 @@ export default function Exercise1Vocab({ vocabPool, timedMode, onComplete }: Exe
     setRecordingUrl(`data:audio/webm;base64,${base64}`);
     if (timerRef.current) clearTimeout(timerRef.current);
 
-    const timeTakenMs = timedMode ? Date.now() - timerStartMs : 0;
+    const timeTakenMs = timedMode ? Date.now() - timerStartMsRef.current : 0;
     const timedOut = timedMode && timeTakenMs > 5000;
 
     try {
@@ -76,7 +76,7 @@ export default function Exercise1Vocab({ vocabPool, timedMode, onComplete }: Exe
     } finally {
       setIsScoring(false);
     }
-  }, [currentItem, timedMode, timerStartMs]);
+  }, [currentItem, timedMode]);
 
   const handleTimedOut = useCallback(() => {
     // Auto-stop recording if timer expires
@@ -84,7 +84,7 @@ export default function Exercise1Vocab({ vocabPool, timedMode, onComplete }: Exe
   }, []);
 
   const handleStartRecording = useCallback(() => {
-    setTimerStartMs(Date.now());
+    timerStartMsRef.current = Date.now();
     if (timedMode) {
       timerRef.current = setTimeout(handleTimedOut, 5000);
     }
