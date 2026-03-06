@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient as createServerClient } from '@/lib/supabase/server';
-import { upsertSubmission } from '@/lib/supabase/queries/homework';
+import { fetchSubmission, upsertSubmission } from '@/lib/supabase/queries/homework';
 import { HomeworkSessionState } from '@/lib/types';
 
 /**
@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
     }: {
       windowId: string;
       classId: string;
-      sessionState: HomeworkSessionState;
+      sessionState?: HomeworkSessionState;
       ex1Score?: number;
       ex2Score?: number;
       ex3aScore?: number;
@@ -47,12 +47,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const e1 = ex1Score ?? 0;
-    const e2 = ex2Score ?? 0;
-    const e3a = ex3aScore ?? 0;
-    const e3b = ex3bScore ?? 0;
+    // save-progress payloads are partial, so preserve existing values to avoid
+    // accidentally overwriting already-computed scores with zeros.
+    const existing = await fetchSubmission(supabase, user.id, windowId);
+    const e1 = ex1Score ?? existing?.ex1Score ?? 0;
+    const e2 = ex2Score ?? existing?.ex2Score ?? 0;
+    const e3a = ex3aScore ?? existing?.ex3aScore ?? 0;
+    const e3b = ex3bScore ?? existing?.ex3bScore ?? 0;
     const total = e1 + e2 + e3a + e3b;
-    const allDone = !!(ex1Completed && ex2Completed && ex3Completed);
+    const c1 = ex1Completed ?? existing?.ex1Completed ?? false;
+    const c2 = ex2Completed ?? existing?.ex2Completed ?? false;
+    const c3 = ex3Completed ?? existing?.ex3Completed ?? false;
+    const allDone = (existing?.allCompleted ?? false) || !!(c1 && c2 && c3);
 
     await upsertSubmission(supabase, {
       learnerId: user.id,
@@ -63,14 +69,15 @@ export async function POST(request: NextRequest) {
       ex3aScore: e3a,
       ex3bScore: e3b,
       totalScore: total,
-      ex1Completed: ex1Completed ?? false,
-      ex2Completed: ex2Completed ?? false,
-      ex3Completed: ex3Completed ?? false,
+      ex1Completed: c1,
+      ex2Completed: c2,
+      ex3Completed: c3,
       allCompleted: allDone,
-      wrongVocabIds: wrongVocabIds ?? [],
-      sessionState,
-      startedAt: new Date().toISOString(),
-      readingMastered: false,
+      wrongVocabIds: wrongVocabIds ?? existing?.wrongVocabIds ?? [],
+      sessionState: sessionState ?? existing?.sessionState ?? {},
+      startedAt: existing?.startedAt ?? new Date().toISOString(),
+      submittedAt: existing?.submittedAt,
+      readingMastered: existing?.readingMastered ?? false,
     });
 
     return NextResponse.json({ success: true });
