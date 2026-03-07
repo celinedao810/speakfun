@@ -404,7 +404,8 @@ export async function fetchOpenWindow(
     .eq('class_id', classId)
     .lte('opens_at', now)
     .gt('closes_at', now)
-    .order('session_number', { ascending: false })
+    .order('session_number', { ascending: true })
+    .limit(1)
     .maybeSingle();
   if (error || !data) return null;
   return toHomeworkWindow(data as HomeworkWindowRow);

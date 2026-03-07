@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { BookOpen, MessageCircle, Timer, Loader2, AlertCircle } from 'lucide-react';
-import { HomeworkWindow, HomeworkSubmission, LessonExercises, VocabExerciseItem, StructureExerciseItem, ReadingExerciseItem, ClassHomeworkSettings } from '@/lib/types';
+import { HomeworkWindow, HomeworkSubmission, LessonExercises, VocabExerciseItem, StructureExerciseItem, ReadingExerciseItem, ClassHomeworkSettings, VocabAttemptAudit } from '@/lib/types';
 import Exercise1Vocab from './Exercise1Vocab';
 import Exercise2Structure from './Exercise2Structure';
 import Exercise3Reading from './Exercise3Reading';
@@ -19,12 +19,6 @@ type SessionPhase =
   | 'SUBMITTING'
   | 'SCORECARD'
   | 'ERROR';
-
-interface VocabAttempt {
-  vocabItemId: string;
-  lessonId: string;
-  correct: boolean;
-}
 
 interface HomeworkSessionProps {
   window: HomeworkWindow;
@@ -115,7 +109,7 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
   const [ex2Score, setEx2Score] = useState(existingSubmission?.ex2Score ?? 0);
   const [ex3aScore, setEx3aScore] = useState(existingSubmission?.ex3aScore ?? 0);
   const [ex3bScore, setEx3bScore] = useState(existingSubmission?.ex3bScore ?? 0);
-  const [vocabAttempts, setVocabAttempts] = useState<VocabAttempt[]>([]);
+  const [vocabAttempts, setVocabAttempts] = useState<VocabAttemptAudit[]>([]);
   const [wrongVocabIds, setWrongVocabIds] = useState<string[]>([]);
   const [wordsCommittedCount, setWordsCommittedCount] = useState(0);
 
@@ -221,7 +215,7 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
     }
   }, [hw.id, classId]);
 
-  const handleEx1Complete = useCallback(async (score: number, wrongIds: string[], attempts: VocabAttempt[]) => {
+  const handleEx1Complete = useCallback(async (score: number, wrongIds: string[], attempts: VocabAttemptAudit[]) => {
     setEx1Score(score);
     setWrongVocabIds(wrongIds);
     setVocabAttempts(attempts);

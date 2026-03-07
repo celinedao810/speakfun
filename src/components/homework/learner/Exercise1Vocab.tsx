@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback } from 'react';
 import { BookOpen, Timer, CheckCircle, XCircle, ChevronRight, RotateCcw } from 'lucide-react';
-import { VocabExerciseItem, VocabScoringResult } from '@/lib/types';
+import { VocabAttemptAudit, VocabExerciseItem, VocabScoringResult } from '@/lib/types';
 import { scoreVocabGuess } from '@/lib/ai/aiClient';
 import AudioPlayer from '@/components/AudioPlayer';
 import AudioRecorder, { AudioRecorderHandle } from '@/components/AudioRecorder';
@@ -10,7 +10,7 @@ import AudioRecorder, { AudioRecorderHandle } from '@/components/AudioRecorder';
 interface Exercise1VocabProps {
   vocabPool: VocabExerciseItem[];  // Pre-shuffled, wrong words first
   timedMode: boolean;
-  onComplete: (score: number, wrongVocabIds: string[], attempts: { vocabItemId: string; lessonId: string; correct: boolean }[]) => void;
+  onComplete: (score: number, wrongVocabIds: string[], attempts: VocabAttemptAudit[]) => void;
 }
 
 type WordState = 'PROMPT' | 'RECORDING' | 'RESULT' | 'WRONG_REPEAT';
@@ -19,6 +19,8 @@ interface WordAttempt {
   item: VocabExerciseItem;
   result: VocabScoringResult | null;
   timedOut: boolean;
+  timeTakenMs: number;
+  timestamp: string;
 }
 
 export default function Exercise1Vocab({ vocabPool, timedMode, onComplete }: Exercise1VocabProps) {
@@ -62,7 +64,13 @@ export default function Exercise1Vocab({ vocabPool, timedMode, onComplete }: Exe
       setTotalScore(s => s + pointsEarned);
 
       const isCorrect = result.isCorrectWord && !timedOut;
-      const newAttempt: WordAttempt = { item: currentItem, result: { ...result, pointsEarned }, timedOut };
+      const newAttempt: WordAttempt = {
+        item: currentItem,
+        result: { ...result, pointsEarned },
+        timedOut,
+        timeTakenMs,
+        timestamp: new Date().toISOString(),
+      };
       setAttempts(prev => [...prev, newAttempt]);
 
       if (!isCorrect) {
@@ -98,10 +106,19 @@ export default function Exercise1Vocab({ vocabPool, timedMode, onComplete }: Exe
     if (isLastItem) {
       // Build final wrong vocab IDs (words with any wrong attempt this session, carried to next day)
       const wrongVocabIds = wrongThisSession;
-      const allAttempts = attempts.map(a => ({
+      const allAttempts: VocabAttemptAudit[] = attempts.map(a => ({
         vocabItemId: a.item.id,
         lessonId: a.item.lessonId,
-        correct: a.result?.isCorrectWord || false,
+        targetWord: a.item.word,
+        recognizedWord: a.result?.recognizedWord || '',
+        isCorrectWord: a.result?.isCorrectWord || false,
+        pronunciationScore: a.result?.pronunciationScore || 0,
+        pointsEarned: a.result?.pointsEarned || 0,
+        feedback: a.result?.feedback || '',
+        timedMode,
+        timeTakenMs: a.timeTakenMs,
+        timedOut: a.timedOut,
+        attemptTimestamp: a.timestamp,
       }));
       onComplete(totalScore, wrongVocabIds, allAttempts);
       return;

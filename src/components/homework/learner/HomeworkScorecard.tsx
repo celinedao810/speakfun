@@ -3,12 +3,7 @@
 import React from 'react';
 import { Trophy, Star, BookOpen, MessageCircle, CheckCircle, ArrowRight, Home } from 'lucide-react';
 import Link from 'next/link';
-
-interface VocabAttempt {
-  vocabItemId: string;
-  lessonId: string;
-  correct: boolean;
-}
+import { VocabAttemptAudit } from '@/lib/types';
 
 interface ScorecardProps {
   windowId: string;
@@ -19,7 +14,7 @@ interface ScorecardProps {
   ex3aScore: number;
   ex3bScore: number;
   totalScore: number;
-  vocabAttempts: VocabAttempt[];
+  vocabAttempts: VocabAttemptAudit[];
   wrongVocabIds: string[];
   wordsCommittedCount: number;
   isReview: boolean;
@@ -66,7 +61,7 @@ export default function HomeworkScorecard({
   const isTopLearner = pct >= 95 && allCompleted;
 
   const totalAttempts = vocabAttempts.length;
-  const correctAttempts = vocabAttempts.filter(a => a.correct).length;
+  const correctAttempts = vocabAttempts.filter(a => a.isCorrectWord).length;
 
   const hasBadges = isHomeworkStar || isTopLearner;
 

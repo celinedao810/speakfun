@@ -5,7 +5,16 @@ import { upsertSubmission, batchUpdateVocabMastery, fetchClassHomeworkSettings, 
 interface VocabAttempt {
   vocabItemId: string;
   lessonId: string;
-  correct: boolean;
+  targetWord: string;
+  recognizedWord: string;
+  isCorrectWord: boolean;
+  pronunciationScore: number;
+  pointsEarned: number;
+  feedback: string;
+  timedMode: boolean;
+  timeTakenMs: number;
+  timedOut: boolean;
+  attemptTimestamp: string;
 }
 
 /**
@@ -92,14 +101,58 @@ export async function POST(request: NextRequest) {
         vocabAttempts.map(a => ({
           vocabItemId: a.vocabItemId,
           lessonId: a.lessonId,
-          correct: a.correct,
+          correct: typeof a.isCorrectWord === 'boolean'
+            ? a.isCorrectWord
+            : !!((a as unknown as { correct?: boolean }).correct),
           commitThreshold: settings.correctGuessesToCommit,
         }))
       );
       wordsCommittedCount = masteryResult.newlyCommittedCount;
     }
 
-    return NextResponse.json({ success: true, totalScore, submission, wordsCommittedCount });
+    let auditRowsInserted = 0;
+
+    if (submission && vocabAttempts && vocabAttempts.length > 0) {
+      const rows = vocabAttempts.map((a, index) => {
+        const legacyCorrect = !!((a as unknown as { correct?: boolean }).correct);
+        return ({
+        submission_id: submission.id,
+        learner_id: user.id,
+        class_id: classId,
+        window_id: windowId,
+        attempt_index: index + 1,
+        vocab_item_id: a.vocabItemId,
+        lesson_id: a.lessonId,
+        target_word: a.targetWord || '',
+        recognized_word: a.recognizedWord || '',
+        is_correct_word: typeof a.isCorrectWord === 'boolean' ? a.isCorrectWord : legacyCorrect,
+        pronunciation_score: Number(a.pronunciationScore || 0),
+        points_earned: Number(a.pointsEarned || 0),
+        feedback: a.feedback || '',
+        timed_mode: !!a.timedMode,
+        time_taken_ms: Number.isFinite(a.timeTakenMs) ? Math.max(0, Math.round(a.timeTakenMs)) : null,
+        timed_out: !!a.timedOut,
+        attempt_timestamp: a.attemptTimestamp || submittedAt,
+      });
+      });
+
+      const { error: attemptsError } = await supabase
+        .from('homework_vocab_attempt_audits')
+        .upsert(rows, { onConflict: 'submission_id,attempt_index' });
+      if (attemptsError) {
+        throw new Error(`Failed to save vocab attempt audits: ${attemptsError.message}`);
+      }
+      auditRowsInserted = rows.length;
+    }
+
+    return NextResponse.json({
+      success: true,
+      totalScore,
+      submission,
+      wordsCommittedCount,
+      vocabAttemptsReceived: vocabAttempts?.length ?? 0,
+      auditRowsInserted,
+    });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Submit failed';
     console.error('[homework/submit] Error:', message);

@@ -1,14 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient as createServerClient } from '@/lib/supabase/server';
-import { fetchSubmission } from '@/lib/supabase/queries/homework';
-import { generateWindowForClass } from '@/lib/homework/generateWindow';
+import { createClient as createServiceClient } from '@supabase/supabase-js';
+import { fetchOpenWindow, fetchSubmission } from '@/lib/supabase/queries/homework';
 
 /**
  * GET /api/homework/window?classId=xxx
  *
- * Returns the current open homework window for the learner.
- * Lazily creates the next session window if none is currently open.
- * Window generation logic lives in src/lib/homework/generateWindow.ts.
+ * Read-only: returns the current open homework window for the learner.
+ * Windows are created only by:
+ *   1. generate-exercises route (first session, immediately after teacher generates exercises)
+ *   2. Cron job at 23:00 UTC / 6:00am UTC+7 daily
  */
 export async function GET(request: NextRequest) {
   try {
@@ -25,19 +26,52 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Generate (or fetch existing) window for this class
-    const { window, courseComplete, notConfigured } = await generateWindowForClass(supabase, classId);
+    // Use service role to bypass RLS for reliable window read
+    const serviceSupabase = createServiceClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
 
-    // Fetch learner submission for this window
+    const window = await fetchOpenWindow(serviceSupabase, classId);
+
+    // Fetch learner submission for this window (learner-scoped client)
     let submission = null;
     if (window) {
       submission = await fetchSubmission(supabase, user.id, window.id);
     }
 
+    // Lightweight course status check (read-only, no window creation)
+    let courseComplete = false;
+    let notConfigured = false;
+    if (!window) {
+      const { data: ccRow } = await serviceSupabase
+        .from('class_courses')
+        .select('courses(homework_lesson_count)')
+        .eq('class_id', classId)
+        .order('position', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      const coursesJoin = ccRow?.courses;
+      const N: number | null = Array.isArray(coursesJoin)
+        ? ((coursesJoin[0] as { homework_lesson_count: number | null } | undefined)?.homework_lesson_count ?? null)
+        : ((coursesJoin as { homework_lesson_count: number | null } | null | undefined)?.homework_lesson_count ?? null);
+
+      if (!N) {
+        notConfigured = true;
+      } else {
+        const { count } = await serviceSupabase
+          .from('daily_homework_windows')
+          .select('id', { count: 'exact', head: true })
+          .eq('class_id', classId)
+          .eq('is_review_session', false);
+        courseComplete = (count ?? 0) >= N * 3;
+      }
+    }
+
     // Fetch lesson name for regular sessions
     let lessonName: string | null = null;
     if (window?.cycleLessonId && !window.isReviewSession) {
-      const { data: lesson } = await supabase
+      const { data: lesson } = await serviceSupabase
         .from('lessons')
         .select('title')
         .eq('id', window.cycleLessonId)

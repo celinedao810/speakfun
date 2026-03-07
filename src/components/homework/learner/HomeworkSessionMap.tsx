@@ -55,12 +55,14 @@ function getStatus(
   const hw = windowBySession.get(planned.sessionNumber);
 
   if (hw) {
+    const sub = subByWindow.get(hw.id);
     if (new Date(hw.closesAt) < now) {
-      const sub = subByWindow.get(hw.id);
       if (sub?.allCompleted) return 'done';
       if (sub?.startedAt) return 'partial';
       return 'missed';
     }
+    // Window still open — check completion status
+    if (sub?.allCompleted) return 'done';
     return 'active';
   }
 

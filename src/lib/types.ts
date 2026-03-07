@@ -541,6 +541,21 @@ export interface VocabScoringResult {
   highlights: WordHighlight[];
 }
 
+export interface VocabAttemptAudit {
+  vocabItemId: string;
+  lessonId: string;
+  targetWord: string;
+  recognizedWord: string;
+  isCorrectWord: boolean;
+  pronunciationScore: number;
+  pointsEarned: number;
+  feedback: string;
+  timedMode: boolean;
+  timeTakenMs: number;
+  timedOut: boolean;
+  attemptTimestamp: string;
+}
+
 export interface StructureScoringResult {
   structureItemId: string;
   step: 'READ_EXAMPLE' | 'OWN_SENTENCE';
