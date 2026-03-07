@@ -187,6 +187,26 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, authLoading]);
 
+  // Real-time subscription: refresh assignments when teacher assigns a new phoneme
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const channel = supabase
+      .channel(`assignments:${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'assignments', filter: `learner_id=eq.${user.id}` },
+        () => {
+          fetchAssignments(supabase, user.id).then(assignments => {
+            setProgress(prev => ({ ...prev, assignments }));
+          }).catch(err => console.error('Failed to refresh assignments:', err));
+        }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [user?.id]);
+
   // --- Helper ---
 
   const createAssignment = (sound: PhonicSound, type: ExerciseType): Assignment => ({
