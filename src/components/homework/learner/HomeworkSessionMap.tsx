@@ -55,6 +55,8 @@ function getStatus(
   const hw = windowBySession.get(planned.sessionNumber);
 
   if (hw) {
+    // Window exists but hasn't opened yet — show as upcoming
+    if (new Date(hw.opensAt) > now) return 'upcoming';
     const sub = subByWindow.get(hw.id);
     if (new Date(hw.closesAt) < now) {
       if (sub?.allCompleted) return 'done';
