@@ -26,7 +26,7 @@ function fmtDate(windowDate: string): string {
 function buildChartPoints(pairs: ProgressPair[], lessons: Record<string, string>): ChartPoint[] {
   const now = new Date();
   return pairs
-    .filter(({ window: hw }) => new Date(hw.closesAt) < now)
+    .filter(({ window: hw, submission }) => new Date(hw.closesAt) < now || !!submission)
     .map(({ window: hw, submission }) => {
       const label = hw.isReviewSession ? `R${hw.sessionNumber}` : `S${hw.sessionNumber}`;
       let status: ChartPoint['status'];
