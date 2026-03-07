@@ -5,7 +5,7 @@ import { LearnerProgress, Assignment, PhonicSound, DailyRecord, LearnerPreferenc
 import { APP_STORAGE_KEY, PHONETIC_SOUNDS } from '@/lib/constants';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase/client';
-import { fetchAssignments, insertAssignment, insertAssignments, updateAssignment, insertRecord, resetAssignment as resetAssignmentDB } from '@/lib/supabase/queries/assignments';
+import { insertAssignment, insertAssignments, updateAssignment, insertRecord, resetAssignment as resetAssignmentDB } from '@/lib/supabase/queries/assignments';
 import { fetchAchievements, insertAchievement } from '@/lib/supabase/queries/achievements';
 import { fetchInterviewQA, insertInterviewQA, deleteInterviewQA as deleteInterviewQADB, fetchInterviewSessions, upsertInterviewSession, deleteInterviewSession as deleteInterviewSessionDB, fetchDrillSessions, insertDrillSession, fetchLiveInterviewSessions, insertLiveInterviewSession } from '@/lib/supabase/queries/interview';
 import { updatePreferences, setPlacementTestDone } from '@/lib/supabase/queries/profiles';
@@ -70,7 +70,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const loadData = async () => {
       try {
         const [assignments, achievements, interviewPrep, interviewSessions, drillSessions, liveHistory] = await Promise.all([
-          fetchAssignments(supabase, user.id),
+          fetch('/api/phoneme/my-assignments').then(r => r.json()).then(d => d.assignments ?? []),
           fetchAchievements(supabase, user.id),
           fetchInterviewQA(supabase, user.id),
           fetchInterviewSessions(supabase, user.id),
@@ -122,7 +122,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                     localStorage.removeItem(sourceKey);
 
                     const [a2, ach2, iq2, is2, ds2, lh2] = await Promise.all([
-                      fetchAssignments(supabase, user.id),
+                      fetch('/api/phoneme/my-assignments').then(r => r.json()).then(d => d.assignments ?? []),
                       fetchAchievements(supabase, user.id),
                       fetchInterviewQA(supabase, user.id),
                       fetchInterviewSessions(supabase, user.id),
@@ -197,7 +197,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'assignments', filter: `learner_id=eq.${user.id}` },
         () => {
-          fetchAssignments(supabase, user.id).then(assignments => {
+          fetch('/api/phoneme/my-assignments').then(r => r.json()).then(d => {
+            const assignments = d.assignments ?? [];
             setProgress(prev => ({ ...prev, assignments }));
           }).catch(err => console.error('Failed to refresh assignments:', err));
         }
