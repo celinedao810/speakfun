@@ -1671,3 +1671,83 @@ Return JSON with this exact structure:
     return JSON.parse(response.text || '{}');
   });
 };
+
+export interface RefinementChange {
+  original: string;
+  corrected: string;
+  reason: string;
+}
+
+export interface RefinementResult {
+  refinedText: string;
+  changes: RefinementChange[];
+  summary: string;
+}
+
+/**
+ * Refine a speech transcription: correct grammar/word-choice mistakes,
+ * make it sound natural for a professional native speaker,
+ * and keep the language level at A2–B1.
+ * An optional teacher comment can guide the refinement.
+ */
+export const refineTranscription = async (
+  transcription: string,
+  teacherComment?: string
+): Promise<RefinementResult> => {
+  return safeExecute(async () => {
+    const ai = new GoogleGenAI({ apiKey: getApiKey() });
+    const refinementInstruction = teacherComment
+      ? `\n\nTEACHER INSTRUCTION: "${teacherComment}"`
+      : '';
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: `You are an English language coach helping students improve spoken English.
+
+ORIGINAL TRANSCRIPTION:
+"${transcription}"
+
+TASK: Produce a refined version that:
+1. Fixes ALL grammar mistakes (tense, agreement, article use, prepositions, etc.)
+2. Replaces unnatural or incorrect word choices with appropriate alternatives
+3. Sounds like a confident native speaker in a professional workplace context
+4. Stays at A2-B1 language level — keep vocabulary accessible, avoid complex structures
+5. Preserves the speaker's original meaning and speaking style as much as possible${refinementInstruction}
+
+Return JSON:
+{
+  "refinedText": "<full corrected and improved version>",
+  "changes": [
+    { "original": "<exact phrase from original>", "corrected": "<replacement>", "reason": "<brief explanation>" }
+  ],
+  "summary": "<1-2 sentences summarising what was improved>"
+}
+
+If there are no corrections needed, return the original text unchanged with an empty changes array.`,
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            refinedText: { type: Type.STRING },
+            changes: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  original: { type: Type.STRING },
+                  corrected: { type: Type.STRING },
+                  reason: { type: Type.STRING },
+                },
+                required: ['original', 'corrected', 'reason'],
+              },
+            },
+            summary: { type: Type.STRING },
+          },
+          required: ['refinedText', 'changes', 'summary'],
+        },
+      },
+    });
+    return JSON.parse(response.text || '{}');
+  });
+};
