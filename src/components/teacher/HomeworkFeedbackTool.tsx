@@ -252,11 +252,13 @@ export default function HomeworkFeedbackTool() {
               <p className="text-sm font-semibold text-foreground">What was changed</p>
               <div className="space-y-2">
                 {refinementResult.changes.map((c, i) => (
-                  <div key={i} className="flex items-start gap-3 text-sm border border-border rounded-lg px-4 py-3">
-                    <span className="text-red-500 line-through shrink-0">{c.original}</span>
-                    <ArrowRight className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
-                    <span className="text-green-600 font-medium shrink-0">{c.corrected}</span>
-                    <span className="text-muted-foreground ml-auto text-xs">{c.reason}</span>
+                  <div key={i} className="text-sm border border-border rounded-lg px-4 py-3 space-y-1.5">
+                    <div className="flex items-start gap-2 flex-wrap">
+                      <span className="text-red-500 line-through">{c.original}</span>
+                      <ArrowRight className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
+                      <span className="text-green-600 font-medium">{c.corrected}</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">{c.reason}</p>
                   </div>
                 ))}
               </div>
