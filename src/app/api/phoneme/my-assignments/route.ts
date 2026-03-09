@@ -1,5 +1,4 @@
-import { NextResponse } from 'next/server';
-import { createClient as createServerClient } from '@/lib/supabase/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { Assignment, DailyRecord, PhonicSound, ExerciseType } from '@/lib/types';
 
@@ -12,20 +11,32 @@ function makeServiceClient() {
 
 /**
  * GET /api/phoneme/my-assignments
+ * Authorization: Bearer <access_token>
  *
- * Returns all phoneme assignments (with records) for the currently authenticated learner.
- * Uses service role to bypass RLS — avoids the browser-client auth.uid() timing issue.
+ * Returns all phoneme assignments (with records) for the caller.
+ * Accepts the access token via Authorization header so we don't rely on
+ * cookie-based session parsing (which can be unreliable with @supabase/ssr).
+ * Uses service role to bypass RLS after verifying the token.
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const supabase = await createServerClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
+    // 1. Extract access token from Authorization header
+    const authHeader = request.headers.get('Authorization');
+    const accessToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
+
+    if (!accessToken) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // 2. Verify token and get user using the service client
     const serviceClient = makeServiceClient();
+    const { data: { user }, error: authErr } = await serviceClient.auth.getUser(accessToken);
 
+    if (authErr || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // 3. Fetch assignments for this user
     const { data: assignmentRows, error: aErr } = await serviceClient
       .from('assignments')
       .select('*')

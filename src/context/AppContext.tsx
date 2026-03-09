@@ -69,8 +69,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     const loadData = async () => {
       try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const accessToken = session?.access_token ?? '';
+        const authHeaders: Record<string, string> = accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
+
         const [assignments, achievements, interviewPrep, interviewSessions, drillSessions, liveHistory] = await Promise.all([
-          fetch('/api/phoneme/my-assignments').then(r => r.json()).then(d => d.assignments ?? []),
+          fetch('/api/phoneme/my-assignments', { headers: authHeaders }).then(r => r.json()).then(d => d.assignments ?? []),
           fetchAchievements(supabase, user.id),
           fetchInterviewQA(supabase, user.id),
           fetchInterviewSessions(supabase, user.id),
@@ -122,7 +126,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                     localStorage.removeItem(sourceKey);
 
                     const [a2, ach2, iq2, is2, ds2, lh2] = await Promise.all([
-                      fetch('/api/phoneme/my-assignments').then(r => r.json()).then(d => d.assignments ?? []),
+                      fetch('/api/phoneme/my-assignments', { headers: authHeaders }).then(r => r.json()).then(d => d.assignments ?? []),
                       fetchAchievements(supabase, user.id),
                       fetchInterviewQA(supabase, user.id),
                       fetchInterviewSessions(supabase, user.id),
@@ -196,11 +200,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'assignments', filter: `learner_id=eq.${user.id}` },
-        () => {
-          fetch('/api/phoneme/my-assignments').then(r => r.json()).then(d => {
-            const assignments = d.assignments ?? [];
-            setProgress(prev => ({ ...prev, assignments }));
-          }).catch(err => console.error('Failed to refresh assignments:', err));
+        async () => {
+          const { data: { session: s } } = await supabase.auth.getSession();
+          const tok = s?.access_token;
+          fetch('/api/phoneme/my-assignments', tok ? { headers: { Authorization: `Bearer ${tok}` } } : {})
+            .then(r => r.json()).then(d => {
+              const assignments = d.assignments ?? [];
+              setProgress(prev => ({ ...prev, assignments }));
+            }).catch(err => console.error('Failed to refresh assignments:', err));
         }
       )
       .subscribe();
