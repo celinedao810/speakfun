@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient as createServerClient } from '@/lib/supabase/server';
-import { transcribeAudio, assessSpeech } from '@/lib/services/geminiService';
+import { transcribeAudio, assessSpeech, assessSpeechTextOnly } from '@/lib/services/geminiService';
 
 export const maxDuration = 120;
 
@@ -27,6 +27,16 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { type, audioBase64, mimeType, transcription, teacherComment } = body;
 
+    // Text-only assessment — no audio required
+    if (type === 'assess-text-only') {
+      if (!transcription) {
+        return NextResponse.json({ error: 'transcription is required' }, { status: 400 });
+      }
+      const result = await assessSpeechTextOnly(transcription, teacherComment);
+      return NextResponse.json(result);
+    }
+
+    // All other types require a valid audio MIME type
     const normalizedMime = ALLOWED_MIME_TYPES[mimeType];
     if (!normalizedMime) {
       return NextResponse.json({ error: `Unsupported file type: ${mimeType}` }, { status: 400 });
@@ -48,7 +58,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(result);
     }
 
-    return NextResponse.json({ error: 'Unknown type. Use "transcribe" or "assess".' }, { status: 400 });
+    return NextResponse.json({ error: 'Unknown type.' }, { status: 400 });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Feedback generation failed';
     console.error('[ai/feedback] Error:', message);

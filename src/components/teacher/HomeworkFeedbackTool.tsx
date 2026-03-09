@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useRef } from 'react';
-import { Upload, FileAudio, X, Loader2, Mic2, BarChart2, MessageSquarePlus, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Upload, FileAudio, X, Loader2, Mic2, BarChart2, MessageSquarePlus, RefreshCw, ChevronDown, ChevronUp, AlertTriangle } from 'lucide-react';
 
 interface FeedbackResult {
   overallScore: number;
@@ -24,6 +24,7 @@ const ACCEPTED_TYPES = [
 ];
 
 const ACCEPT_ATTR = '.wav,.mp3,.aac,.mp4,.mov';
+const SESSION_KEY = 'feedback_tool_state';
 
 function scoreColor(score: number) {
   if (score >= 80) return 'text-green-600';
@@ -47,6 +48,7 @@ function FeedbackCard({ title, content }: FeedbackCardProps) {
   return (
     <div className="border border-border rounded-lg overflow-hidden">
       <button
+        type="button"
         onClick={() => setOpen((o) => !o)}
         className="w-full flex items-center justify-between px-4 py-3 bg-muted/40 hover:bg-muted/60 transition text-left"
       >
@@ -71,14 +73,35 @@ export default function HomeworkFeedbackTool() {
   const [isConverting, setIsConverting] = useState(false);
   const [isAssessing, setIsAssessing] = useState(false);
   const [error, setError] = useState('');
+  const [restoredFromSession, setRestoredFromSession] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Restore persisted state on mount (survives SW-triggered page reloads)
+  useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem(SESSION_KEY);
+      if (saved) {
+        const { transcription: t, feedbackResult: f } = JSON.parse(saved);
+        if (t) { setTranscription(t); setRestoredFromSession(true); }
+        if (f) setFeedbackResult(f);
+      }
+    } catch { /* ignore */ }
+  }, []);
+
+  // Persist transcription + feedback whenever they change
+  useEffect(() => {
+    try {
+      if (transcription || feedbackResult) {
+        sessionStorage.setItem(SESSION_KEY, JSON.stringify({ transcription, feedbackResult }));
+      }
+    } catch { /* ignore */ }
+  }, [transcription, feedbackResult]);
 
   const readAsBase64 = (f: File): Promise<string> =>
     new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => {
         const result = reader.result as string;
-        // Strip data URL prefix
         resolve(result.split(',')[1]);
       };
       reader.onerror = reject;
@@ -96,6 +119,8 @@ export default function HomeworkFeedbackTool() {
     setTranscription('');
     setFeedbackResult(null);
     setTeacherComment('');
+    setRestoredFromSession(false);
+    sessionStorage.removeItem(SESSION_KEY);
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -128,18 +153,41 @@ export default function HomeworkFeedbackTool() {
   };
 
   const handleAssess = async (comment?: string) => {
-    if (!file || !transcription) return;
+    if (!transcription) return;
+    if (!file && !restoredFromSession) return;
     setIsAssessing(true);
     setError('');
     try {
-      const audioBase64 = await readAsBase64(file);
+      let audioBase64 = '';
+      let mimeType = '';
+      if (file) {
+        audioBase64 = await readAsBase64(file);
+        mimeType = file.type;
+      } else {
+        // No file after reload — re-assess using transcription text only (no audio)
+        const res = await fetch('/api/ai/feedback', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'assess-text-only',
+            transcription,
+            teacherComment: comment ?? teacherComment,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Assessment failed');
+        setFeedbackResult(data);
+        setTeacherComment('');
+        setIsAssessing(false);
+        return;
+      }
       const res = await fetch('/api/ai/feedback', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           type: 'assess',
           audioBase64,
-          mimeType: file.type,
+          mimeType,
           transcription,
           teacherComment: comment ?? teacherComment,
         }),
@@ -163,10 +211,20 @@ export default function HomeworkFeedbackTool() {
     setFeedbackResult(null);
     setTeacherComment('');
     setError('');
+    setRestoredFromSession(false);
+    sessionStorage.removeItem(SESSION_KEY);
   };
 
   return (
     <div className="max-w-3xl space-y-6">
+      {/* Restored-from-session notice */}
+      {restoredFromSession && !file && (
+        <div className="flex items-start gap-3 text-sm bg-yellow-50 border border-yellow-200 rounded-lg px-4 py-3 text-yellow-800">
+          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+          <span>The page was reloaded and your previous results were restored. Re-upload the recording to run a new assessment.</span>
+        </div>
+      )}
+
       {/* Upload area */}
       {!file ? (
         <div
@@ -196,7 +254,7 @@ export default function HomeworkFeedbackTool() {
             <p className="text-sm font-medium truncate">{file.name}</p>
             <p className="text-xs text-muted-foreground">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
           </div>
-          <button onClick={handleReset} className="p-1.5 hover:bg-muted rounded-lg transition" title="Remove file">
+          <button type="button" onClick={handleReset} className="p-1.5 hover:bg-muted rounded-lg transition" title="Remove file">
             <X className="w-4 h-4 text-muted-foreground" />
           </button>
         </div>
@@ -217,6 +275,7 @@ export default function HomeworkFeedbackTool() {
       {/* Convert button */}
       {file && (
         <button
+          type="button"
           onClick={handleConvert}
           disabled={isConverting}
           className="flex items-center gap-2 px-5 py-2.5 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 disabled:opacity-60 transition"
@@ -240,17 +299,20 @@ export default function HomeworkFeedbackTool() {
             className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm resize-y focus:outline-none focus:ring-2 focus:ring-primary/40"
             placeholder="Transcription will appear here. You can edit it before assessing."
           />
-          <button
-            onClick={() => handleAssess()}
-            disabled={isAssessing || !transcription.trim()}
-            className="flex items-center gap-2 px-5 py-2.5 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 disabled:opacity-60 transition"
-          >
-            {isAssessing ? (
-              <><Loader2 className="w-4 h-4 animate-spin" /> Assessing…</>
-            ) : (
-              <><BarChart2 className="w-4 h-4" /> Assess</>
-            )}
-          </button>
+          {file && (
+            <button
+              type="button"
+              onClick={() => handleAssess()}
+              disabled={isAssessing || !transcription.trim()}
+              className="flex items-center gap-2 px-5 py-2.5 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 disabled:opacity-60 transition"
+            >
+              {isAssessing ? (
+                <><Loader2 className="w-4 h-4 animate-spin" /> Assessing…</>
+              ) : (
+                <><BarChart2 className="w-4 h-4" /> Assess</>
+              )}
+            </button>
+          )}
         </div>
       )}
 
@@ -284,6 +346,17 @@ export default function HomeworkFeedbackTool() {
             <p className="px-4 pb-3 text-sm text-foreground leading-relaxed">{feedbackResult.transcription}</p>
           </details>
 
+          {/* Clear results */}
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={handleReset}
+              className="text-xs text-muted-foreground hover:text-foreground underline"
+            >
+              Clear and start over
+            </button>
+          </div>
+
           {/* Teacher comment to refine */}
           <div className="space-y-2 pt-2">
             <label className="text-sm font-semibold text-foreground flex items-center gap-2">
@@ -298,8 +371,9 @@ export default function HomeworkFeedbackTool() {
               className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm resize-y focus:outline-none focus:ring-2 focus:ring-primary/40"
             />
             <button
+              type="button"
               onClick={() => handleAssess(teacherComment)}
-              disabled={isAssessing || !teacherComment.trim()}
+              disabled={isAssessing || !teacherComment.trim() || (!file && !restoredFromSession)}
               className="flex items-center gap-2 px-5 py-2.5 bg-secondary text-secondary-foreground rounded-lg text-sm font-medium hover:bg-secondary/80 disabled:opacity-60 transition"
             >
               {isAssessing ? (

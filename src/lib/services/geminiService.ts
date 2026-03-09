@@ -1538,6 +1538,69 @@ If the audio is silent or unintelligible, return an empty string.`,
 };
 
 /**
+ * Assess using transcription text only — used when the audio file is no longer
+ * available (e.g. after a service-worker-triggered page reload).
+ */
+export const assessSpeechTextOnly = async (
+  transcription: string,
+  teacherComment?: string
+): Promise<SpeechAssessmentResult> => {
+  return safeExecute(async () => {
+    const ai = new GoogleGenAI({ apiKey: getApiKey() });
+    const refinementInstruction = teacherComment
+      ? `\n\nTEACHER COMMENT (apply to your feedback): "${teacherComment}"`
+      : '';
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: `You are an expert English language teacher reviewing a student's spoken response (transcription only — no audio available).
+
+TRANSCRIPTION:
+"${transcription}"
+
+Assess across four dimensions and provide actionable, constructive feedback in English.
+Note: pronunciation feedback should be based on likely issues inferred from the text patterns.${refinementInstruction}
+
+Return JSON with this exact structure:
+{
+  "overallScore": <number 0-100>,
+  "transcription": "${transcription.replace(/"/g, '\\"')}",
+  "feedback": {
+    "pronunciation": "<inferred pronunciation feedback based on word choices>",
+    "grammar": "<detailed grammar feedback>",
+    "wordChoice": "<detailed word choice feedback>",
+    "cohesionAndCoherence": "<detailed cohesion & coherence feedback>",
+    "summary": "<2-3 sentence overall summary with top 2 improvement priorities>"
+  }
+}`,
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            overallScore: { type: Type.NUMBER },
+            transcription: { type: Type.STRING },
+            feedback: {
+              type: Type.OBJECT,
+              properties: {
+                pronunciation: { type: Type.STRING },
+                grammar: { type: Type.STRING },
+                wordChoice: { type: Type.STRING },
+                cohesionAndCoherence: { type: Type.STRING },
+                summary: { type: Type.STRING },
+              },
+              required: ['pronunciation', 'grammar', 'wordChoice', 'cohesionAndCoherence', 'summary'],
+            },
+          },
+          required: ['overallScore', 'transcription', 'feedback'],
+        },
+      },
+    });
+    return JSON.parse(response.text || '{}');
+  });
+};
+
+/**
  * Assess the quality of a spoken recording across four dimensions:
  * pronunciation, grammar, word choice, cohesion & coherence.
  * Optionally accepts a teacher comment to guide or refine the AI feedback.
