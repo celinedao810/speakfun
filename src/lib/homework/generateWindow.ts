@@ -147,6 +147,14 @@ export async function generateWindowForClass(
 
   const nonReviewCount = allWindows.filter(w => !w.isReviewSession).length;
 
+  // Pre-compute reviewPool here — needed for fallback review decision below.
+  const lessonsFromPastSessions = new Set(
+    allWindows
+      .filter(w => !w.isReviewSession && w.cycleLessonId)
+      .map(w => w.cycleLessonId as string)
+  );
+  const reviewPool = readyExercises.filter(e => lessonsFromPastSessions.has(e.lessonId));
+
   let isReviewSession: boolean;
   let cycleLesson: LessonExercises | null = null;
   let lessonCycleSession: number | null = null;
@@ -164,20 +172,25 @@ export async function generateWindowForClass(
       cycleLesson = readyExercises[lessonCycleIndex] ?? null;
       lessonCycleSession = cycleLesson ? sessionInCycle : null;
       if (!cycleLesson) {
-        // No lesson available yet — skip generation
-        return { created: false, window: null, courseComplete: false, notConfigured: false };
+        // Lesson exercises not ready yet. Fall back to a review session if the
+        // lesson genuinely exists in the curriculum (we're just waiting for
+        // exercise generation) and there are past lessons to review.
+        // Guard: if the lesson doesn't exist in the curriculum at all (N is
+        // misconfigured / teacher hasn't created the lesson), skip instead of
+        // looping forever on review sessions.
+        const lessonExistsInCurriculum = lessonCycleIndex < lessonIds.length;
+        if (lessonExistsInCurriculum && reviewPool.length > 0) {
+          isReviewSession = true;
+          lessonCycleSession = null;
+          // cycleLesson stays null → step 6 will use the reviewPool path
+        } else {
+          return { created: false, window: null, courseComplete: false, notConfigured: false };
+        }
       }
     }
   }
 
   // 6. Build lesson pool
-  const lessonsFromPastSessions = new Set(
-    allWindows
-      .filter(w => !w.isReviewSession && w.cycleLessonId)
-      .map(w => w.cycleLessonId as string)
-  );
-
-  const reviewPool = readyExercises.filter(e => lessonsFromPastSessions.has(e.lessonId));
 
   let lessonIdsInPool: string[];
   if (isReviewSession) {
