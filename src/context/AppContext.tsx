@@ -189,7 +189,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id, authLoading]);
+  }, [user?.id, authLoading, profile]);
 
   // Real-time subscription: refresh assignments when teacher assigns a new phoneme
   useEffect(() => {
