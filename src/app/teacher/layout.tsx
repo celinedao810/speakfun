@@ -11,7 +11,7 @@ const tabs = [
   { href: '/teacher/classes', label: 'Classes', icon: Users },
   { href: '/teacher/lesson-plans', label: 'Lesson Plans', icon: Sparkles },
   { href: '/teacher/feedback', label: 'Feedback', icon: MessageSquareText },
-];
+]; // v2
 
 export default function TeacherLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
