@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { BookOpen, MessageCircle, Timer, Loader2, AlertCircle } from 'lucide-react';
-import { HomeworkWindow, HomeworkSubmission, LessonExercises, VocabExerciseItem, StructureExerciseItem, ReadingExerciseItem, ClassHomeworkSettings, VocabAttemptAudit } from '@/lib/types';
+import { HomeworkWindow, HomeworkSubmission, HomeworkSessionState, LessonExercises, VocabExerciseItem, StructureExerciseItem, ReadingExerciseItem, ClassHomeworkSettings, VocabAttemptAudit } from '@/lib/types';
 import Exercise1Vocab from './Exercise1Vocab';
 import Exercise2Structure from './Exercise2Structure';
 import Exercise3Reading from './Exercise3Reading';
@@ -146,15 +146,47 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
         // Wrong vocab from yesterday (carry-forward)
         const prevWrong = existingSubmission?.wrongVocabIds ?? [];
 
-        // Build vocab pool: wrong-first then random up to limit
+        // Build vocab pool up to limit
         // Review sessions use reviewWordCount; regular sessions use wordsPerSession
         const limit = hw.isReviewSession
           ? (settingsData?.reviewWordCount ?? 15)
           : (settingsData?.wordsPerSession ?? 10);
-        const wrongItems = allVocab.filter(v => prevWrong.includes(v.id));
-        const freshItems = allVocab.filter(v => !prevWrong.includes(v.id));
-        const shuffledFresh = [...freshItems].sort(() => Math.random() - 0.5);
-        const pool = [...wrongItems, ...shuffledFresh].slice(0, limit);
+
+        let pool: VocabExerciseItem[];
+        if (hw.isReviewSession) {
+          // Fetch mastery to separate seen/unseen and mastered/still-learning vocab
+          const masteryRes = await fetch(`/api/homework/vocab-notebook?classId=${classId}`);
+          const masteryData = masteryRes.ok ? await masteryRes.json() : null;
+          const masteryEntries: Array<{ vocabItemId: string; lessonId: string; isCommitted: boolean }> =
+            masteryData?.entries ?? [];
+
+          const seenKeys = new Set<string>();
+          const masteredKeys = new Set<string>();
+          for (const e of masteryEntries) {
+            const k = `${e.lessonId}:${e.vocabItemId}`;
+            seenKeys.add(k);
+            if (e.isCommitted) masteredKeys.add(k);
+          }
+
+          const key = (v: VocabExerciseItem) => `${v.lessonId}:${v.id}`;
+          const wrongIds = new Set(prevWrong);
+          const seenVocab = allVocab.filter(v => seenKeys.has(key(v)));
+
+          const wrongNotMastered = seenVocab.filter(v => wrongIds.has(v.id) && !masteredKeys.has(key(v)));
+          const freshNotMastered = seenVocab
+            .filter(v => !wrongIds.has(v.id) && !masteredKeys.has(key(v)))
+            .sort(() => Math.random() - 0.5);
+          const masteredItems = seenVocab
+            .filter(v => masteredKeys.has(key(v)))
+            .sort(() => Math.random() - 0.5);
+
+          pool = [...wrongNotMastered, ...freshNotMastered, ...masteredItems].slice(0, limit);
+        } else {
+          const wrongItems = allVocab.filter(v => prevWrong.includes(v.id));
+          const freshItems = allVocab.filter(v => !prevWrong.includes(v.id));
+          const shuffledFresh = [...freshItems].sort(() => Math.random() - 0.5);
+          pool = [...wrongItems, ...shuffledFresh].slice(0, limit);
+        }
 
         setVocabPool(pool);
 
@@ -175,6 +207,12 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
             setReadingItem({ lessonId: pendingId, readingPassage: pendingEx.readingPassage, vocabWords: pendingEx.vocabItems ?? [] });
             setReadingLessonId(pendingId);
           }
+        }
+
+        // Restore vocab attempts saved during Ex1 so mastery is preserved on resume
+        const savedAttempts = existingSubmission?.sessionState?.vocabAttempts;
+        if (savedAttempts && savedAttempts.length > 0) {
+          setVocabAttempts(savedAttempts);
         }
 
         // If already started, jump to correct phase
@@ -199,6 +237,8 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
   const autoSave = useCallback(async (partial: {
     ex1Score?: number; ex2Score?: number; ex3aScore?: number; ex3bScore?: number;
     ex1Completed?: boolean; ex2Completed?: boolean; ex3Completed?: boolean;
+    wrongVocabIds?: string[];
+    sessionState?: HomeworkSessionState;
   }) => {
     try {
       await fetch('/api/homework/save-progress', {
@@ -219,7 +259,14 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
     setEx1Score(score);
     setWrongVocabIds(wrongIds);
     setVocabAttempts(attempts);
-    await autoSave({ ex1Score: score, ex1Completed: true });
+    // Save vocabAttempts in sessionState so mastery can be updated even if
+    // the learner resumes after a page refresh (which would skip Ex1).
+    await autoSave({
+      ex1Score: score,
+      ex1Completed: true,
+      wrongVocabIds: wrongIds,
+      sessionState: { vocabAttempts: attempts },
+    });
     setPhase('EX2_INTRO');
   }, [autoSave]);
 

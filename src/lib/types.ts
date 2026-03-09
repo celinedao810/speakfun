@@ -504,6 +504,9 @@ export interface HomeworkSessionState {
     conversationId?: string;
     mode?: 'NEXT' | 'PRIOR';
   };
+  // Saved after Ex1 completes so vocab mastery can be updated even when
+  // the learner resumes the session after a page refresh.
+  vocabAttempts?: VocabAttemptAudit[];
 }
 
 export interface HomeworkSubmission {

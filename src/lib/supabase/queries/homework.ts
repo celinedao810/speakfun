@@ -137,10 +137,15 @@ function toExtractedContent(row: ExtractedContentRow): ExtractedLessonContent {
 }
 
 function toLessonExercises(row: LessonExercisesRow): LessonExercises {
+  const lessonId = row.lesson_id;
+  const rawVocabItems = (row.vocab_items as LessonExercises['vocabItems']) || [];
+  const rawStructureItems = (row.structure_items as LessonExercises['structureItems']) || [];
   return {
-    lessonId: row.lesson_id,
-    vocabItems: (row.vocab_items as LessonExercises['vocabItems']) || [],
-    structureItems: (row.structure_items as LessonExercises['structureItems']) || [],
+    lessonId,
+    // Ensure every vocab/structure item always has lessonId set from the row,
+    // in case old JSONB data was stored before lessonId was added to the schema.
+    vocabItems: rawVocabItems.map(v => ({ ...v, lessonId: v.lessonId || lessonId })),
+    structureItems: rawStructureItems.map(s => ({ ...s, lessonId: s.lessonId || lessonId })),
     readingPassage: row.reading_passage ?? '',
     generationStatus: row.generation_status,
     errorMessage: row.error_message || undefined,
@@ -592,6 +597,9 @@ export async function batchUpdateVocabMastery(
   const { error } = await supabase
     .from('learner_vocab_mastery')
     .upsert(upsertRows, { onConflict: 'learner_id,class_id,lesson_id,vocab_item_id' });
+  if (error) {
+    console.error('[batchUpdateVocabMastery] Supabase upsert error:', error.message, error.details, error.hint, { learnerId, classId, sampleRow: upsertRows[0] });
+  }
   return { ok: !error, newlyCommittedCount };
 }
 

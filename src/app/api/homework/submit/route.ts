@@ -107,6 +107,9 @@ export async function POST(request: NextRequest) {
           commitThreshold: settings.correctGuessesToCommit,
         }))
       );
+      if (!masteryResult.ok) {
+        console.error('[homework/submit] Vocab mastery update failed for learner', user.id, 'class', classId, 'windowId', windowId);
+      }
       wordsCommittedCount = masteryResult.newlyCommittedCount;
     }
 

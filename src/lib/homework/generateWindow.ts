@@ -177,12 +177,15 @@ export async function generateWindowForClass(
       .map(w => w.cycleLessonId as string)
   );
 
+  const reviewPool = readyExercises.filter(e => lessonsFromPastSessions.has(e.lessonId));
+
   let lessonIdsInPool: string[];
   if (isReviewSession) {
-    const reviewPool = readyExercises.filter(e => lessonsFromPastSessions.has(e.lessonId));
-    lessonIdsInPool = reviewPool.length > 0
-      ? reviewPool.map(e => e.lessonId)
-      : readyExercises.map(e => e.lessonId);
+    if (reviewPool.length === 0) {
+      // No lessons covered in past sessions yet — skip this review session
+      return { created: false, window: null, courseComplete: false, notConfigured: false };
+    }
+    lessonIdsInPool = reviewPool.map(e => e.lessonId);
   } else {
     lessonIdsInPool = [cycleLesson!.lessonId];
   }
@@ -199,11 +202,9 @@ export async function generateWindowForClass(
   }
 
   // 8. Compute max possible points
-  const poolExercises = isReviewSession
-    ? readyExercises.filter(e => lessonsFromPastSessions.has(e.lessonId))
-    : [cycleLesson!];
+  const poolExercises = isReviewSession ? reviewPool : [cycleLesson!];
   const maxPossiblePoints = computeMaxPoints(
-    poolExercises.length > 0 ? poolExercises : readyExercises,
+    poolExercises,
     settings.wordsPerSession,
     settings.structuresPerSession,
     isReviewSession,
