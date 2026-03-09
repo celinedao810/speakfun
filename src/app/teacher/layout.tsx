@@ -3,13 +3,14 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Mic, BookOpen, Users, Sparkles } from 'lucide-react';
+import { Mic, BookOpen, Users, Sparkles, MessageSquareText } from 'lucide-react';
 
 const tabs = [
   { href: '/teacher', label: 'Pronunciation', icon: Mic, exact: true },
   { href: '/teacher/courses', label: 'Courses', icon: BookOpen },
   { href: '/teacher/classes', label: 'Classes', icon: Users },
   { href: '/teacher/lesson-plans', label: 'Lesson Plans', icon: Sparkles },
+  { href: '/teacher/feedback', label: 'Feedback', icon: MessageSquareText },
 ];
 
 export default function TeacherLayout({ children }: { children: React.ReactNode }) {

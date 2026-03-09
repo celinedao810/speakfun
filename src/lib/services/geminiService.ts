@@ -1490,3 +1490,121 @@ Regenerate the full lesson plan incorporating the teacher's feedback. Preserve t
     };
   });
 };
+
+// ─── Homework Feedback Tool ──────────────────────────────────────────────────
+
+export interface TranscriptionResult {
+  transcription: string;
+}
+
+export interface SpeechAssessmentResult {
+  overallScore: number;
+  transcription: string;
+  feedback: {
+    pronunciation: string;
+    grammar: string;
+    wordChoice: string;
+    cohesionAndCoherence: string;
+    summary: string;
+  };
+}
+
+/**
+ * Transcribe audio recording to text.
+ * Supports wav, mp3, aac, mp4/mov (audio track).
+ */
+export const transcribeAudio = async (
+  audioBase64: string,
+  mimeType: string
+): Promise<TranscriptionResult> => {
+  return safeExecute(async () => {
+    const ai = new GoogleGenAI({ apiKey: getApiKey() });
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: {
+        parts: [
+          {
+            text: `Transcribe the spoken content in this audio recording as accurately as possible.
+Return ONLY the verbatim transcription — no commentary, no formatting, no labels.
+If the audio is silent or unintelligible, return an empty string.`,
+          },
+          { inlineData: { mimeType, data: audioBase64 } },
+        ],
+      },
+    });
+    const transcription = (response.text || '').trim();
+    return { transcription };
+  });
+};
+
+/**
+ * Assess the quality of a spoken recording across four dimensions:
+ * pronunciation, grammar, word choice, cohesion & coherence.
+ * Optionally accepts a teacher comment to guide or refine the AI feedback.
+ */
+export const assessSpeech = async (
+  transcription: string,
+  audioBase64: string,
+  mimeType: string,
+  teacherComment?: string
+): Promise<SpeechAssessmentResult> => {
+  return safeExecute(async () => {
+    const ai = new GoogleGenAI({ apiKey: getApiKey() });
+    const refinementInstruction = teacherComment
+      ? `\n\nTEACHER COMMENT (apply to your feedback): "${teacherComment}"`
+      : '';
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: {
+        parts: [
+          {
+            text: `You are an expert English language teacher reviewing a student's spoken recording.
+
+TRANSCRIPTION (for reference):
+"${transcription}"
+
+Assess the recording across four dimensions and provide actionable, constructive feedback in English.${refinementInstruction}
+
+Return JSON with this exact structure:
+{
+  "overallScore": <number 0-100>,
+  "transcription": "<exact transcription you hear>",
+  "feedback": {
+    "pronunciation": "<detailed feedback on pronunciation: problem sounds, stress, intonation, connected speech>",
+    "grammar": "<detailed feedback on grammatical accuracy: tense, agreement, sentence structure>",
+    "wordChoice": "<detailed feedback on vocabulary: appropriateness, variety, precision, collocations>",
+    "cohesionAndCoherence": "<detailed feedback on organisation, logical flow, discourse markers, idea development>",
+    "summary": "<2-3 sentence overall summary with the top 2 improvement priorities>"
+  }
+}`,
+          },
+          { inlineData: { mimeType, data: audioBase64 } },
+        ],
+      },
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            overallScore: { type: Type.NUMBER },
+            transcription: { type: Type.STRING },
+            feedback: {
+              type: Type.OBJECT,
+              properties: {
+                pronunciation: { type: Type.STRING },
+                grammar: { type: Type.STRING },
+                wordChoice: { type: Type.STRING },
+                cohesionAndCoherence: { type: Type.STRING },
+                summary: { type: Type.STRING },
+              },
+              required: ['pronunciation', 'grammar', 'wordChoice', 'cohesionAndCoherence', 'summary'],
+            },
+          },
+          required: ['overallScore', 'transcription', 'feedback'],
+        },
+      },
+    });
+    return JSON.parse(response.text || '{}');
+  });
+};
