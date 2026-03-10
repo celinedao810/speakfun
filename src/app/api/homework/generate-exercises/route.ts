@@ -66,11 +66,12 @@ export async function POST(request: NextRequest) {
       generatedAt: now,
     });
 
-    // Immediately create homework windows for all classes using this lesson (server-side, no learner action needed).
-    // GET /api/homework/window still creates lazily as a fallback, but this is the primary trigger.
-    triggerWindowGenerationForLesson(lessonId).catch((err) =>
-      console.error('[generate-exercises] Window trigger error:', err)
-    );
+    // Immediately create homework windows for all classes using this lesson.
+    try {
+      await triggerWindowGenerationForLesson(lessonId);
+    } catch (err) {
+      console.error('[generate-exercises] Window trigger error:', err);
+    }
 
     return NextResponse.json({
       success: true,
