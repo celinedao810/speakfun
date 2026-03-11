@@ -56,7 +56,7 @@ function renderMarkdown(text: string) {
   };
 
   lines.forEach((line, i) => {
-    const isBullet = /^[-*]\s+/.test(line);
+    const isBullet = /^\s*[-*]\s+/.test(line);
     const numberedMatch = /^(\d+)\.\s+(.*)$/.exec(line);
     const h3Match = /^###\s+(.*)$/.exec(line);
     const h2Match = /^##\s+(.*)$/.exec(line);

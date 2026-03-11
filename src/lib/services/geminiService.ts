@@ -1351,7 +1351,18 @@ Produce a complete, classroom-ready lesson plan with these exact sections (use t
 6. Wrap-Up (id: "wrap_up")
 7. Homework (id: "homework")
 
-Each section content should be detailed markdown. Use bullet points, bold terms, and example sentences where appropriate.
+Each section content must be well-structured markdown with proper line breaks. Use bullet points, bold terms, and example sentences where appropriate.
+
+IMPORTANT FORMATTING RULES:
+- Always use real newline characters (\n) between lines — never run multiple sentences or sub-items onto a single line.
+- For vocabulary items, use this exact multi-line format for each word:
+  **Word** (part of speech) — /phonetic/
+  Definition: ...
+  - Example 1: "..."
+  - Example 2: "..."
+- Separate each numbered vocabulary item with a blank line.
+- For any numbered list, each item's sub-content (definition, examples, steps) must be on its own line, indented with "  " (two spaces) or as a bullet.
+
 The title should be a short, descriptive heading for this specific lesson (e.g. "IT English: REST APIs and Web Services").`;
 
     // Build parts: reference PDFs first (if any), then the instruction text
