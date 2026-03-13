@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { BookOpen, MessageCircle, Timer, Loader2, AlertCircle } from 'lucide-react';
+import { BookOpen, MessageCircle, Timer, Loader2, AlertCircle, CheckCircle, ChevronRight } from 'lucide-react';
 import { HomeworkWindow, HomeworkSubmission, HomeworkSessionState, LessonExercises, VocabExerciseItem, StructureExerciseItem, ReadingExerciseItem, ClassHomeworkSettings, VocabAttemptAudit, ConversationExercise } from '@/lib/types';
 import { useAuth } from '@/context/AuthContext';
 import Exercise1Vocab from './Exercise1Vocab';
@@ -12,6 +12,7 @@ import HomeworkScorecard from './HomeworkScorecard';
 
 type SessionPhase =
   | 'LOADING'
+  | 'HUB'
   | 'EX1_INTRO'
   | 'EX1'
   | 'EX2_INTRO'
@@ -111,6 +112,11 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
   // Timer mode per exercise (default off)
   const [ex1Timed, setEx1Timed] = useState(false);
   const [ex2Timed, setEx2Timed] = useState(false);
+
+  // Completion flags
+  const [ex1Done, setEx1Done] = useState(existingSubmission?.ex1Completed ?? false);
+  const [ex2Done, setEx2Done] = useState(existingSubmission?.ex2Completed ?? false);
+  const [ex3Done, setEx3Done] = useState(existingSubmission?.ex3Completed ?? false);
 
   // Scores & tracking
   const [ex1Score, setEx1Score] = useState(existingSubmission?.ex1Score ?? 0);
@@ -230,15 +236,10 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
           setVocabAttempts(savedAttempts);
         }
 
-        // If already started, jump to correct phase
         if (existingSubmission?.allCompleted) {
           setPhase('SCORECARD');
-        } else if (existingSubmission?.ex2Completed) {
-          setPhase('EX3_INTRO');
-        } else if (existingSubmission?.ex1Completed) {
-          setPhase('EX2_INTRO');
         } else {
-          setPhase('EX1_INTRO');
+          setPhase('HUB');
         }
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : 'Failed to load homework';
@@ -272,30 +273,32 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
 
   const handleEx1Complete = useCallback(async (score: number, wrongIds: string[], attempts: VocabAttemptAudit[]) => {
     setEx1Score(score);
+    setEx1Done(true);
     setWrongVocabIds(wrongIds);
     setVocabAttempts(attempts);
-    // Save vocabAttempts in sessionState so mastery can be updated even if
-    // the learner resumes after a page refresh (which would skip Ex1).
     await autoSave({
       ex1Score: score,
       ex1Completed: true,
       wrongVocabIds: wrongIds,
       sessionState: { vocabAttempts: attempts },
     });
-    setPhase('EX2_INTRO');
+    setPhase('HUB');
   }, [autoSave]);
 
   const handleEx2Complete = useCallback(async (score: number) => {
     setEx2Score(score);
+    setEx2Done(true);
     await autoSave({ ex2Score: score, ex2Completed: true });
-    setPhase((conversationItem || readingItem) ? 'EX3_INTRO' : 'SUBMITTING');
-  }, [autoSave, conversationItem, readingItem]);
+    setPhase('HUB');
+  }, [autoSave]);
 
   const handleEx3Complete = useCallback(async (score: number) => {
     setEx3aScore(score);
     setEx3bScore(0);
-    setPhase('SUBMITTING');
-  }, []);
+    setEx3Done(true);
+    await autoSave({ ex3aScore: score, ex3Completed: true });
+    setPhase('HUB');
+  }, [autoSave]);
 
   // Submit on entering SUBMITTING phase
   useEffect(() => {
@@ -492,41 +495,76 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
     );
   }
 
-  // Fallback: exercise intro icons display
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-3 bg-primary/10 rounded-xl p-4">
-        <BookOpen className="w-5 h-5 text-primary" />
-        <div>
-          <p className="text-sm font-semibold text-foreground">Exercise 1: Vocabulary</p>
-          <p className="text-xs text-primary">{vocabPool.length} words</p>
+  if (phase === 'HUB') {
+    const hasEx3 = !!(conversationItem || readingItem);
+    const allDone = ex1Done && ex2Done && (!hasEx3 || ex3Done);
+    const ex3TurnCount = conversationItem?.turns.filter(t => t.speaker === 'LEARNER').length ?? 0;
+
+    const ExCard = ({
+      exNum, icon, title, subtitle, done, score, onStart,
+    }: {
+      exNum: number; icon: React.ReactNode; title: string; subtitle: string;
+      done: boolean; score: number; onStart: () => void;
+    }) => (
+      <div className={`flex items-center gap-4 rounded-xl border p-4 ${done ? 'bg-muted/40 border-border' : 'bg-card border-border'}`}>
+        <div className={`p-2.5 rounded-xl shrink-0 ${done ? 'bg-emerald-100' : 'bg-primary/10'}`}>
+          {done ? <CheckCircle className="w-5 h-5 text-emerald-600" /> : icon}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-foreground">Ex {exNum} · {title}</p>
+          <p className={`text-xs mt-0.5 ${done ? 'text-emerald-600 font-medium' : 'text-muted-foreground'}`}>
+            {done ? `+${score.toFixed(1)} pts` : subtitle}
+          </p>
+        </div>
+        {!done && (
+          <button
+            onClick={onStart}
+            className="flex items-center gap-1 text-xs font-semibold text-primary bg-primary/10 hover:bg-primary/20 px-3 py-1.5 rounded-full transition shrink-0"
+          >
+            Start <ChevronRight className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
+    );
+
+    return (
+      <div className="space-y-3">
+        <ExCard exNum={1} icon={<BookOpen className="w-5 h-5 text-primary" />}
+          title="Vocabulary" subtitle={`${vocabPool.length} words`}
+          done={ex1Done} score={ex1Score} onStart={() => setPhase('EX1_INTRO')} />
+        <ExCard exNum={2} icon={<MessageCircle className="w-5 h-5 text-primary" />}
+          title="Sentences" subtitle={`${structurePool.length} patterns`}
+          done={ex2Done} score={ex2Score} onStart={() => setPhase('EX2_INTRO')} />
+        {hasEx3 && (
+          <ExCard exNum={3}
+            icon={conversationItem
+              ? <MessageCircle className="w-5 h-5 text-violet-600" />
+              : <BookOpen className="w-5 h-5 text-emerald-600" />}
+            title={conversationItem ? 'Conversation' : 'Reading'}
+            subtitle={conversationItem ? `${ex3TurnCount} turns` : `${readingItem?.vocabWords.length ?? 0} vocab words`}
+            done={ex3Done} score={ex3aScore + ex3bScore} onStart={() => setPhase('EX3_INTRO')} />
+        )}
+        <div className="pt-2">
+          <button
+            onClick={() => setPhase('SUBMITTING')}
+            className={`w-full py-3 rounded-xl font-semibold transition flex items-center justify-center gap-2 ${
+              allDone
+                ? 'bg-primary text-primary-foreground hover:bg-primary/90'
+                : 'bg-muted text-muted-foreground hover:bg-muted/80'
+            }`}
+          >
+            <CheckCircle className="w-4 h-4" />
+            {allDone ? 'Submit & See Results' : 'Submit Homework'}
+          </button>
+          {!allDone && (
+            <p className="text-xs text-muted-foreground text-center mt-2">
+              You can submit now or complete remaining exercises first.
+            </p>
+          )}
         </div>
       </div>
-      <div className="flex items-center gap-3 bg-primary/10 rounded-xl p-4">
-        <MessageCircle className="w-5 h-5 text-primary" />
-        <div>
-          <p className="text-sm font-semibold text-foreground">Exercise 2: Sentence Structure</p>
-          <p className="text-xs text-primary">{structurePool.length} patterns</p>
-        </div>
-      </div>
-      {conversationItem && (
-        <div className="flex items-center gap-3 bg-violet-50 rounded-xl p-4">
-          <MessageCircle className="w-5 h-5 text-violet-600" />
-          <div>
-            <p className="text-sm font-semibold text-violet-800">Exercise 3: Conversation Practice</p>
-            <p className="text-xs text-violet-600">{conversationItem.turns.filter(t => t.speaker === 'LEARNER').length} turns</p>
-          </div>
-        </div>
-      )}
-      {!conversationItem && readingItem && (
-        <div className="flex items-center gap-3 bg-emerald-50 rounded-xl p-4">
-          <BookOpen className="w-5 h-5 text-emerald-600" />
-          <div>
-            <p className="text-sm font-semibold text-emerald-800">Exercise 3: Reading Practice</p>
-            <p className="text-xs text-emerald-600">{readingItem.vocabWords.length} vocabulary words</p>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+    );
+  }
+
+  return null;
 }
