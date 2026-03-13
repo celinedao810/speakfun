@@ -57,12 +57,20 @@ export function computeMaxPoints(
   const structureLimit = isReview ? (reviewStructureCount ?? structuresPerSession) : structuresPerSession;
   const vocabPool = Math.min(totalVocab, wordLimit);
   const structurePool = Math.min(totalStructures, structureLimit);
-  const readingLesson = pendingReadingLessonId
+  const pendingLesson = pendingReadingLessonId
     ? exercises.find(e => e.lessonId === pendingReadingLessonId)
     : null;
-  const hasReadingPassage = !!(readingLesson?.readingPassage);
-  const readingPts = (isReview || !hasReadingPassage) ? 0 : (20 + totalVocab);
-  return vocabPool * 1 + structurePool * (7 + 7) + readingPts;
+  let ex3Pts = 0;
+  if (!isReview && pendingLesson) {
+    if (pendingLesson.conversationExercise) {
+      const learnerTurns = pendingLesson.conversationExercise.turns.filter(t => t.speaker === 'LEARNER').length;
+      ex3Pts = learnerTurns * 10;
+    } else if (pendingLesson.readingPassage) {
+      // Legacy: reading passage exercise
+      ex3Pts = 20 + totalVocab;
+    }
+  }
+  return vocabPool * 1 + structurePool * (7 + 7) + ex3Pts;
 }
 
 // ---------------------------------------------------------------------------

@@ -417,6 +417,7 @@ export interface LessonExercises {
   vocabItems: VocabExerciseItem[];
   structureItems: StructureExerciseItem[];
   readingPassage: string;
+  conversationExercise?: ConversationExercise;
   generationStatus: 'PENDING' | 'GENERATING' | 'DONE' | 'ERROR';
   errorMessage?: string;
   generatedAt?: string;
@@ -438,6 +439,34 @@ export interface ReadingScoringResult {
   pointsEarned: number;
   feedback: string;
   transcription: string;
+}
+
+// --- Conversation exercise types ---
+
+export interface ConversationTurn {
+  index: number;
+  speaker: 'AI' | 'LEARNER';
+  text: string;               // AI: message text; LEARNER: ideal/sample answer
+  targetStructureId?: string; // LEARNER turns only
+  hint?: string;              // Structure pattern to reveal on hint tap
+}
+
+export interface ConversationExercise {
+  lessonId: string;
+  scenario: string;     // e.g. "Discussing a project update with your manager"
+  aiRole: string;       // e.g. "Manager"
+  learnerRole: string;  // e.g. "Team Member" (overridden by profile at display time)
+  turns: ConversationTurn[];
+}
+
+export interface ConversationTurnScoringResult {
+  transcription: string;
+  structureExact: boolean;    // Used target structure exactly
+  structureUsed: boolean;     // Used a similar/correct structure
+  grammarCorrect: boolean;
+  penaltiesApplied: number;
+  pointsEarned: number;       // 10, 5, or 0 minus penalties
+  feedback: string;           // Vietnamese
 }
 
 // --- Homework windows and settings ---

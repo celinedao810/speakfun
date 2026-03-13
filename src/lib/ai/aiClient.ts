@@ -3,7 +3,7 @@
 
 import type {
   PlacementSentence, DiagnosticResult, SoundDrillPack, TargetSoundResult,
-  VocabScoringResult, StructureScoringResult, ReadingScoringResult,
+  VocabScoringResult, StructureScoringResult, ReadingScoringResult, ConversationTurnScoringResult,
 } from '@/lib/types';
 import type {
   PronunciationResult, LiveEvaluationResult, AISuggestion,
@@ -159,6 +159,13 @@ export const scoreReadingPassage = (
   audioBase64: string,
 ): Promise<ReadingScoringResult> =>
   post('/api/ai/homework-score', { type: 'reading-passage', readingPassage, vocabWords, audioBase64 });
+
+export const scoreConversationTurn = (
+  targetText: string,
+  hint: string,
+  audioBase64: string,
+): Promise<ConversationTurnScoringResult> =>
+  post('/api/ai/homework-score', { type: 'conversation-turn', targetText, hint, audioBase64 });
 
 // ── Safe client-side re-exports ─────────────────────────────────────────────
 

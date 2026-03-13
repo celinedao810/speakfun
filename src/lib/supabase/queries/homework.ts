@@ -34,6 +34,7 @@ interface LessonExercisesRow {
   structure_items: unknown;
   dialogue_lines: unknown;
   reading_passage: string;
+  conversation_exercise: unknown;
   generation_status: 'PENDING' | 'GENERATING' | 'DONE' | 'ERROR';
   error_message: string | null;
   generated_at: string | null;
@@ -147,6 +148,7 @@ function toLessonExercises(row: LessonExercisesRow): LessonExercises {
     vocabItems: rawVocabItems.map(v => ({ ...v, lessonId: v.lessonId || lessonId })),
     structureItems: rawStructureItems.map(s => ({ ...s, lessonId: s.lessonId || lessonId })),
     readingPassage: row.reading_passage ?? '',
+    conversationExercise: (row.conversation_exercise as LessonExercises['conversationExercise']) || undefined,
     generationStatus: row.generation_status,
     errorMessage: row.error_message || undefined,
     generatedAt: row.generated_at || undefined,
@@ -333,6 +335,7 @@ export async function upsertLessonExercises(
       structure_items: updates.structureItems || [],
       dialogue_lines: [],
       reading_passage: updates.readingPassage ?? '',
+      conversation_exercise: updates.conversationExercise ?? null,
       generation_status: updates.generationStatus,
       error_message: updates.errorMessage || null,
       generated_at: updates.generatedAt || null,

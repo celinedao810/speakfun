@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient as createServerClient } from '@/lib/supabase/server';
-import { generateVocabClues } from '@/lib/services/geminiService';
+import { generateVocabClues, generateConversationExercise } from '@/lib/services/geminiService';
 import {
   fetchExtractedContent,
   upsertLessonExercises,
@@ -52,8 +52,10 @@ export async function POST(request: NextRequest) {
       lessonId,
     }));
 
-    // 3. Copy reading passage from extracted content
-    const readingPassage = extracted.readingPassage || '';
+    // 3. Generate conversation exercise from structures
+    const conversationExercise = structureItems.length > 0
+      ? await generateConversationExercise(structureItems, lessonId)
+      : undefined;
 
     const now = new Date().toISOString();
 
@@ -61,7 +63,8 @@ export async function POST(request: NextRequest) {
     await upsertLessonExercises(supabase, lessonId, {
       vocabItems,
       structureItems,
-      readingPassage,
+      readingPassage: '',
+      conversationExercise,
       generationStatus: 'DONE',
       generatedAt: now,
     });
@@ -77,7 +80,7 @@ export async function POST(request: NextRequest) {
       success: true,
       vocabCount: vocabItems.length,
       structureCount: structureItems.length,
-      readingPassageLength: readingPassage.length,
+      conversationTurns: conversationExercise?.turns.length ?? 0,
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Exercise generation failed';

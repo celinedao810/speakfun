@@ -1,8 +1,9 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import {
   PlacementSentence, DiagnosticResult, SoundDrillPack, TargetSoundResult, WordHighlight,
-  VocabItem, StructureItem, RawDialogueLine, VocabExerciseItem,
+  VocabItem, StructureItem, RawDialogueLine, VocabExerciseItem, StructureExerciseItem,
   VocabScoringResult, StructureScoringResult, ConversationScoringResult, ReadingScoringResult,
+  ConversationExercise, ConversationTurnScoringResult,
 } from "@/lib/types";
 
 /**
@@ -1060,6 +1061,152 @@ Be lenient with minor accent differences. Focus on intelligibility and correctne
       pointsEarned,
       feedback: result.feedback || '',
       transcription: result.transcription || '',
+    };
+  });
+};
+
+/**
+ * Generates a role-play conversation exercise from the lesson's grammar structures.
+ * The conversation is at A2 CEFR level and gives learners turns to practise each structure.
+ */
+export const generateConversationExercise = async (
+  structureItems: StructureExerciseItem[],
+  lessonId: string
+): Promise<ConversationExercise> => {
+  return safeExecute(async () => {
+    const ai = new GoogleGenAI({ apiKey: getApiKey() });
+    const structuresJson = JSON.stringify(
+      structureItems.map(s => ({ id: s.id, pattern: s.pattern, explanation: s.explanation, exampleSentence: s.exampleSentence }))
+    );
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: `You are designing an English speaking exercise for A2-level CEFR learners.
+
+You are given a list of grammar structures from a lesson. Create a natural conversation where a learner can practise each structure. The conversation must be:
+- A2 level vocabulary and grammar (simple everyday words — only the target structures may be slightly more complex)
+- Natural and coherent — a realistic dialogue between two people in a professional or everyday context
+- Each LEARNER turn MUST practise exactly one target structure
+- Rule for structure placement:
+  * If the structure is naturally used in a QUESTION → have the LEARNER ask the question (AI provides the answer in the next AI turn)
+  * If the structure is naturally used in a STATEMENT or ANSWER → have the AI ask a question that prompts the learner to respond using that structure
+
+For LEARNER turns, the "text" field must be the ideal/sample answer the learner should say (used for scoring).
+For LEARNER turns, the "hint" field must be the structure pattern the learner should use (e.g. "Subject + has/have + been + V-ing + ...").
+The total number of turns should be appropriate for the number of structures (roughly 2 turns per structure: one AI prompt turn + one LEARNER turn).
+
+Grammar structures:
+${structuresJson}
+
+Return a JSON object.`,
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            scenario: { type: Type.STRING },
+            aiRole: { type: Type.STRING },
+            learnerRole: { type: Type.STRING },
+            turns: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  index: { type: Type.NUMBER },
+                  speaker: { type: Type.STRING },
+                  text: { type: Type.STRING },
+                  targetStructureId: { type: Type.STRING },
+                  hint: { type: Type.STRING },
+                },
+                required: ['index', 'speaker', 'text'],
+              },
+            },
+          },
+          required: ['scenario', 'aiRole', 'learnerRole', 'turns'],
+        },
+      },
+    });
+    const result = JSON.parse(response.text || '{}');
+    return {
+      lessonId,
+      scenario: result.scenario || '',
+      aiRole: result.aiRole || 'Colleague',
+      learnerRole: result.learnerRole || 'Team Member',
+      turns: (result.turns || []).map((t: { index: number; speaker: string; text: string; targetStructureId?: string; hint?: string }, i: number) => ({
+        index: t.index ?? i,
+        speaker: t.speaker === 'LEARNER' ? 'LEARNER' : 'AI',
+        text: t.text || '',
+        targetStructureId: t.targetStructureId,
+        hint: t.hint,
+      })),
+    };
+  });
+};
+
+/**
+ * Scores a learner's spoken response for a conversation role-play turn.
+ * Awards 10pt for exact target structure, 5pt for similar structure, 0pt if missing.
+ * Deducts 0.5pt per pronunciation/grammar/word-choice error.
+ */
+export const scoreConversationTurn = async (
+  targetText: string,
+  hint: string,
+  audioBase64: string
+): Promise<ConversationTurnScoringResult> => {
+  return safeExecute(async () => {
+    const ai = new GoogleGenAI({ apiKey: getApiKey() });
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: {
+        parts: [
+          {
+            text: `You are scoring a learner's spoken English response in a role-play exercise.
+
+Expected response: "${targetText}"
+Target structure hint: "${hint}"
+
+Scoring rules:
+1. Transcribe exactly what the learner said.
+2. Check if the learner used the target structure:
+   - structureExact = true: The learner used the exact target structure pattern with correct grammar and appropriate word choices → base 10 points
+   - structureUsed = true (but not exact): The learner used a similar structure that conveys the same meaning with correct grammar → base 5 points
+   - Both false: The learner did not use the target structure → base 0 points
+3. Count errors (each deducts 0.5pt from the base):
+   - Pronunciation errors (clearly wrong sounds, not just accent)
+   - Grammar errors (wrong tense, subject-verb agreement, article misuse, etc.)
+   - Significant word choice errors (wrong vocabulary that changes meaning)
+4. pointsEarned = max(0, base - penaltiesApplied × 0.5)
+5. grammarCorrect = true if no grammar errors found.
+6. Write 1–2 sentences of feedback in Vietnamese.`,
+          },
+          { inlineData: { mimeType: 'audio/webm', data: audioBase64 } },
+        ],
+      },
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            transcription: { type: Type.STRING },
+            structureExact: { type: Type.BOOLEAN },
+            structureUsed: { type: Type.BOOLEAN },
+            grammarCorrect: { type: Type.BOOLEAN },
+            penaltiesApplied: { type: Type.NUMBER },
+            pointsEarned: { type: Type.NUMBER },
+            feedback: { type: Type.STRING },
+          },
+          required: ['transcription', 'structureExact', 'structureUsed', 'grammarCorrect', 'penaltiesApplied', 'pointsEarned', 'feedback'],
+        },
+      },
+    });
+    const result = JSON.parse(response.text || '{}');
+    return {
+      transcription: result.transcription || '',
+      structureExact: result.structureExact || false,
+      structureUsed: result.structureUsed || result.structureExact || false,
+      grammarCorrect: result.grammarCorrect || false,
+      penaltiesApplied: result.penaltiesApplied || 0,
+      pointsEarned: result.pointsEarned || 0,
+      feedback: result.feedback || '',
     };
   });
 };

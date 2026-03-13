@@ -2,10 +2,12 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { BookOpen, MessageCircle, Timer, Loader2, AlertCircle } from 'lucide-react';
-import { HomeworkWindow, HomeworkSubmission, HomeworkSessionState, LessonExercises, VocabExerciseItem, StructureExerciseItem, ReadingExerciseItem, ClassHomeworkSettings, VocabAttemptAudit } from '@/lib/types';
+import { HomeworkWindow, HomeworkSubmission, HomeworkSessionState, LessonExercises, VocabExerciseItem, StructureExerciseItem, ReadingExerciseItem, ClassHomeworkSettings, VocabAttemptAudit, ConversationExercise } from '@/lib/types';
+import { useAuth } from '@/context/AuthContext';
 import Exercise1Vocab from './Exercise1Vocab';
 import Exercise2Structure from './Exercise2Structure';
 import Exercise3Reading from './Exercise3Reading';
+import Exercise3Conversation from './Exercise3Conversation';
 import HomeworkScorecard from './HomeworkScorecard';
 
 type SessionPhase =
@@ -90,6 +92,7 @@ function TimedToggle({ label, description, timedMode, onToggle, onStart }: Timed
 }
 
 export default function HomeworkSession({ window: hw, classId, existingSubmission, onDone }: HomeworkSessionProps) {
+  const { profile } = useAuth();
   const [phase, setPhase] = useState<SessionPhase>('LOADING');
   const [error, setError] = useState<string | null>(null);
 
@@ -97,8 +100,13 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
   const [vocabPool, setVocabPool] = useState<VocabExerciseItem[]>([]);
   const [structurePool, setStructurePool] = useState<StructureExerciseItem[]>([]);
   const [readingItem, setReadingItem] = useState<ReadingExerciseItem | null>(null);
+  const [conversationItem, setConversationItem] = useState<ConversationExercise | null>(null);
+  const [allStructures, setAllStructures] = useState<StructureExerciseItem[]>([]);
   const [readingLessonId, setReadingLessonId] = useState<string | null>(null);
   const [settings, setSettings] = useState<ClassHomeworkSettings | null>(null);
+
+  // Derive learner role from profile for conversation display
+  const learnerRole = profile?.preferences?.role || profile?.job_title || '';
 
   // Timer mode per exercise (default off)
   const [ex1Timed, setEx1Timed] = useState(false);
@@ -141,7 +149,7 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
 
         // Aggregate items across all lessons
         const allVocab: VocabExerciseItem[] = exData.flatMap(e => e.vocabItems ?? []);
-        const allStructures: StructureExerciseItem[] = exData.flatMap(e => e.structureItems ?? []);
+        const aggregatedStructures: StructureExerciseItem[] = exData.flatMap(e => e.structureItems ?? []);
 
         // Wrong vocab from yesterday (carry-forward)
         const prevWrong = existingSubmission?.wrongVocabIds ?? [];
@@ -195,15 +203,22 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
           ? (settingsData?.reviewStructureCount ?? 5)
           : (settingsData?.structuresPerSession ?? 5);
         const structuresToUse = hw.isReviewSession
-          ? [...allStructures].sort(() => Math.random() - 0.5)
-          : allStructures;
-        setStructurePool(structuresToUse.slice(0, structureLimit));
+          ? [...aggregatedStructures].sort(() => Math.random() - 0.5)
+          : aggregatedStructures;
+        const slicedStructures = structuresToUse.slice(0, structureLimit);
+        setStructurePool(slicedStructures);
+        setAllStructures(aggregatedStructures);
 
-        // Build reading item from the window's pending reading lesson
+        // Build Ex3 item from the window's pending lesson
         const pendingId = hw.pendingReadingLessonId;
         if (pendingId) {
           const pendingEx = exData.find((e: LessonExercises) => e.lessonId === pendingId);
-          if (pendingEx?.readingPassage) {
+          if (pendingEx?.conversationExercise) {
+            // New: conversation exercise
+            setConversationItem(pendingEx.conversationExercise);
+            setReadingLessonId(pendingId);
+          } else if (pendingEx?.readingPassage) {
+            // Legacy: reading passage exercise
             setReadingItem({ lessonId: pendingId, readingPassage: pendingEx.readingPassage, vocabWords: pendingEx.vocabItems ?? [] });
             setReadingLessonId(pendingId);
           }
@@ -273,8 +288,8 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
   const handleEx2Complete = useCallback(async (score: number) => {
     setEx2Score(score);
     await autoSave({ ex2Score: score, ex2Completed: true });
-    setPhase(readingItem ? 'EX3_INTRO' : 'SUBMITTING');
-  }, [autoSave, readingItem]);
+    setPhase((conversationItem || readingItem) ? 'EX3_INTRO' : 'SUBMITTING');
+  }, [autoSave, conversationItem, readingItem]);
 
   const handleEx3Complete = useCallback(async (score: number) => {
     setEx3aScore(score);
@@ -424,30 +439,50 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
   }
 
   if (phase === 'EX3_INTRO') {
+    const isConversation = !!conversationItem;
+    const learnerTurnCount = conversationItem?.turns.filter(t => t.speaker === 'LEARNER').length ?? 0;
     return (
       <div className="space-y-4">
         <div className="text-center py-2">
           <div className="flex justify-center mb-3">
-            <div className="bg-emerald-100 p-3 rounded-2xl">
-              <BookOpen className="w-8 h-8 text-emerald-600" />
+            <div className={`p-3 rounded-2xl ${isConversation ? 'bg-violet-100' : 'bg-emerald-100'}`}>
+              {isConversation
+                ? <MessageCircle className="w-8 h-8 text-violet-600" />
+                : <BookOpen className="w-8 h-8 text-emerald-600" />
+              }
             </div>
           </div>
-          <h3 className="text-lg font-bold text-foreground mb-1">Exercise 3: Reading Practice</h3>
+          <h3 className="text-lg font-bold text-foreground mb-1">
+            {isConversation ? 'Exercise 3: Conversation Practice' : 'Exercise 3: Reading Practice'}
+          </h3>
           <p className="text-sm text-muted-foreground">
-            Read the lesson passage aloud. Target vocabulary words are hidden — use hints if needed.
+            {isConversation
+              ? `Role-play a conversation in ${learnerTurnCount} turns. Use the grammar structures you've learned.`
+              : 'Read the lesson passage aloud. Target vocabulary words are hidden — use hints if needed.'
+            }
           </p>
         </div>
         <button
           onClick={() => setPhase('EX3')}
           className="w-full py-3 bg-primary text-primary-foreground rounded-xl font-semibold hover:bg-primary/90 transition"
         >
-          Start Reading
+          {isConversation ? 'Start Conversation' : 'Start Reading'}
         </button>
       </div>
     );
   }
 
   if (phase === 'EX3') {
+    if (conversationItem) {
+      return (
+        <Exercise3Conversation
+          item={conversationItem}
+          structures={allStructures}
+          learnerRole={learnerRole}
+          onComplete={handleEx3Complete}
+        />
+      );
+    }
     return (
       <Exercise3Reading
         item={readingItem!}
@@ -473,7 +508,16 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
           <p className="text-xs text-primary">{structurePool.length} patterns</p>
         </div>
       </div>
-      {readingItem && (
+      {conversationItem && (
+        <div className="flex items-center gap-3 bg-violet-50 rounded-xl p-4">
+          <MessageCircle className="w-5 h-5 text-violet-600" />
+          <div>
+            <p className="text-sm font-semibold text-violet-800">Exercise 3: Conversation Practice</p>
+            <p className="text-xs text-violet-600">{conversationItem.turns.filter(t => t.speaker === 'LEARNER').length} turns</p>
+          </div>
+        </div>
+      )}
+      {!conversationItem && readingItem && (
         <div className="flex items-center gap-3 bg-emerald-50 rounded-xl p-4">
           <BookOpen className="w-5 h-5 text-emerald-600" />
           <div>
