@@ -30,7 +30,8 @@ export default function Exercise3Conversation({ item, structures, learnerRole, o
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const structureMap = new Map(structures.map(s => [s.id, s]));
-  const turns = item.turns;
+  // Normalize turn indices to array position (Gemini may generate 1-based or arbitrary indices)
+  const turns = item.turns.map((t, i) => ({ ...t, index: i }));
   const currentTurn = turns[currentIndex] ?? null;
   const isFinished = currentIndex >= turns.length;
 
