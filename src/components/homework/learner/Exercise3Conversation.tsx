@@ -10,6 +10,7 @@ interface Exercise3ConversationProps {
   item: ConversationExercise;
   structures: StructureExerciseItem[];
   learnerRole: string;
+  learnerName?: string;
   onComplete: (score: number) => void;
 }
 
@@ -18,7 +19,7 @@ interface CompletedTurn {
   result: ConversationTurnScoringResult;
 }
 
-export default function Exercise3Conversation({ item, structures, learnerRole, onComplete }: Exercise3ConversationProps) {
+export default function Exercise3Conversation({ item, structures, learnerRole, learnerName, onComplete }: Exercise3ConversationProps) {
   // Index into item.turns of the turn currently being shown/acted on
   const [currentIndex, setCurrentIndex] = useState(0);
   const [completedTurns, setCompletedTurns] = useState<CompletedTurn[]>([]);
@@ -30,6 +31,8 @@ export default function Exercise3Conversation({ item, structures, learnerRole, o
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const structureMap = new Map(structures.map(s => [s.id, s]));
+  const resolveName = (text: string) =>
+    learnerName ? text.replace(/\[Learner'?s?\s*Name\]/gi, learnerName) : text;
   // Normalize turn indices to array position (Gemini may generate 1-based or arbitrary indices)
   const turns = item.turns.map((t, i) => ({ ...t, index: i }));
   const currentTurn = turns[currentIndex] ?? null;
@@ -124,7 +127,7 @@ export default function Exercise3Conversation({ item, structures, learnerRole, o
                   </div>
                   <div className="bg-white border border-slate-200 rounded-2xl rounded-bl-sm px-4 py-2.5 max-w-[85%]">
                     <p className="text-xs text-slate-400 mb-0.5">{item.aiRole}</p>
-                    <p className="text-sm text-slate-800">{turn.text}</p>
+                    <p className="text-sm text-slate-800">{resolveName(turn.text)}</p>
                   </div>
                 </div>
                 {/* Next button only on the current AI turn */}

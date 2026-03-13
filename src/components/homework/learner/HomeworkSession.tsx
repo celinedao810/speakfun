@@ -479,6 +479,7 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
           item={conversationItem}
           structures={allStructures}
           learnerRole={learnerRole}
+          learnerName={profile?.full_name || ''}
           onComplete={handleEx3Complete}
         />
       );
