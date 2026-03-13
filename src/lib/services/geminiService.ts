@@ -1161,22 +1161,24 @@ export const scoreConversationTurn = async (
           {
             text: `You are scoring a learner's spoken English response in a role-play exercise.
 
-Expected response: "${targetText}"
-Target structure hint: "${hint}"
+Target grammar structure pattern: "${hint}"
+Sample answer (one possible correct response): "${targetText}"
 
 Scoring rules:
 1. Transcribe exactly what the learner said.
-2. Check if the learner used the target structure:
-   - structureExact = true: The learner used the exact target structure pattern with correct grammar and appropriate word choices → base 10 points
-   - structureUsed = true (but not exact): The learner used a similar structure that conveys the same meaning with correct grammar → base 5 points
-   - Both false: The learner did not use the target structure → base 0 points
+2. Evaluate whether the learner correctly applied the TARGET GRAMMAR STRUCTURE PATTERN (not whether they matched the sample answer word-for-word). The sample answer is just one example — different vocabulary or examples that still follow the same pattern are equally valid.
+   - structureExact = true: The learner correctly applied the target structure pattern with appropriate grammar → base 10 points
+   - structureUsed = true (but not exact): The learner used a recognisably similar structure that conveys the same meaning → base 5 points
+   - Both false: The learner did not use the target structure at all → base 0 points
 3. Count errors (each deducts 0.5pt from the base):
    - Pronunciation errors (clearly wrong sounds, not just accent)
    - Grammar errors (wrong tense, subject-verb agreement, article misuse, etc.)
    - Significant word choice errors (wrong vocabulary that changes meaning)
+   - Do NOT penalise for using different but valid vocabulary/examples that still fit the structure.
 4. pointsEarned = max(0, base - penaltiesApplied × 0.5)
 5. grammarCorrect = true if no grammar errors found.
-6. Write 1–2 sentences of feedback in Vietnamese.`,
+6. Write 1–2 sentences of feedback in Vietnamese.
+7. correctedSentence: Rewrite the learner's actual transcription as a corrected sentence that properly uses the target structure pattern. Keep the learner's own vocabulary and examples where possible — only fix structural or grammar errors.`,
           },
           { inlineData: { mimeType: 'audio/webm', data: audioBase64 } },
         ],
@@ -1193,8 +1195,9 @@ Scoring rules:
             penaltiesApplied: { type: Type.NUMBER },
             pointsEarned: { type: Type.NUMBER },
             feedback: { type: Type.STRING },
+            correctedSentence: { type: Type.STRING },
           },
-          required: ['transcription', 'structureExact', 'structureUsed', 'grammarCorrect', 'penaltiesApplied', 'pointsEarned', 'feedback'],
+          required: ['transcription', 'structureExact', 'structureUsed', 'grammarCorrect', 'penaltiesApplied', 'pointsEarned', 'feedback', 'correctedSentence'],
         },
       },
     });
@@ -1207,6 +1210,7 @@ Scoring rules:
       penaltiesApplied: result.penaltiesApplied || 0,
       pointsEarned: result.pointsEarned || 0,
       feedback: result.feedback || '',
+      correctedSentence: result.correctedSentence || '',
     };
   });
 };

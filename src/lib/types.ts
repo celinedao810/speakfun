@@ -467,6 +467,7 @@ export interface ConversationTurnScoringResult {
   penaltiesApplied: number;
   pointsEarned: number;       // 10, 5, or 0 minus penalties
   feedback: string;           // Vietnamese
+  correctedSentence: string;  // Learner's transcription rewritten with the correct structure
 }
 
 // --- Homework windows and settings ---

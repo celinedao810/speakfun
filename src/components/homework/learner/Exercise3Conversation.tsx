@@ -191,10 +191,10 @@ export default function Exercise3Conversation({ item, structures, learnerRole, l
                     <p className="text-slate-500">−{(result.penaltiesApplied * 0.5).toFixed(1)}đ ({result.penaltiesApplied} lỗi)</p>
                   )}
                   <p className="text-slate-600 mt-1">{result.feedback}</p>
-                  {!result.structureExact && (
+                  {!result.structureExact && result.correctedSentence && (
                     <div className="mt-1.5 pt-1.5 border-t border-slate-200">
-                      <span className="text-slate-400">Gợi ý: </span>
-                      <span className="text-slate-600 italic">"{turn.text}"</span>
+                      <span className="text-slate-400">Có thể nói: </span>
+                      <span className="text-slate-600 italic">"{result.correctedSentence}"</span>
                     </div>
                   )}
                 </div>
