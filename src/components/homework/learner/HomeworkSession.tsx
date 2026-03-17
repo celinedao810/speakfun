@@ -547,18 +547,19 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
         <div className="pt-2">
           <button
             onClick={() => setPhase('SUBMITTING')}
+            disabled={!allDone}
             className={`w-full py-3 rounded-xl font-semibold transition flex items-center justify-center gap-2 ${
               allDone
                 ? 'bg-primary text-primary-foreground hover:bg-primary/90'
-                : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                : 'bg-muted text-muted-foreground cursor-not-allowed opacity-50'
             }`}
           >
             <CheckCircle className="w-4 h-4" />
-            {allDone ? 'Submit & See Results' : 'Submit Homework'}
+            Submit & See Results
           </button>
           {!allDone && (
             <p className="text-xs text-muted-foreground text-center mt-2">
-              You can submit now or complete remaining exercises first.
+              Complete all exercises to submit.
             </p>
           )}
         </div>
