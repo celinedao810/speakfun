@@ -5,28 +5,28 @@
 -- reused across lessons, so the compound key (lesson_id + structure_item_id)
 -- is required.
 
-CREATE TABLE IF NOT EXISTS learner_structure_mastery (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  learner_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  class_id UUID NOT NULL REFERENCES classes(id) ON DELETE CASCADE,
+CREATE TABLE IF NOT EXISTS public.learner_structure_mastery (
+  id TEXT PRIMARY KEY DEFAULT substr(md5(random()::text), 1, 9),
+  learner_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  class_id TEXT NOT NULL REFERENCES public.classes(id) ON DELETE CASCADE,
   structure_item_id TEXT NOT NULL,
-  lesson_id TEXT NOT NULL,
+  lesson_id TEXT NOT NULL REFERENCES public.lessons(id) ON DELETE CASCADE,
   correct_count INTEGER NOT NULL DEFAULT 0,
   incorrect_count INTEGER NOT NULL DEFAULT 0,
   is_committed BOOLEAN NOT NULL DEFAULT false,
   last_seen_at TIMESTAMPTZ,
   committed_at TIMESTAMPTZ,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_at TIMESTAMPTZ DEFAULT now(),
   UNIQUE (learner_id, class_id, lesson_id, structure_item_id)
 );
 
-ALTER TABLE learner_structure_mastery ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.learner_structure_mastery ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Learner owns their structure mastery"
-  ON learner_structure_mastery
-  FOR ALL
-  USING (learner_id = auth.uid());
+CREATE POLICY "Learners manage own structure mastery"
+  ON public.learner_structure_mastery FOR ALL
+  USING (auth.uid() = learner_id)
+  WITH CHECK (auth.uid() = learner_id);
 
 -- Add structureGuessesToCommit to class_homework_settings
-ALTER TABLE class_homework_settings
+ALTER TABLE public.class_homework_settings
   ADD COLUMN IF NOT EXISTS structure_guesses_to_commit INTEGER NOT NULL DEFAULT 10;
