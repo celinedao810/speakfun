@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS public.learner_structure_mastery (
 
 ALTER TABLE public.learner_structure_mastery ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Learners manage own structure mastery" ON public.learner_structure_mastery;
 CREATE POLICY "Learners manage own structure mastery"
   ON public.learner_structure_mastery FOR ALL
   USING (auth.uid() = learner_id)
