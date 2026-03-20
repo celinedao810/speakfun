@@ -42,6 +42,7 @@ export default function HomeworkNotebook({ classId }: { classId: string }) {
   const totalStructMastered = structureData?.masteredCount ?? 0;
   const totalVocabLearning = vocabData?.learningCount ?? 0;
   const totalStructLearning = structureData?.learningCount ?? 0;
+  const totalStructItems = structureData?.entries.length ?? 0;
 
   return (
     <div className="bg-card rounded-xl border border-border overflow-hidden">
@@ -57,6 +58,11 @@ export default function HomeworkNotebook({ classId }: { classId: string }) {
 
         {!loading && (
           <div className="flex items-center gap-1.5 mr-2">
+            {totalStructItems > 0 && (
+              <span className="text-xs font-medium bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-400 px-2 py-0.5 rounded-full">
+                {totalStructItems} structures
+              </span>
+            )}
             {(totalVocabLearning + totalStructLearning) > 0 && (
               <span className="text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 px-2 py-0.5 rounded-full">
                 {totalVocabLearning + totalStructLearning} learning
