@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { MessageCircle, Bot, User, Lightbulb, CheckCircle, XCircle, ChevronRight } from 'lucide-react';
-import { ConversationExercise, ConversationTurnScoringResult, StructureExerciseItem } from '@/lib/types';
+import { ConversationExercise, ConversationTurnScoringResult, StructureExerciseItem, StructureAttemptAudit } from '@/lib/types';
 import { scoreConversationTurn } from '@/lib/ai/aiClient';
 import AudioRecorder from '@/components/AudioRecorder';
 
@@ -11,7 +11,7 @@ interface Exercise3ConversationProps {
   structures: StructureExerciseItem[];
   learnerRole: string;
   learnerName?: string;
-  onComplete: (score: number) => void;
+  onComplete: (score: number, structureAttempts: StructureAttemptAudit[]) => void;
 }
 
 interface CompletedTurn {
@@ -270,7 +270,17 @@ export default function Exercise3Conversation({ item, structures, learnerRole, l
               </div>
             </div>
             <button
-              onClick={() => onComplete(totalScore)}
+              onClick={() => {
+                const structureAttempts: StructureAttemptAudit[] = completedTurns
+                  .filter(ct => item.turns[ct.index]?.targetStructureId)
+                  .map(ct => ({
+                    structureItemId: item.turns[ct.index].targetStructureId!,
+                    lessonId: item.lessonId,
+                    isCorrect: ct.result.structureExact || ct.result.structureUsed,
+                    attemptTimestamp: new Date().toISOString(),
+                  }));
+                onComplete(totalScore, structureAttempts);
+              }}
               className="w-full py-3 bg-violet-600 text-white rounded-xl font-semibold hover:bg-violet-700 transition flex items-center justify-center gap-2"
             >
               <CheckCircle className="w-4 h-4" />

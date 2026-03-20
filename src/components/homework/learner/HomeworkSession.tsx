@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { BookOpen, MessageCircle, Timer, Loader2, AlertCircle, CheckCircle, ChevronRight } from 'lucide-react';
-import { HomeworkWindow, HomeworkSubmission, HomeworkSessionState, LessonExercises, VocabExerciseItem, StructureExerciseItem, ReadingExerciseItem, ClassHomeworkSettings, VocabAttemptAudit, ConversationExercise } from '@/lib/types';
+import { HomeworkWindow, HomeworkSubmission, HomeworkSessionState, LessonExercises, VocabExerciseItem, StructureExerciseItem, ReadingExerciseItem, ClassHomeworkSettings, VocabAttemptAudit, ConversationExercise, StructureAttemptAudit } from '@/lib/types';
 import { useAuth } from '@/context/AuthContext';
 import Exercise1Vocab from './Exercise1Vocab';
 import Exercise2Structure from './Exercise2Structure';
@@ -125,7 +125,9 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
   const [ex3bScore, setEx3bScore] = useState(existingSubmission?.ex3bScore ?? 0);
   const [vocabAttempts, setVocabAttempts] = useState<VocabAttemptAudit[]>([]);
   const [wrongVocabIds, setWrongVocabIds] = useState<string[]>([]);
+  const [structureAttempts, setStructureAttempts] = useState<StructureAttemptAudit[]>([]);
   const [wordsCommittedCount, setWordsCommittedCount] = useState(0);
+  const [structuresCommittedCount, setStructuresCommittedCount] = useState(0);
 
   // Final scores
   const [finalScores, setFinalScores] = useState<{
@@ -215,7 +217,7 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
         setStructurePool(slicedStructures);
         setAllStructures(aggregatedStructures);
 
-        // Build Ex3 item from the window's pending lesson
+        // Build Ex3 item from the window's pending lesson (regular sessions)
         const pendingId = hw.pendingReadingLessonId;
         if (pendingId) {
           const pendingEx = exData.find((e: LessonExercises) => e.lessonId === pendingId);
@@ -227,6 +229,63 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
             // Legacy: reading passage exercise
             setReadingItem({ lessonId: pendingId, readingPassage: pendingEx.readingPassage, vocabWords: pendingEx.vocabItems ?? [] });
             setReadingLessonId(pendingId);
+          }
+        }
+
+        // Review session: generate a 10-turn IT conversation using mastery-prioritized structures
+        if (hw.isReviewSession) {
+          const REVIEW_CONV_COUNT = 10;
+
+          // Use cached conversation from sessionState if resuming mid-session
+          const cached = existingSubmission?.sessionState?.reviewConversationData;
+          if (cached) {
+            setConversationItem(cached);
+          } else {
+            // Build mastery-aware structure pool for the conversation
+            const structNotebookRes = await fetch(`/api/homework/structure-notebook?classId=${classId}`);
+            const structNotebookData = structNotebookRes.ok ? await structNotebookRes.json() : null;
+            const structMasteryEntries: Array<{ structureItemId: string; lessonId: string; isCommitted: boolean }> =
+              structNotebookData?.entries ?? [];
+
+            const committedKeys = new Set<string>();
+            for (const e of structMasteryEntries) {
+              if (e.isCommitted) committedKeys.add(`${e.lessonId}:${e.structureItemId}`);
+            }
+
+            const structKey = (s: StructureExerciseItem) => `${s.lessonId}:${s.id}`;
+            const notCommitted = aggregatedStructures
+              .filter(s => !committedKeys.has(structKey(s)))
+              .sort(() => Math.random() - 0.5);
+            const committed = aggregatedStructures
+              .filter(s => committedKeys.has(structKey(s)))
+              .sort(() => Math.random() - 0.5);
+            const reviewConvStructures = [...notCommitted, ...committed].slice(0, REVIEW_CONV_COUNT);
+
+            if (reviewConvStructures.length > 0) {
+              const convRes = await fetch('/api/homework/generate-review-conversation', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ structureItems: reviewConvStructures }),
+              });
+              if (convRes.ok) {
+                const conv = await convRes.json();
+                setConversationItem(conv);
+                // Cache so page refresh mid-session doesn't regenerate a different conversation
+                try {
+                  await fetch('/api/homework/save-progress', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      windowId: hw.id,
+                      classId,
+                      sessionState: { reviewConversationData: conv },
+                    }),
+                  });
+                } catch {
+                  // Non-blocking cache failure is acceptable
+                }
+              }
+            }
           }
         }
 
@@ -292,10 +351,11 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
     setPhase('HUB');
   }, [autoSave]);
 
-  const handleEx3Complete = useCallback(async (score: number) => {
+  const handleEx3Complete = useCallback(async (score: number, attempts: StructureAttemptAudit[]) => {
     setEx3aScore(score);
     setEx3bScore(0);
     setEx3Done(true);
+    setStructureAttempts(attempts);
     await autoSave({ ex3aScore: score, ex3Completed: true });
     setPhase('HUB');
   }, [autoSave]);
@@ -319,6 +379,7 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
             ex3bScore,
             wrongVocabIds,
             vocabAttempts,
+            structureAttempts,
             readingLessonId,
           }),
         });
@@ -326,6 +387,7 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
         if (!res.ok) throw new Error(data.error || 'Submit failed');
 
         setWordsCommittedCount(data.wordsCommittedCount ?? 0);
+        setStructuresCommittedCount(data.structuresCommittedCount ?? 0);
         setFinalScores({ ex1: ex1Score, ex2: ex2Score, ex3a: ex3aScore, ex3b: ex3bScore, total: totalScore });
         setPhase('SCORECARD');
       } catch (err: unknown) {
@@ -336,7 +398,7 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
     };
 
     submit();
-  }, [phase, hw.id, classId, ex1Score, ex2Score, ex3aScore, ex3bScore, wrongVocabIds, vocabAttempts]);
+  }, [phase, hw.id, classId, ex1Score, ex2Score, ex3aScore, ex3bScore, wrongVocabIds, vocabAttempts, structureAttempts]);
 
   // — Render —
 
@@ -391,6 +453,7 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
         vocabAttempts={vocabAttempts}
         wrongVocabIds={wrongVocabIds}
         wordsCommittedCount={wordsCommittedCount}
+        structuresCommittedCount={structuresCommittedCount}
         isReview={hw.isReviewSession}
         onDone={onDone}
       />
@@ -490,7 +553,7 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
     return (
       <Exercise3Reading
         item={readingItem!}
-        onComplete={handleEx3Complete}
+        onComplete={(score) => handleEx3Complete(score, [])}
       />
     );
   }

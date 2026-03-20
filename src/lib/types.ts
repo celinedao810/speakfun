@@ -495,6 +495,7 @@ export interface ClassHomeworkSettings {
   wordsPerSession: number;
   structuresPerSession: number;
   correctGuessesToCommit: number;
+  structureGuessesToCommit: number;
   reviewIntervalDays: number;
   reviewWordCount: number;
   reviewStructureCount: number;
@@ -514,6 +515,28 @@ export interface VocabMasteryRecord {
   isCommitted: boolean;
   lastSeenAt?: string;
   committedAt?: string;
+}
+
+// --- Learner structure mastery (spaced repetition) ---
+
+export interface StructureMasteryRecord {
+  id: string;
+  learnerId: string;
+  classId: string;
+  structureItemId: string;
+  lessonId: string;
+  correctCount: number;
+  incorrectCount: number;
+  isCommitted: boolean;
+  lastSeenAt?: string;
+  committedAt?: string;
+}
+
+export interface StructureAttemptAudit {
+  structureItemId: string;
+  lessonId: string;
+  isCorrect: boolean;
+  attemptTimestamp: string;
 }
 
 // --- Homework submission ---
@@ -537,6 +560,8 @@ export interface HomeworkSessionState {
   // Saved after Ex1 completes so vocab mastery can be updated even when
   // the learner resumes the session after a page refresh.
   vocabAttempts?: VocabAttemptAudit[];
+  // Cached review conversation so it survives page refresh mid-session.
+  reviewConversationData?: ConversationExercise;
 }
 
 export interface HomeworkSubmission {

@@ -5,6 +5,7 @@ import {
   HomeworkWindow,
   ClassHomeworkSettings,
   VocabMasteryRecord,
+  StructureMasteryRecord,
   HomeworkSubmission,
   HomeworkSessionState,
   LeaderboardEntry,
@@ -65,12 +66,27 @@ interface ClassHomeworkSettingsRow {
   words_per_session: number;
   structures_per_session: number;
   correct_guesses_to_commit: number;
+  structure_guesses_to_commit: number;
   review_interval_days: number;
   review_word_count: number;
   review_structure_count: number;
   homework_restarted_at: string | null;
   created_at: string;
   updated_at: string;
+}
+
+interface StructureMasteryRow {
+  id: string;
+  learner_id: string;
+  class_id: string;
+  structure_item_id: string;
+  lesson_id: string;
+  correct_count: number;
+  incorrect_count: number;
+  is_committed: boolean;
+  last_seen_at: string | null;
+  committed_at: string | null;
+  created_at: string;
 }
 
 interface VocabMasteryRow {
@@ -181,10 +197,26 @@ function toClassHomeworkSettings(row: ClassHomeworkSettingsRow): ClassHomeworkSe
     wordsPerSession: row.words_per_session,
     structuresPerSession: row.structures_per_session,
     correctGuessesToCommit: row.correct_guesses_to_commit,
+    structureGuessesToCommit: row.structure_guesses_to_commit ?? 10,
     reviewIntervalDays: row.review_interval_days,
     reviewWordCount: row.review_word_count,
     reviewStructureCount: row.review_structure_count,
     homeworkRestartedAt: row.homework_restarted_at ?? null,
+  };
+}
+
+function toStructureMastery(row: StructureMasteryRow): StructureMasteryRecord {
+  return {
+    id: row.id,
+    learnerId: row.learner_id,
+    classId: row.class_id,
+    structureItemId: row.structure_item_id,
+    lessonId: row.lesson_id,
+    correctCount: row.correct_count,
+    incorrectCount: row.incorrect_count,
+    isCommitted: row.is_committed,
+    lastSeenAt: row.last_seen_at ?? undefined,
+    committedAt: row.committed_at ?? undefined,
   };
 }
 
@@ -622,6 +654,81 @@ export async function fetchCommittedVocabIds(
 }
 
 // ============================================================================
+// Structure mastery queries
+// ============================================================================
+
+export async function fetchStructureMastery(
+  supabase: SupabaseClient,
+  learnerId: string,
+  classId: string
+): Promise<StructureMasteryRecord[]> {
+  const { data, error } = await supabase
+    .from('learner_structure_mastery')
+    .select('*')
+    .eq('learner_id', learnerId)
+    .eq('class_id', classId);
+  if (error || !data) return [];
+  return (data as StructureMasteryRow[]).map(toStructureMastery);
+}
+
+export async function batchUpdateStructureMastery(
+  supabase: SupabaseClient,
+  learnerId: string,
+  classId: string,
+  updates: {
+    structureItemId: string;
+    lessonId: string;
+    correct: boolean;
+    commitThreshold: number;
+  }[]
+): Promise<{ ok: boolean; newlyCommittedCount: number }> {
+  if (updates.length === 0) return { ok: true, newlyCommittedCount: 0 };
+  const now = new Date().toISOString();
+
+  // Fetch existing records for this learner/class.
+  // Use compound key (lesson_id + structure_item_id) because structure IDs like "s1", "s2"
+  // are reused across lessons — they are NOT globally unique.
+  const { data: existing } = await supabase
+    .from('learner_structure_mastery')
+    .select('*')
+    .eq('learner_id', learnerId)
+    .eq('class_id', classId)
+    .in('structure_item_id', updates.map(u => u.structureItemId));
+
+  const existingMap = new Map(
+    ((existing as StructureMasteryRow[]) || []).map(r => [`${r.lesson_id}:${r.structure_item_id}`, r])
+  );
+
+  let newlyCommittedCount = 0;
+  const upsertRows = updates.map(u => {
+    const prev = existingMap.get(`${u.lessonId}:${u.structureItemId}`);
+    const newCorrect = (prev?.correct_count || 0) + (u.correct ? 1 : 0);
+    const newIncorrect = (prev?.incorrect_count || 0) + (u.correct ? 0 : 1);
+    const isCommitted = newCorrect >= u.commitThreshold;
+    if (isCommitted && !prev?.is_committed) newlyCommittedCount++;
+    return {
+      learner_id: learnerId,
+      class_id: classId,
+      structure_item_id: u.structureItemId,
+      lesson_id: u.lessonId,
+      correct_count: newCorrect,
+      incorrect_count: newIncorrect,
+      is_committed: isCommitted,
+      last_seen_at: now,
+      committed_at: isCommitted && !prev?.is_committed ? now : (prev?.committed_at || null),
+    };
+  });
+
+  const { error } = await supabase
+    .from('learner_structure_mastery')
+    .upsert(upsertRows, { onConflict: 'learner_id,class_id,lesson_id,structure_item_id' });
+  if (error) {
+    console.error('[batchUpdateStructureMastery] Supabase upsert error:', error.message, { learnerId, classId });
+  }
+  return { ok: !error, newlyCommittedCount };
+}
+
+// ============================================================================
 // Class homework settings queries
 // ============================================================================
 
@@ -629,6 +736,7 @@ const DEFAULT_SETTINGS: Omit<ClassHomeworkSettings, 'id' | 'classId'> = {
   wordsPerSession: 10,
   structuresPerSession: 5,
   correctGuessesToCommit: 7,
+  structureGuessesToCommit: 10,
   reviewIntervalDays: 7,
   reviewWordCount: 15,
   reviewStructureCount: 5,
@@ -661,6 +769,7 @@ export async function upsertClassHomeworkSettings(
       words_per_session: settings.wordsPerSession,
       structures_per_session: settings.structuresPerSession,
       correct_guesses_to_commit: settings.correctGuessesToCommit,
+      structure_guesses_to_commit: settings.structureGuessesToCommit,
       review_interval_days: settings.reviewIntervalDays,
       review_word_count: settings.reviewWordCount,
       review_structure_count: settings.reviewStructureCount,

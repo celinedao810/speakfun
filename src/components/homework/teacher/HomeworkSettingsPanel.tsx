@@ -18,6 +18,7 @@ export default function HomeworkSettingsPanel({ classId, settings, onSaved }: Ho
     wordsPerSession: settings.wordsPerSession,
     structuresPerSession: settings.structuresPerSession,
     correctGuessesToCommit: settings.correctGuessesToCommit,
+    structureGuessesToCommit: settings.structureGuessesToCommit,
     reviewIntervalDays: settings.reviewIntervalDays,
     reviewWordCount: settings.reviewWordCount,
     reviewStructureCount: settings.reviewStructureCount,
@@ -61,10 +62,11 @@ export default function HomeworkSettingsPanel({ classId, settings, onSaved }: Ho
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-4">
         {field('Words per session', 'wordsPerSession', 5, 30, 'Vocab words shown daily')}
         {field('Structures per session', 'structuresPerSession', 1, 10, 'Sentence structures daily')}
-        {field('Correct guesses to commit', 'correctGuessesToCommit', 3, 14, 'Until word is mastered')}
+        {field('Vocab mastery threshold', 'correctGuessesToCommit', 3, 14, 'Correct guesses to commit vocab')}
+        {field('Structure mastery threshold', 'structureGuessesToCommit', 3, 20, 'Correct turns to commit structure')}
         {field('Review every N days', 'reviewIntervalDays', 3, 30, 'Calendar days between reviews')}
         {field('Review word count', 'reviewWordCount', 5, 30, 'Words in review session')}
-        {field('Review structure count', 'reviewStructureCount', 1, 10, 'Structures in review')}
+        {field('Review structure count', 'reviewStructureCount', 1, 10, 'Structures in review Ex2')}
       </div>
 
       <button

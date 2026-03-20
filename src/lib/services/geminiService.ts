@@ -1143,6 +1143,83 @@ Return a JSON object.`,
 };
 
 /**
+ * Generates a 10-learner-turn IT-context conversation for review sessions.
+ * Picks exactly one structure per learner turn from the provided 10 structures.
+ * The scenario is always set in an IT/tech workplace context.
+ */
+export const generateReviewConversationExercise = async (
+  structureItems: StructureExerciseItem[]
+): Promise<ConversationExercise> => {
+  return safeExecute(async () => {
+    const ai = new GoogleGenAI({ apiKey: getApiKey() });
+    const structuresJson = JSON.stringify(
+      structureItems.map(s => ({ id: s.id, pattern: s.pattern, explanation: s.explanation, exampleSentence: s.exampleSentence }))
+    );
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: `You are designing an English speaking exercise for A2-level CEFR learners who work in IT.
+
+You are given exactly 10 grammar structures. Create a natural IT/tech workplace conversation where a learner practises each structure exactly once. The conversation must be:
+- Set in an IT or software development context (e.g. a standup meeting, code review, deployment discussion, helping a colleague with a technical problem, sprint planning, etc.)
+- A2 level vocabulary — only the target grammar structures may be slightly more complex
+- Natural and coherent — a realistic dialogue in a professional IT setting
+- Exactly 10 LEARNER turns, one per structure (in the order given)
+- Rule for structure placement:
+  * If the structure is naturally used in a QUESTION → have the LEARNER ask the question (AI provides the answer in the next AI turn)
+  * If the structure is naturally used in a STATEMENT or ANSWER → have the AI ask a question that prompts the learner to respond using that structure
+
+For LEARNER turns, the "text" field must be the ideal/sample answer the learner should say (used for scoring).
+For LEARNER turns, the "hint" field must be the structure pattern the learner should use.
+
+Grammar structures (use all 10, one per learner turn, in this order):
+${structuresJson}
+
+Return a JSON object.`,
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            scenario: { type: Type.STRING },
+            aiRole: { type: Type.STRING },
+            learnerRole: { type: Type.STRING },
+            turns: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  index: { type: Type.NUMBER },
+                  speaker: { type: Type.STRING },
+                  text: { type: Type.STRING },
+                  targetStructureId: { type: Type.STRING },
+                  hint: { type: Type.STRING },
+                },
+                required: ['index', 'speaker', 'text'],
+              },
+            },
+          },
+          required: ['scenario', 'aiRole', 'learnerRole', 'turns'],
+        },
+      },
+    });
+    const result = JSON.parse(response.text || '{}');
+    return {
+      lessonId: 'review',
+      scenario: result.scenario || '',
+      aiRole: result.aiRole || 'Colleague',
+      learnerRole: result.learnerRole || 'Team Member',
+      turns: (result.turns || []).map((t: { index: number; speaker: string; text: string; targetStructureId?: string; hint?: string }, i: number) => ({
+        index: i,
+        speaker: (t.speaker || '').toUpperCase() === 'LEARNER' ? 'LEARNER' : 'AI',
+        text: t.text || '',
+        targetStructureId: t.targetStructureId,
+        hint: t.hint,
+      })),
+    };
+  });
+};
+
+/**
  * Scores a learner's spoken response for a conversation role-play turn.
  * Awards 10pt for exact target structure, 5pt for similar structure, 0pt if missing.
  * Deducts 0.5pt per pronunciation/grammar/word-choice error.

@@ -11,7 +11,7 @@ import Link from 'next/link';
 import HomeworkHub from '@/components/homework/learner/HomeworkHub';
 import HomeworkProgress from '@/components/homework/learner/HomeworkProgress';
 import HomeworkSessionMap from '@/components/homework/learner/HomeworkSessionMap';
-import VocabNotebook from '@/components/homework/learner/VocabNotebook';
+import HomeworkNotebook from '@/components/homework/learner/HomeworkNotebook';
 import HomeworkLeaderboard from '@/components/homework/shared/HomeworkLeaderboard';
 
 export default function LearnerClassDetailPage() {
@@ -140,9 +140,9 @@ export default function LearnerClassDetailPage() {
         <HomeworkProgress classId={classId} />
       </div>
 
-      {/* Vocab Notebook */}
+      {/* My Notebook (Vocab + Structures) */}
       <div className="mt-6">
-        <VocabNotebook classId={classId} />
+        <HomeworkNotebook classId={classId} />
       </div>
 
       {/* Leaderboard */}

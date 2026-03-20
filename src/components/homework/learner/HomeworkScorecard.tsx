@@ -17,6 +17,7 @@ interface ScorecardProps {
   vocabAttempts: VocabAttemptAudit[];
   wrongVocabIds: string[];
   wordsCommittedCount: number;
+  structuresCommittedCount?: number;
   isReview: boolean;
   onDone: () => void;
 }
@@ -50,6 +51,7 @@ export default function HomeworkScorecard({
   totalScore,
   vocabAttempts,
   wordsCommittedCount,
+  structuresCommittedCount = 0,
   isReview,
   onDone,
 }: ScorecardProps) {
@@ -134,6 +136,17 @@ export default function HomeworkScorecard({
                 </div>
                 <div className="text-xs text-muted-foreground/60 mt-0.5">
                   {wordsCommittedCount === 1 ? 'word' : 'words'} committed to memory!
+                </div>
+              </div>
+            )}
+            {structuresCommittedCount > 0 && (
+              <div className="flex-1 text-center">
+                <div className="flex items-center justify-center gap-1.5">
+                  <CheckCircle className="w-4 h-4 text-violet-500" />
+                  <span className="text-lg font-bold text-violet-600">{structuresCommittedCount}</span>
+                </div>
+                <div className="text-xs text-muted-foreground/60 mt-0.5">
+                  {structuresCommittedCount === 1 ? 'structure' : 'structures'} committed to memory!
                 </div>
               </div>
             )}
