@@ -38,7 +38,7 @@ export default function Exercise3Conversation({ item, structures, learnerRole, l
   const turns = item.turns.map((t, i) => ({
     ...t,
     index: i,
-    speaker: (t.speaker === 'LEARNER' || !!(t.hint || t.targetStructureId)) ? 'LEARNER' : 'AI',
+    speaker: t.speaker === 'AI' ? 'AI' : (t.speaker === 'LEARNER' || !!(t.hint || t.targetStructureId)) ? 'LEARNER' : 'AI',
   })) as typeof item.turns;
   const currentTurn = turns[currentIndex] ?? null;
   const isFinished = currentIndex >= turns.length;
