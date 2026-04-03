@@ -24,10 +24,8 @@ export default function CourseDetailPage() {
   const [loading, setLoading] = useState(true);
   const [editingName, setEditingName] = useState(false);
   const [editingDesc, setEditingDesc] = useState(false);
-  const [editingHomeworkCount, setEditingHomeworkCount] = useState(false);
   const [nameValue, setNameValue] = useState('');
   const [descValue, setDescValue] = useState('');
-  const [homeworkCountValue, setHomeworkCountValue] = useState<string>('');
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [pdfUrls, setPdfUrls] = useState<Record<string, string>>({});
@@ -62,7 +60,6 @@ export default function CourseDetailPage() {
     setLessons(lessonsData);
     setNameValue(courseData.name);
     setDescValue(courseData.description);
-    setHomeworkCountValue(courseData.homework_lesson_count?.toString() ?? '');
     setLoading(false);
     fetchPdfUrls(lessonsData);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -84,15 +81,6 @@ export default function CourseDetailPage() {
     await updateCourse(supabase, courseId, { description: descValue.trim() });
     setCourse({ ...course, description: descValue.trim() });
     setEditingDesc(false);
-  };
-
-  const handleSaveHomeworkCount = async () => {
-    if (!course) return;
-    const parsed = parseInt(homeworkCountValue, 10);
-    const value = (!homeworkCountValue.trim() || isNaN(parsed) || parsed < 1) ? null : parsed;
-    await updateCourse(supabase, courseId, { homework_lesson_count: value });
-    setCourse({ ...course, homework_lesson_count: value });
-    setEditingHomeworkCount(false);
   };
 
   const handleUpload = async (files: File[]) => {
@@ -255,51 +243,6 @@ export default function CourseDetailPage() {
         <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-slate-400">
           <span>{course.lesson_count} lesson{course.lesson_count !== 1 ? 's' : ''} uploaded</span>
 
-          {/* Homework lesson count */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-slate-500 font-medium">Lessons for homework:</span>
-            {editingHomeworkCount ? (
-              <div className="flex items-center gap-1">
-                <input
-                  type="number"
-                  min={1}
-                  max={50}
-                  value={homeworkCountValue}
-                  onChange={(e) => setHomeworkCountValue(e.target.value)}
-                  className="w-16 text-xs border border-slate-300 rounded px-1.5 py-0.5 outline-none focus:ring-1 focus:ring-indigo-500"
-                  autoFocus
-                  onKeyDown={(e) => e.key === 'Enter' && handleSaveHomeworkCount()}
-                  placeholder="e.g. 6"
-                />
-                <button onClick={handleSaveHomeworkCount} className="text-green-600 hover:text-green-700">
-                  <Check className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  onClick={() => {
-                    setEditingHomeworkCount(false);
-                    setHomeworkCountValue(course.homework_lesson_count?.toString() ?? '');
-                  }}
-                  className="text-slate-400 hover:text-slate-600"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            ) : (
-              <div className="flex items-center gap-1">
-                {course.homework_lesson_count != null ? (
-                  <span className="font-semibold text-indigo-600">{course.homework_lesson_count}</span>
-                ) : (
-                  <span className="text-amber-500 font-medium">Not set — homework blocked</span>
-                )}
-                <button
-                  onClick={() => setEditingHomeworkCount(true)}
-                  className="text-slate-400 hover:text-slate-600 p-0.5"
-                >
-                  <Pencil className="w-3 h-3" />
-                </button>
-              </div>
-            )}
-          </div>
         </div>
       </div>
 

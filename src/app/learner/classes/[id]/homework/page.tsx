@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Loader2, AlertCircle, BookOpen } from 'lucide-react';
+import { ArrowLeft, Loader2, AlertCircle } from 'lucide-react';
 import Link from 'next/link';
 import { HomeworkWindow, HomeworkSubmission } from '@/lib/types';
 
@@ -20,7 +20,6 @@ export default function HomeworkHubPage() {
   const [error, setError] = useState<string | null>(null);
   const [window, setWindow] = useState<HomeworkWindow | null>(null);
   const [submission, setSubmission] = useState<HomeworkSubmission | null>(null);
-  const [notConfigured, setNotConfigured] = useState(false);
 
   useEffect(() => {
     const today = new Date().toISOString().slice(0, 10);
@@ -30,7 +29,6 @@ export default function HomeworkHubPage() {
         if (data.error) throw new Error(data.error);
         setWindow(data.window);
         setSubmission(data.submission);
-        setNotConfigured(data.notConfigured ?? false);
       })
       .catch(err => setError(err.message))
       .finally(() => setLoading(false));
@@ -49,22 +47,6 @@ export default function HomeworkHubPage() {
       <div className="bg-red-50 rounded-2xl p-6 text-center">
         <AlertCircle className="w-8 h-8 text-red-500 mx-auto mb-2" />
         <p className="text-sm text-red-700">{error}</p>
-      </div>
-    );
-  }
-
-  if (notConfigured) {
-    return (
-      <div className="text-center py-12">
-        <BookOpen className="w-8 h-8 text-amber-400 mx-auto mb-3" />
-        <p className="text-slate-700 font-medium mb-1">Homework not set up yet</p>
-        <p className="text-slate-500 text-sm mb-4">
-          Your teacher needs to set the number of lessons for this course before homework can begin.
-        </p>
-        <Link href={`/learner/classes/${classId}`} className="inline-flex items-center gap-1.5 text-sm text-indigo-600 hover:text-indigo-700">
-          <ArrowLeft className="w-4 h-4" />
-          Back to class
-        </Link>
       </div>
     );
   }

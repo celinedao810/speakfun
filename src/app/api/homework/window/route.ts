@@ -40,31 +40,21 @@ export async function GET(request: NextRequest) {
       submission = await fetchSubmission(supabase, user.id, window.id);
     }
 
-    // Lightweight course status check (read-only, no window creation)
+    // Lightweight course status check: complete if today > homework_end_date
     let courseComplete = false;
-    let notConfigured = false;
+    const notConfigured = false;
     if (!window) {
-      const { data: ccRow } = await serviceSupabase
-        .from('class_courses')
-        .select('courses(homework_lesson_count)')
+      const { data: settingsRow } = await serviceSupabase
+        .from('class_homework_settings')
+        .select('homework_end_date')
         .eq('class_id', classId)
-        .order('position', { ascending: true })
-        .limit(1)
         .maybeSingle();
-      const coursesJoin = ccRow?.courses;
-      const N: number | null = Array.isArray(coursesJoin)
-        ? ((coursesJoin[0] as { homework_lesson_count: number | null } | undefined)?.homework_lesson_count ?? null)
-        : ((coursesJoin as { homework_lesson_count: number | null } | null | undefined)?.homework_lesson_count ?? null);
-
-      if (!N) {
-        notConfigured = true;
-      } else {
-        const { count } = await serviceSupabase
-          .from('daily_homework_windows')
-          .select('id', { count: 'exact', head: true })
-          .eq('class_id', classId)
-          .eq('is_review_session', false);
-        courseComplete = (count ?? 0) >= N * 3;
+      const endDate: string | null = (settingsRow as { homework_end_date: string | null } | null)?.homework_end_date ?? null;
+      if (endDate) {
+        const UTC7_OFFSET = 7 * 60 * 60 * 1000;
+        const nowUtc7 = new Date(Date.now() + UTC7_OFFSET);
+        const today = `${nowUtc7.getUTCFullYear()}-${String(nowUtc7.getUTCMonth() + 1).padStart(2, '0')}-${String(nowUtc7.getUTCDate()).padStart(2, '0')}`;
+        courseComplete = today > endDate;
       }
     }
 
