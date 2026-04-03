@@ -41,7 +41,9 @@ export function todayUtc7(): string {
   return `${y}-${m}-${d}`;
 }
 
-/** Compute max possible points for a session given the exercises in the pool. */
+/** Compute max possible points for a review session.
+ *  Formula: vocabPool × 1pt  +  structurePool × 3pt  +  10pt (Ex3 free talk)
+ */
 export function computeMaxPoints(
   exercises: LessonExercises[],
   wordsPerSession: number,
@@ -57,16 +59,22 @@ export function computeMaxPoints(
   const structureLimit = isReview ? (reviewStructureCount ?? structuresPerSession) : structuresPerSession;
   const vocabPool = Math.min(totalVocab, wordLimit);
   const structurePool = Math.min(totalStructures, structureLimit);
+
+  if (isReview) {
+    // All sessions are now review sessions: ex3 is always free talk (10pt max)
+    return vocabPool * 1 + structurePool * 3 + 10;
+  }
+
+  // Legacy path: regular (non-review) sessions keep old formula for existing windows
   const pendingLesson = pendingReadingLessonId
     ? exercises.find(e => e.lessonId === pendingReadingLessonId)
     : null;
   let ex3Pts = 0;
-  if (!isReview && pendingLesson) {
+  if (pendingLesson) {
     if (pendingLesson.conversationExercise) {
       const learnerTurns = pendingLesson.conversationExercise.turns.filter(t => t.speaker === 'LEARNER').length;
       ex3Pts = learnerTurns * 10;
     } else if (pendingLesson.readingPassage) {
-      // Legacy: reading passage exercise
       ex3Pts = 20 + totalVocab;
     }
   }
@@ -81,29 +89,18 @@ export function computeMaxPoints(
  * Generates the next homework window for a class if none is currently open.
  * Auth-free: works with any SupabaseClient (anon or service role).
  *
- * Session algorithm:
- *   N = course.homework_lesson_count (teacher-set; null → generation blocked)
- *   nonReviewCount = number of past non-review windows
+ * Session algorithm (new):
+ *   - Every session is a review session (is_review_session = true)
+ *   - One session per UTC+7 calendar day, generated only after 6am UTC+7
+ *   - Generation stops when today > homework_end_date (returns courseComplete: true)
+ *   - Pool = all lessons with DONE exercises assigned to the class
  *
- *   if nonReviewCount >= N × 3:
- *     — all N lessons covered → courseComplete immediately
- *   else:
- *     nextSessionNumber % 7 == 0 → review session
- *     else → regular lesson session (lessonCycleIndex = floor(nonReviewCount / 3))
- *     if lesson exercises not ready yet → skip generation (no window created)
- *
- * Lessons are ordered by curriculum order (sort_order), not by exercise generation time.
- *
- * If N is not set on the course: returns notConfigured: true and no window is created.
- * If lesson exercises are not yet generated: generation is blocked until they are ready.
- *
- * Reading carry-forward for sessions 2–3:
- *   Carries pendingReadingLessonId from the previous window without a per-learner
- *   mastery check (acceptable tradeoff in cron/no-auth context).
+ * If no exercises are ready yet: generation is skipped until they are.
  */
 export async function generateWindowForClass(
   supabase: SupabaseClient,
-  classId: string
+  classId: string,
+  { forceReview = false }: { forceReview?: boolean } = {}
 ): Promise<{ created: boolean; window: HomeworkWindow | null; courseComplete: boolean; notConfigured: boolean }> {
   // 1. If a window is already open, nothing to do
   const existing = await fetchOpenWindow(supabase, classId);
@@ -111,35 +108,41 @@ export async function generateWindowForClass(
     return { created: false, window: existing, courseComplete: false, notConfigured: false };
   }
 
-  // 2. Load all past windows to determine session number
-  const allWindows = await fetchWindowsByClass(supabase, classId);
-
-  // 3. Fetch the active course's homework_lesson_count
-  const { data: ccRow } = await supabase
-    .from('class_courses')
-    .select('courses(homework_lesson_count)')
-    .eq('class_id', classId)
-    .order('position', { ascending: true })
-    .limit(1)
-    .maybeSingle();
-
-  const coursesJoin = ccRow?.courses;
-  const N: number | null = Array.isArray(coursesJoin)
-    ? ((coursesJoin[0] as { homework_lesson_count: number | null } | undefined)?.homework_lesson_count ?? null)
-    : ((coursesJoin as { homework_lesson_count: number | null } | null | undefined)?.homework_lesson_count ?? null);
-
-  if (!N) {
-    // Teacher hasn't set the lesson count — block generation
-    return { created: false, window: null, courseComplete: false, notConfigured: true };
+  // 2. 6am UTC+7 gate — only generate sessions from 6am onwards
+  const UTC7_OFFSET = 7 * 60 * 60 * 1000;
+  const nowUtc7 = new Date(Date.now() + UTC7_OFFSET);
+  const skipTimeGate = forceReview || (process.env.HOMEWORK_SESSION_DURATION_MINS && parseInt(process.env.HOMEWORK_SESSION_DURATION_MINS, 10) > 0);
+  if (!skipTimeGate && nowUtc7.getUTCHours() < 6) {
+    return { created: false, window: null, courseComplete: false, notConfigured: false };
   }
 
-  // 4. Get all lessons in courses assigned to this class (curriculum order)
+  // 3. One session per calendar day — if any window was already created today, skip.
+  const todayDate = todayUtc7();
+  const { data: todayWindow } = await supabase
+    .from('daily_homework_windows')
+    .select('id')
+    .eq('class_id', classId)
+    .eq('window_date', todayDate)
+    .maybeSingle();
+  if (todayWindow) {
+    return { created: false, window: null, courseComplete: false, notConfigured: false };
+  }
+
+  // 4. Load settings and check end date
+  const settings = await fetchClassHomeworkSettings(supabase, classId);
+  if (settings.homeworkEndDate && todayDate > settings.homeworkEndDate) {
+    return { created: false, window: null, courseComplete: true, notConfigured: false };
+  }
+
+  // 5. Load all past windows to determine session number
+  const allWindows = await fetchWindowsByClass(supabase, classId);
+
+  // 6. Get all lessons in courses assigned to this class (curriculum order)
   const courseLessons = await fetchLessonsForClassCourses(supabase, classId);
   const lessonIds = [...new Set(courseLessons.map((cl: { lessonId: string }) => cl.lessonId))];
   const allExercises = await fetchLessonExercisesForLessons(supabase, lessonIds);
 
-  // Sort by curriculum order (lesson sort_order via fetchLessonsForClassCourses),
-  // not by exercise generation time
+  // Sort by curriculum order (lesson sort_order via fetchLessonsForClassCourses)
   const lessonOrder = new Map(lessonIds.map((id, i) => [id, i]));
   const readyExercises = allExercises
     .filter(e => e.generationStatus === 'DONE' && e.generatedAt)
@@ -149,81 +152,22 @@ export async function generateWindowForClass(
     return { created: false, window: null, courseComplete: false, notConfigured: false };
   }
 
-  // 5. Determine next session
+  // 7. All sessions are review sessions; pool = all ready lessons
   const nextSessionNumber = allWindows.length + 1;
-  const settings = await fetchClassHomeworkSettings(supabase, classId);
-
-  const nonReviewCount = allWindows.filter(w => !w.isReviewSession).length;
-
-  let isReviewSession: boolean;
-  let cycleLesson: LessonExercises | null = null;
-  let lessonCycleSession: number | null = null;
-
-  if (nonReviewCount >= N * 3) {
-    // All N lessons covered — course complete.
-    return { created: false, window: null, courseComplete: true, notConfigured: false };
-  } else {
-    // Normal generation: mid-course modulo review or regular lesson session
-    isReviewSession = nextSessionNumber % 7 === 0;
-
-    if (!isReviewSession) {
-      const lessonCycleIndex = Math.floor(nonReviewCount / 3);
-      const sessionInCycle = (nonReviewCount % 3) + 1;
-      cycleLesson = readyExercises[lessonCycleIndex] ?? null;
-      lessonCycleSession = cycleLesson ? sessionInCycle : null;
-      if (!cycleLesson) {
-        // Lesson exercises not ready yet — skip generation until they are.
-        return { created: false, window: null, courseComplete: false, notConfigured: false };
-      }
-    }
-  }
-
-  // 6. Build lesson pool
-
-  let lessonIdsInPool: string[];
-  let poolExercises: LessonExercises[];
-  if (isReviewSession) {
-    const lessonsFromPastSessions = new Set(
-      allWindows
-        .filter(w => !w.isReviewSession && w.cycleLessonId)
-        .map(w => w.cycleLessonId as string)
-    );
-    const reviewPool = readyExercises.filter(e => lessonsFromPastSessions.has(e.lessonId));
-    if (reviewPool.length === 0) {
-      // No lessons covered in past sessions yet — skip this review session
-      return { created: false, window: null, courseComplete: false, notConfigured: false };
-    }
-    lessonIdsInPool = reviewPool.map(e => e.lessonId);
-    poolExercises = reviewPool;
-  } else {
-    lessonIdsInPool = [cycleLesson!.lessonId];
-    poolExercises = [cycleLesson!];
-  }
-
-  // 7. Determine pending reading lesson
-  let pendingReadingLessonId: string | null = null;
-  if (!isReviewSession && cycleLesson) {
-    if (lessonCycleSession === 1) {
-      pendingReadingLessonId = cycleLesson.lessonId;
-    } else {
-      const prevWindow = allWindows[0]; // latest window (ordered by session_number desc)
-      pendingReadingLessonId = prevWindow?.pendingReadingLessonId ?? null;
-    }
-  }
+  const lessonIdsInPool = readyExercises.map(e => e.lessonId);
 
   // 8. Compute max possible points
   const maxPossiblePoints = computeMaxPoints(
-    poolExercises,
+    readyExercises,
     settings.wordsPerSession,
     settings.structuresPerSession,
-    isReviewSession,
-    pendingReadingLessonId,
+    true, // always review
+    null,
     settings.reviewWordCount,
     settings.reviewStructureCount
   );
 
   // 9. Race-condition guard: check if a concurrent request already created this session.
-  //    (React Strict Mode fires useEffect twice on mount; both calls can race past step 1.)
   const { data: alreadyExists } = await supabase
     .from('daily_homework_windows')
     .select('id')
@@ -238,21 +182,20 @@ export async function generateWindowForClass(
   // 10. Create the window
   const now = new Date().toISOString();
   const closesAt = computeClosesAt();
-  const windowDate = todayUtc7();
 
   const created = await createHomeworkWindow(supabase, {
     classId,
     triggeringSessionId: null,
-    windowDate,
-    isReviewSession,
+    windowDate: todayDate,
+    isReviewSession: true,
     lessonIdsInPool,
     maxPossiblePoints,
     opensAt: now,
     closesAt,
-    pendingReadingLessonId,
+    pendingReadingLessonId: null,
     sessionNumber: nextSessionNumber,
-    lessonCycleSession,
-    cycleLessonId: cycleLesson?.lessonId ?? null,
+    lessonCycleSession: null,
+    cycleLessonId: null,
   });
 
   return { created: true, window: created, courseComplete: false, notConfigured: false };

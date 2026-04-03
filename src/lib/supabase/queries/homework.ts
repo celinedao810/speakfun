@@ -71,6 +71,7 @@ interface ClassHomeworkSettingsRow {
   review_word_count: number;
   review_structure_count: number;
   homework_restarted_at: string | null;
+  homework_end_date: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -202,6 +203,7 @@ function toClassHomeworkSettings(row: ClassHomeworkSettingsRow): ClassHomeworkSe
     reviewWordCount: row.review_word_count,
     reviewStructureCount: row.review_structure_count,
     homeworkRestartedAt: row.homework_restarted_at ?? null,
+    homeworkEndDate: row.homework_end_date ?? null,
   };
 }
 
@@ -741,6 +743,7 @@ const DEFAULT_SETTINGS: Omit<ClassHomeworkSettings, 'id' | 'classId'> = {
   reviewWordCount: 15,
   reviewStructureCount: 5,
   homeworkRestartedAt: null,
+  homeworkEndDate: null,
 };
 
 export async function fetchClassHomeworkSettings(
@@ -773,6 +776,7 @@ export async function upsertClassHomeworkSettings(
       review_interval_days: settings.reviewIntervalDays,
       review_word_count: settings.reviewWordCount,
       review_structure_count: settings.reviewStructureCount,
+      homework_end_date: settings.homeworkEndDate ?? null,
     }, { onConflict: 'class_id' });
   return !error;
 }

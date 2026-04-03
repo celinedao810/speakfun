@@ -1,254 +1,276 @@
 "use client";
 
-import { useState, useRef, useCallback } from 'react';
-import { BookOpen, Timer, CheckCircle, XCircle, ChevronRight, RotateCcw } from 'lucide-react';
+import { useState, useRef, useCallback, useEffect } from 'react';
+import { CheckCircle, XCircle, Mic } from 'lucide-react';
 import { VocabAttemptAudit, VocabExerciseItem, VocabScoringResult } from '@/lib/types';
 import { scoreVocabGuess } from '@/lib/ai/aiClient';
-import AudioPlayer from '@/components/AudioPlayer';
 import AudioRecorder, { AudioRecorderHandle } from '@/components/AudioRecorder';
 
 interface Exercise1VocabProps {
-  vocabPool: VocabExerciseItem[];  // Pre-shuffled, wrong words first
-  timedMode: boolean;
-  onComplete: (score: number, wrongVocabIds: string[], attempts: VocabAttemptAudit[]) => void;
+  vocabPool: VocabExerciseItem[];
+  onComplete: (score: number, wrongVocabIds: string[], attempts: VocabAttemptAudit[], wordResults: WordResult[]) => void;
 }
 
-type WordState = 'PROMPT' | 'RECORDING' | 'RESULT' | 'WRONG_REPEAT';
-
-interface WordAttempt {
+export interface WordResult {
   item: VocabExerciseItem;
-  result: VocabScoringResult | null;
-  timedOut: boolean;
-  timeTakenMs: number;
-  timestamp: string;
+  pointsEarned: number;
+  isCorrect: boolean;
 }
 
-export default function Exercise1Vocab({ vocabPool, timedMode, onComplete }: Exercise1VocabProps) {
+/** Parse word type from the first word(s) of the clue field. */
+function parseWordType(clue: string): string {
+  const m = clue.match(/^(noun|verb|adjective|adverb|phrase|idiom|expression)/i);
+  return m ? m[1].toLowerCase() : '';
+}
+
+const FALL_DURATION_MS = 10000; // 10 seconds
+
+export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1VocabProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [wordState, setWordState] = useState<WordState>('PROMPT');
-  const [currentResult, setCurrentResult] = useState<VocabScoringResult | null>(null);
+  const [progress, setProgress] = useState(0); // 0 → 1 over FALL_DURATION_MS
   const [isScoring, setIsScoring] = useState(false);
+  const [currentResult, setCurrentResult] = useState<VocabScoringResult | null>(null);
   const [totalScore, setTotalScore] = useState(0);
-  const [attempts, setAttempts] = useState<WordAttempt[]>([]);
-  const [wrongThisSession, setWrongThisSession] = useState<string[]>([]);
-  const [allItems, setAllItems] = useState(vocabPool);  // May grow with wrong repeats
-  const [recordingUrl, setRecordingUrl] = useState<string | null>(null);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const [wrongVocabIds, setWrongVocabIds] = useState<string[]>([]);
+  const [attempts, setAttempts] = useState<VocabAttemptAudit[]>([]);
+  const [wordResults, setWordResults] = useState<WordResult[]>([]);
+  const [resultTimeoutId, setResultTimeoutId] = useState<NodeJS.Timeout | null>(null);
+
   const recorderRef = useRef<AudioRecorderHandle>(null);
-  const timerStartMsRef = useRef(0);
+  const animFrameRef = useRef<number | null>(null);
+  const startTimeRef = useRef<number>(0);
+  const scoredRef = useRef(false); // prevent double-scoring on the same word
 
-  const currentItem = allItems[currentIndex];
-  const totalItems = allItems.length;
-  const isLastItem = currentIndex === totalItems - 1;
+  const currentItem = vocabPool[currentIndex];
+  const isFinished = currentIndex >= vocabPool.length;
 
+  // Advance to next word (or finish)
+  const advanceToNext = useCallback((score: number, wrong: string[], att: VocabAttemptAudit[], result: WordResult, newTotal: number, newWrong: string[], newAttempts: VocabAttemptAudit[], newWordResults: WordResult[]) => {
+    setCurrentResult(null);
+    setProgress(0);
+    scoredRef.current = false;
+    setCurrentIndex(i => {
+      const next = i + 1;
+      if (next >= vocabPool.length) {
+        onComplete(newTotal, newWrong, newAttempts, newWordResults);
+      }
+      return next;
+    });
+  }, [vocabPool.length, onComplete]);
+
+  // Score current recording
   const handleRecordingComplete = useCallback(async (base64: string) => {
-    setWordState('RECORDING');
+    if (scoredRef.current || !currentItem) return;
+    scoredRef.current = true;
     setIsScoring(true);
-    setRecordingUrl(`data:audio/webm;base64,${base64}`);
-    if (timerRef.current) clearTimeout(timerRef.current);
 
-    const timeTakenMs = timedMode ? Date.now() - timerStartMsRef.current : 0;
-    const timedOut = timedMode && timeTakenMs > 5000;
+    // Pause the fall animation while scoring
+    if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
 
+    const timestamp = new Date().toISOString();
     try {
-      const result = await scoreVocabGuess(
-        currentItem.word,
-        currentItem.ipa,
-        base64,
-        timedMode && !timedOut
-      );
+      const result = await scoreVocabGuess(currentItem.word, currentItem.ipa, base64, true);
       result.vocabItemId = currentItem.id;
 
-      const pointsEarned = timedOut ? 0 : result.pointsEarned;
-      setCurrentResult({ ...result, pointsEarned });
-      setTotalScore(s => s + pointsEarned);
-
-      const isCorrect = result.isCorrectWord && !timedOut;
-      const newAttempt: WordAttempt = {
-        item: currentItem,
-        result: { ...result, pointsEarned },
-        timedOut,
-        timeTakenMs,
-        timestamp: new Date().toISOString(),
+      const pts = result.pointsEarned;
+      const isCorrect = result.isCorrectWord;
+      const newTotal = totalScore + pts;
+      const newWrong = isCorrect ? wrongVocabIds : (wrongVocabIds.includes(currentItem.id) ? wrongVocabIds : [...wrongVocabIds, currentItem.id]);
+      const audit: VocabAttemptAudit = {
+        vocabItemId: currentItem.id,
+        lessonId: currentItem.lessonId,
+        targetWord: currentItem.word,
+        recognizedWord: result.recognizedWord || '',
+        isCorrectWord: isCorrect,
+        pronunciationScore: result.pronunciationScore,
+        pointsEarned: pts,
+        feedback: result.feedback,
+        timedMode: true,
+        timeTakenMs: 0,
+        timedOut: false,
+        attemptTimestamp: timestamp,
       };
-      setAttempts(prev => [...prev, newAttempt]);
+      const wordResult: WordResult = { item: currentItem, pointsEarned: pts, isCorrect };
+      const newAttempts = [...attempts, audit];
+      const newWordResults = [...wordResults, wordResult];
 
-      if (!isCorrect) {
-        setWrongThisSession(prev => prev.includes(currentItem.id) ? prev : [...prev, currentItem.id]);
-      }
+      setTotalScore(newTotal);
+      setWrongVocabIds(newWrong);
+      setAttempts(newAttempts);
+      setWordResults(newWordResults);
+      setCurrentResult(result);
 
-      setWordState('RESULT');
+      // Auto-advance after 2 seconds
+      const tid = setTimeout(() => {
+        advanceToNext(pts, newWrong, newAttempts, wordResult, newTotal, newWrong, newAttempts, newWordResults);
+      }, 2000);
+      setResultTimeoutId(tid);
     } catch {
-      setIsScoring(false);
-      setWordState('PROMPT');
+      // On error, treat as wrong and advance
+      const newWrong = wrongVocabIds.includes(currentItem.id) ? wrongVocabIds : [...wrongVocabIds, currentItem.id];
+      const wordResult: WordResult = { item: currentItem, pointsEarned: 0, isCorrect: false };
+      const newWordResults = [...wordResults, wordResult];
+      setWrongVocabIds(newWrong);
+      setWordResults(newWordResults);
+      const tid = setTimeout(() => {
+        advanceToNext(0, newWrong, attempts, wordResult, totalScore, newWrong, attempts, newWordResults);
+      }, 1000);
+      setResultTimeoutId(tid);
     } finally {
       setIsScoring(false);
     }
-  }, [currentItem, timedMode]);
+  }, [currentItem, totalScore, wrongVocabIds, attempts, wordResults, advanceToNext]);
 
-  const handleTimedOut = useCallback(() => {
-    // Auto-stop recording if timer expires
-    recorderRef.current?.stop?.();
-  }, []);
+  // Falling block animation
+  useEffect(() => {
+    if (isFinished || !currentItem) return;
 
-  const handleStartRecording = useCallback(() => {
-    timerStartMsRef.current = Date.now();
-    if (timedMode) {
-      timerRef.current = setTimeout(handleTimedOut, 5000);
-    }
-  }, [timedMode, handleTimedOut]);
+    setProgress(0);
+    scoredRef.current = false;
+    startTimeRef.current = performance.now();
 
-  const handleRecordingStateChange = useCallback((recording: boolean) => {
-    if (recording) handleStartRecording();
-  }, [handleStartRecording]);
+    const tick = (now: number) => {
+      const elapsed = now - startTimeRef.current;
+      const p = Math.min(elapsed / FALL_DURATION_MS, 1);
+      setProgress(p);
 
-  const handleNext = () => {
-    if (isLastItem) {
-      // Build final wrong vocab IDs (words with any wrong attempt this session, carried to next day)
-      const wrongVocabIds = wrongThisSession;
-      const allAttempts: VocabAttemptAudit[] = attempts.map(a => ({
-        vocabItemId: a.item.id,
-        lessonId: a.item.lessonId,
-        targetWord: a.item.word,
-        recognizedWord: a.result?.recognizedWord || '',
-        isCorrectWord: a.result?.isCorrectWord || false,
-        pronunciationScore: a.result?.pronunciationScore || 0,
-        pointsEarned: a.result?.pointsEarned || 0,
-        feedback: a.result?.feedback || '',
-        timedMode,
-        timeTakenMs: a.timeTakenMs,
-        timedOut: a.timedOut,
-        attemptTimestamp: a.timestamp,
-      }));
-      onComplete(totalScore, wrongVocabIds, allAttempts);
-      return;
-    }
-
-    // If this was wrong, add a repeat at end if not already queued
-    if (currentResult && !currentResult.isCorrectWord) {
-      const alreadyQueued = allItems.slice(currentIndex + 1).some(i => i.id === currentItem.id);
-      if (!alreadyQueued) {
-        setAllItems(prev => [...prev, currentItem]);
+      if (p < 1) {
+        animFrameRef.current = requestAnimationFrame(tick);
+      } else {
+        // Block reached bottom — if not yet scored, count as wrong and advance
+        if (!scoredRef.current) {
+          scoredRef.current = true;
+          recorderRef.current?.stop?.(); // auto-stop if recording was started
+          const newWrong = wrongVocabIds.includes(currentItem.id) ? wrongVocabIds : [...wrongVocabIds, currentItem.id];
+          const wordResult: WordResult = { item: currentItem, pointsEarned: 0, isCorrect: false };
+          const newWordResults = [...wordResults, wordResult];
+          setWrongVocabIds(newWrong);
+          setWordResults(newWordResults);
+          // Advance immediately (no result to show)
+          setCurrentIndex(i => {
+            const next = i + 1;
+            if (next >= vocabPool.length) {
+              onComplete(totalScore, newWrong, attempts, newWordResults);
+            }
+            return next;
+          });
+          setProgress(0);
+        }
       }
-    }
+    };
 
-    setCurrentResult(null);
-    setRecordingUrl(null);
-    setWordState('PROMPT');
-    setCurrentIndex(i => i + 1);
-  };
+    animFrameRef.current = requestAnimationFrame(tick);
+    return () => {
+      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentIndex, isFinished]);
 
-  if (!currentItem) return null;
+  // Cleanup result timeout on unmount
+  useEffect(() => () => { if (resultTimeoutId) clearTimeout(resultTimeoutId); }, [resultTimeoutId]);
 
-  const progressPct = Math.round((currentIndex / totalItems) * 100);
+  if (isFinished) return null;
+
+  const wordType = parseWordType(currentItem.clue);
+  // Mask: first letter visible, rest as underscores
+  const maskedWord = currentItem.word[0].toUpperCase() + ' ' + Array(currentItem.word.length - 1).fill('_').join(' ');
+  // Vertical travel: block starts off-screen top, travels to bottom
+  const frameHeight = 340; // px — approximate frame height
+  const blockHeight = 120; // px — approximate block height
+  const maxTravel = frameHeight - blockHeight;
+  const translateY = progress * maxTravel;
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="bg-indigo-100 p-1.5 rounded-lg">
-            <BookOpen className="w-4 h-4 text-indigo-600" />
-          </div>
-          <span className="text-sm font-semibold text-slate-700">Vocabulary Guessing</span>
-        </div>
-        <div className="flex items-center gap-2">
-          {timedMode && (
-            <div className="flex items-center gap-1 text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded-full">
-              <Timer className="w-3.5 h-3.5" />
-              Timed (5s)
-            </div>
-          )}
-          <span className="text-xs text-slate-400">{currentIndex + 1}/{totalItems}</span>
+        <span className="text-sm font-semibold text-slate-700">Vocabulary</span>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-slate-400">{currentIndex + 1}/{vocabPool.length}</span>
+          <span className="text-lg font-bold text-indigo-600">{totalScore.toFixed(1)} pts</span>
         </div>
       </div>
 
-      {/* Progress bar */}
+      {/* Progress bar (time-based) */}
       <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
         <div
-          className="h-full bg-indigo-500 rounded-full transition-all"
-          style={{ width: `${progressPct}%` }}
+          className="h-full bg-indigo-500 rounded-full transition-none"
+          style={{ width: `${(1 - progress) * 100}%` }}
         />
       </div>
 
-      {/* Score display */}
-      <div className="text-center">
-        <span className="text-2xl font-bold text-indigo-600">{totalScore.toFixed(1)}</span>
-        <span className="text-slate-400 text-sm ml-1">pts</span>
-      </div>
+      {/* Game frame */}
+      <div
+        className="relative bg-gradient-to-b from-indigo-950 to-slate-900 rounded-2xl overflow-hidden border border-indigo-800"
+        style={{ height: `${frameHeight}px` }}
+      >
+        {/* Falling block */}
+        <div
+          className="absolute left-1/2 -translate-x-1/2 w-[85%]"
+          style={{ transform: `translateX(-50%) translateY(${translateY}px)`, willChange: 'transform' }}
+        >
+          <div className="bg-indigo-700/90 backdrop-blur rounded-2xl px-5 py-4 border border-indigo-400/40 shadow-lg">
+            {/* Masked word */}
+            <p className="font-mono text-xl font-bold text-white tracking-widest text-center mb-1">
+              {maskedWord}
+            </p>
+            {/* Word type */}
+            {wordType && (
+              <p className="text-xs text-indigo-300 text-center uppercase tracking-wide mb-2">{wordType}</p>
+            )}
+            {/* Definition */}
+            <p className="text-sm text-indigo-100 text-center leading-relaxed">
+              {currentItem.clue.replace(/^(noun|verb|adjective|adverb|phrase|idiom|expression)[:\s]*/i, '').trim()}
+            </p>
+          </div>
+        </div>
 
-      {/* Word card */}
-      <div className="bg-gradient-to-br from-indigo-50 to-violet-50 rounded-2xl p-6 text-center border border-indigo-100">
-        {wordState === 'RESULT' && currentResult ? (
-          <>
-            <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold mb-3 ${
-              currentResult.isCorrectWord ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'
+        {/* Result overlay */}
+        {currentResult && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/60 rounded-2xl">
+            <div className={`rounded-2xl px-6 py-5 text-center shadow-xl w-[80%] ${
+              currentResult.isCorrectWord ? 'bg-green-600' : 'bg-red-600'
             }`}>
               {currentResult.isCorrectWord ? (
-                <><CheckCircle className="w-4 h-4" /> Correct! +{currentResult.pointsEarned.toFixed(1)}pt</>
+                <CheckCircle className="w-8 h-8 text-white mx-auto mb-2" />
               ) : (
-                <><XCircle className="w-4 h-4" /> Incorrect — 0pt</>
+                <XCircle className="w-8 h-8 text-white mx-auto mb-2" />
+              )}
+              <p className="text-white font-bold text-lg">{currentItem.word}</p>
+              <p className="text-white/80 text-xs mt-1">/{currentItem.ipa}/</p>
+              <p className="text-white/90 text-sm font-semibold mt-2">
+                {currentResult.isCorrectWord ? `+${currentResult.pointsEarned.toFixed(1)} pt` : '0 pt'}
+              </p>
+              {currentResult.feedback && (
+                <p className="text-white/70 text-xs mt-1">{currentResult.feedback}</p>
               )}
             </div>
-            <p className="text-2xl font-bold text-slate-900 mb-1">{currentItem.word}</p>
-            <p className="text-slate-500 text-sm mb-1">/{currentItem.ipa}/</p>
-            {currentResult.recognizedWord && currentResult.recognizedWord !== currentItem.word && (
-              <p className="text-xs text-slate-400">You said: "{currentResult.recognizedWord}"</p>
-            )}
-            {currentResult.feedback && (
-              <p className="text-xs text-slate-500 mt-2 bg-white/60 rounded-lg px-3 py-2">
-                {currentResult.feedback}
-              </p>
-            )}
-            {/* TTS to hear correct pronunciation */}
-            <div className="mt-3 flex justify-center">
-              <AudioPlayer text={currentItem.word} label="Play pronunciation" />
+          </div>
+        )}
+
+        {/* Scoring indicator */}
+        {isScoring && !currentResult && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="bg-black/50 rounded-full px-4 py-2">
+              <p className="text-white text-xs animate-pulse">Analyzing...</p>
             </div>
-            {/* Playback of learner's own recording */}
-            {recordingUrl && (
-              <div className="mt-3 text-left">
-                <p className="text-xs text-slate-400 mb-1">Your recording:</p>
-                <audio controls src={recordingUrl} className="w-full h-9 rounded-lg" />
-              </div>
-            )}
-          </>
-        ) : (
-          <>
-            <p className="font-mono text-lg font-semibold text-indigo-600 tracking-widest mb-3">
-              {currentItem.word[0].toUpperCase()}{Array(currentItem.word.length - 1).fill('_').join(' ')}
-            </p>
-            <p className="text-xs text-slate-400 uppercase tracking-wide mb-2">Clue</p>
-            <p className="text-base text-slate-700 leading-relaxed">{currentItem.clue.replace(/\s*Starts with:\s*\w+\.\.\./gi, '')}</p>
-            <p className="text-xs text-slate-400 mt-3">Example: "{currentItem.exampleSentence.replace(new RegExp(currentItem.word, 'gi'), '___')}"</p>
-          </>
+          </div>
         )}
       </div>
 
-      {/* Recording / Next action */}
-      {wordState !== 'RESULT' ? (
-        <div className="flex flex-col items-center gap-3">
-          <p className="text-sm text-slate-500">Say the word aloud</p>
+      {/* Mic at bottom */}
+      {!currentResult && (
+        <div className="flex flex-col items-center gap-2">
+          <p className="text-xs text-slate-500 flex items-center gap-1">
+            <Mic className="w-3.5 h-3.5" /> Say the word before the block disappears
+          </p>
           <AudioRecorder
             ref={recorderRef}
             onRecordingComplete={handleRecordingComplete}
             isProcessing={isScoring}
-            maxDuration={timedMode ? 6 : undefined}
-            onRecordingStateChange={handleRecordingStateChange}
+            maxDuration={11}
           />
         </div>
-      ) : (
-        <button
-          onClick={handleNext}
-          className="w-full flex items-center justify-center gap-2 py-3 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 transition"
-        >
-          {isLastItem ? (
-            <><CheckCircle className="w-4 h-4" /> Finish Vocabulary</>
-          ) : currentResult?.isCorrectWord ? (
-            <><ChevronRight className="w-4 h-4" /> Next Word</>
-          ) : (
-            <><RotateCcw className="w-4 h-4" /> Try Again Later</>
-          )}
-        </button>
       )}
     </div>
   );

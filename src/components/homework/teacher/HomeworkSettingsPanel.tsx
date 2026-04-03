@@ -19,21 +19,32 @@ export default function HomeworkSettingsPanel({ classId, settings, onSaved }: Ho
     structuresPerSession: settings.structuresPerSession,
     correctGuessesToCommit: settings.correctGuessesToCommit,
     structureGuessesToCommit: settings.structureGuessesToCommit,
-    reviewIntervalDays: settings.reviewIntervalDays,
     reviewWordCount: settings.reviewWordCount,
     reviewStructureCount: settings.reviewStructureCount,
+    homeworkEndDate: settings.homeworkEndDate ?? '',
   });
 
   const handleSave = async () => {
     setSaving(true);
-    await upsertClassHomeworkSettings(supabase, { classId, homeworkRestartedAt: settings.homeworkRestartedAt, ...values });
-    onSaved({ ...settings, classId, ...values });
+    await upsertClassHomeworkSettings(supabase, {
+      classId,
+      homeworkRestartedAt: settings.homeworkRestartedAt,
+      reviewIntervalDays: settings.reviewIntervalDays,
+      ...values,
+      homeworkEndDate: values.homeworkEndDate || null,
+    });
+    onSaved({
+      ...settings,
+      classId,
+      ...values,
+      homeworkEndDate: values.homeworkEndDate || null,
+    });
     setSaving(false);
   };
 
   const field = (
     label: string,
-    key: keyof typeof values,
+    key: keyof Omit<typeof values, 'homeworkEndDate'>,
     min: number,
     max: number,
     hint?: string
@@ -64,9 +75,20 @@ export default function HomeworkSettingsPanel({ classId, settings, onSaved }: Ho
         {field('Structures per session', 'structuresPerSession', 1, 10, 'Sentence structures daily')}
         {field('Vocab mastery threshold', 'correctGuessesToCommit', 3, 14, 'Correct guesses to commit vocab')}
         {field('Structure mastery threshold', 'structureGuessesToCommit', 3, 20, 'Correct turns to commit structure')}
-        {field('Review every N days', 'reviewIntervalDays', 3, 30, 'Calendar days between reviews')}
         {field('Review word count', 'reviewWordCount', 5, 30, 'Words in review session')}
         {field('Review structure count', 'reviewStructureCount', 1, 10, 'Structures in review Ex2')}
+      </div>
+
+      {/* End date */}
+      <div className="mb-4">
+        <label className="block text-xs font-medium text-muted-foreground mb-1">Session chain end date</label>
+        <input
+          type="date"
+          value={values.homeworkEndDate}
+          onChange={(e) => setValues(v => ({ ...v, homeworkEndDate: e.target.value }))}
+          className="w-full px-3 py-2 text-sm border border-border rounded-lg bg-input outline-none focus:ring-2 focus:ring-ring text-foreground"
+        />
+        <p className="text-xs text-muted-foreground/60 mt-0.5">No new sessions will be created after this date. Leave blank for no end date.</p>
       </div>
 
       <button

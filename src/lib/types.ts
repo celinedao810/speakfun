@@ -500,6 +500,7 @@ export interface ClassHomeworkSettings {
   reviewWordCount: number;
   reviewStructureCount: number;
   homeworkRestartedAt: string | null;
+  homeworkEndDate: string | null;  // YYYY-MM-DD; generation stops after this date
 }
 
 // --- Learner vocab mastery (spaced repetition) ---
@@ -631,6 +632,16 @@ export interface ConversationScoringResult {
   transcription: string;
   pointsEarned: number;
   timeTakenMs: number;
+}
+
+export interface FreeTalkScoringResult {
+  score: number;                  // 0–10, baseline 8pt; 0.5pt deducted per error
+  transcription: string;
+  feedback: string;               // overall feedback summary
+  pronunciationErrors: string[];
+  grammarErrors: string[];
+  vocabularyFeedback: string;
+  deliveryFeedback: string;
 }
 
 // --- Leaderboard ---

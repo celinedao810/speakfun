@@ -6,6 +6,7 @@ import {
   scoreOwnSentence,
   scoreReadingPassage,
   scoreConversationTurn,
+  scoreFreeTalk,
 } from '@/lib/services/geminiService';
 
 export const maxDuration = 60;
@@ -63,6 +64,15 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'targetText and audioBase64 are required' }, { status: 400 });
       }
       const result = await scoreConversationTurn(targetText, hint ?? '', audioBase64);
+      return NextResponse.json(result);
+    }
+
+    if (type === 'free-talk') {
+      const { audioBase64, vocabWords, structurePatterns } = body;
+      if (!audioBase64) {
+        return NextResponse.json({ error: 'audioBase64 is required' }, { status: 400 });
+      }
+      const result = await scoreFreeTalk(audioBase64, vocabWords ?? [], structurePatterns ?? []);
       return NextResponse.json(result);
     }
 

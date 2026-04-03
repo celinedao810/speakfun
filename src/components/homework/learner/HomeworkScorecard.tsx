@@ -112,7 +112,7 @@ export default function HomeworkScorecard({
         {(ex3aScore + ex3bScore > 0) && (
           <ScoreRow
             icon={<MessageCircle className="w-4 h-4 text-violet-600" />}
-            label="Conversation"
+            label={isReview ? 'Free Talk' : 'Conversation / Reading'}
             score={ex3aScore + ex3bScore}
             color="bg-violet-50"
           />

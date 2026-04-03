@@ -3,7 +3,7 @@ import {
   PlacementSentence, DiagnosticResult, SoundDrillPack, TargetSoundResult, WordHighlight,
   VocabItem, StructureItem, RawDialogueLine, VocabExerciseItem, StructureExerciseItem,
   VocabScoringResult, StructureScoringResult, ConversationScoringResult, ReadingScoringResult,
-  ConversationExercise, ConversationTurnScoringResult,
+  ConversationExercise, ConversationTurnScoringResult, FreeTalkScoringResult,
 } from "@/lib/types";
 
 /**
@@ -1420,7 +1420,8 @@ Give feedback in Vietnamese.`
 
 /**
  * Evaluates a learner's own sentence using a target grammar structure.
- * Points: 5pt (no timer) or 7pt (timer), minus 0.5pt per grammar/pronun error.
+ * Points: 3pt max, minus 0.5pt per grammar/pronunciation error.
+ * timerMode parameter kept for backward compatibility but no longer affects scoring.
  */
 export const scoreOwnSentence = async (
   structurePattern: string,
@@ -1429,7 +1430,7 @@ export const scoreOwnSentence = async (
 ): Promise<StructureScoringResult> => {
   return safeExecute(async () => {
     const ai = new GoogleGenAI({ apiKey: getApiKey() });
-    const basePoints = timerMode ? 7 : 5;
+    const basePoints = 3;
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: {
@@ -1533,6 +1534,82 @@ Step 4: Points: 0 if incorrect, ${withinTime ? '5' : '4'} if correct.`
       transcription: result.transcription || '',
       pointsEarned: result.pointsEarned || 0,
       timeTakenMs,
+    };
+  });
+};
+
+/**
+ * Evaluates a 45-second free-talk recording for Ex3.
+ * Score: 10pt max, baseline 8pt. Deduct 0.5pt per pronunciation/grammar/delivery error.
+ * Returns transcription, categorized errors, and overall feedback.
+ */
+export const scoreFreeTalk = async (
+  audioBase64: string,
+  vocabWords: string[],
+  structurePatterns: string[],
+): Promise<FreeTalkScoringResult> => {
+  return safeExecute(async () => {
+    const ai = new GoogleGenAI({ apiKey: getApiKey() });
+    const vocabList = vocabWords.join(', ') || '(none)';
+    const structureList = structurePatterns.join(' | ') || '(none)';
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: {
+        parts: [
+          {
+            text: `You are an English pronunciation and fluency coach. Evaluate this learner's 45-second free-speech recording.
+
+Target vocabulary words (for reference — learner is encouraged to use them): ${vocabList}
+Target grammar structures (for reference — learner is encouraged to use them): ${structureList}
+
+Scoring rules:
+- Base score: 10 points
+- Deduct 0.5pt per pronunciation error (mispronounced word, wrong stress, unclear sounds)
+- Deduct 0.5pt per grammar error (wrong tense, missing article, subject-verb agreement, etc.)
+- Deduct 0.5pt per delivery issue (unnatural pausing, very slow pace, choppy rhythm)
+- Minimum score: 0
+- Baseline is 8pt — the learner must reach this to pass
+
+Steps:
+1. Transcribe exactly what was said.
+2. List each pronunciation error specifically (e.g. "said 'develop' as 'deh-vel-op', stress on wrong syllable").
+3. List each grammar error specifically (e.g. "said 'he go' instead of 'he goes'").
+4. Note any vocabulary from the target list the learner used correctly.
+5. Assess delivery: fluency, pacing, naturalness.
+6. Calculate final score = max(0, 10 - (pronunciation errors + grammar errors + delivery issues) × 0.5).
+7. Write overall feedback in Vietnamese, specifically naming errors.
+8. Write vocabularyFeedback in Vietnamese noting which target words were used or missed.
+9. Write deliveryFeedback in Vietnamese on fluency and pacing.`,
+          },
+          { inlineData: { mimeType: 'audio/webm', data: audioBase64 } }
+        ]
+      },
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            transcription: { type: Type.STRING },
+            score: { type: Type.NUMBER },
+            pronunciationErrors: { type: Type.ARRAY, items: { type: Type.STRING } },
+            grammarErrors: { type: Type.ARRAY, items: { type: Type.STRING } },
+            feedback: { type: Type.STRING },
+            vocabularyFeedback: { type: Type.STRING },
+            deliveryFeedback: { type: Type.STRING },
+          },
+          required: ['transcription', 'score', 'pronunciationErrors', 'grammarErrors', 'feedback', 'vocabularyFeedback', 'deliveryFeedback'],
+        },
+      },
+    });
+    const result = JSON.parse(response.text || '{}');
+    return {
+      score: Math.max(0, Math.min(10, result.score || 0)),
+      transcription: result.transcription || '',
+      feedback: result.feedback || '',
+      pronunciationErrors: result.pronunciationErrors || [],
+      grammarErrors: result.grammarErrors || [],
+      vocabularyFeedback: result.vocabularyFeedback || '',
+      deliveryFeedback: result.deliveryFeedback || '',
     };
   });
 };

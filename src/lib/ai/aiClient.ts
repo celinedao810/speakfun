@@ -4,6 +4,7 @@
 import type {
   PlacementSentence, DiagnosticResult, SoundDrillPack, TargetSoundResult,
   VocabScoringResult, StructureScoringResult, ReadingScoringResult, ConversationTurnScoringResult,
+  FreeTalkScoringResult,
 } from '@/lib/types';
 import type {
   PronunciationResult, LiveEvaluationResult, AISuggestion,
@@ -166,6 +167,13 @@ export const scoreConversationTurn = (
   audioBase64: string,
 ): Promise<ConversationTurnScoringResult> =>
   post('/api/ai/homework-score', { type: 'conversation-turn', targetText, hint, audioBase64 });
+
+export const scoreFreeTalk = (
+  audioBase64: string,
+  vocabWords: string[],
+  structurePatterns: string[],
+): Promise<FreeTalkScoringResult> =>
+  post('/api/ai/homework-score', { type: 'free-talk', audioBase64, vocabWords, structurePatterns });
 
 // ── Safe client-side re-exports ─────────────────────────────────────────────
 
