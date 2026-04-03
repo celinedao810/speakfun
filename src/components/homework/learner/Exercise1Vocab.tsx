@@ -207,7 +207,7 @@ export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1Vocab
         {/* Falling block */}
         <div
           className="absolute left-1/2 -translate-x-1/2 w-[85%]"
-          style={{ transform: `translateX(-50%) translateY(${translateY}px)`, willChange: 'transform' }}
+          style={{ top: `${translateY}px` }}
         >
           <div className="bg-indigo-700/90 backdrop-blur rounded-2xl px-5 py-4 border border-indigo-400/40 shadow-lg">
             {/* Masked word */}

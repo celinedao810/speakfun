@@ -159,8 +159,8 @@ export default function Exercise2Structure({ structures, onComplete }: Exercise2
       >
         {/* Falling block */}
         <div
-          className="absolute left-1/2 w-[88%]"
-          style={{ transform: `translateX(-50%) translateY(${translateY}px)`, willChange: 'transform' }}
+          className="absolute left-1/2 -translate-x-1/2 w-[88%]"
+          style={{ top: `${translateY}px` }}
         >
           <div className="bg-violet-700/90 backdrop-blur rounded-2xl px-5 py-4 border border-violet-400/40 shadow-lg">
             {/* Pattern */}
