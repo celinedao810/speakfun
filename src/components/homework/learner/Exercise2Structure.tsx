@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { CheckCircle, XCircle, Mic } from 'lucide-react';
 import { StructureExerciseItem, StructureScoringResult } from '@/lib/types';
 import { scoreOwnSentence } from '@/lib/ai/aiClient';
@@ -32,6 +32,19 @@ export default function Exercise2Structure({ structures, onComplete }: Exercise2
   const animFrameRef = useRef<number | null>(null);
   const startTimeRef = useRef<number>(0);
   const scoredRef = useRef(false);
+  const frameRef = useRef<HTMLDivElement>(null);
+  const [frameHeightPx, setFrameHeightPx] = useState(320);
+
+  useEffect(() => {
+    const el = frameRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(entries => {
+      const h = entries[0]?.contentRect.height;
+      if (h && h > 0) setFrameHeightPx(h);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   const currentStructure = structures[currentIndex];
   const isFinished = currentIndex >= structures.length;
@@ -128,9 +141,8 @@ export default function Exercise2Structure({ structures, onComplete }: Exercise2
 
   if (isFinished) return null;
 
-  const frameHeight = 380;
   const blockHeight = 150;
-  const maxTravel = frameHeight - blockHeight;
+  const maxTravel = Math.max(frameHeightPx - blockHeight, 0);
   const translateY = progress * maxTravel;
 
   return (
@@ -154,8 +166,8 @@ export default function Exercise2Structure({ structures, onComplete }: Exercise2
 
       {/* Game frame */}
       <div
-        className="relative bg-gradient-to-b from-violet-950 to-slate-900 rounded-2xl overflow-hidden border border-violet-800"
-        style={{ height: `${frameHeight}px` }}
+        ref={frameRef}
+        className="relative bg-gradient-to-b from-violet-950 to-slate-900 rounded-2xl overflow-hidden border border-violet-800 h-[clamp(240px,48vh,380px)]"
       >
         {/* Falling block */}
         <div

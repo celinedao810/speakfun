@@ -39,13 +39,26 @@ export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1Vocab
   const recorderRef = useRef<AudioRecorderHandle>(null);
   const animFrameRef = useRef<number | null>(null);
   const startTimeRef = useRef<number>(0);
-  const scoredRef = useRef(false); // prevent double-scoring on the same word
+  const scoredRef = useRef(false);
+  const frameRef = useRef<HTMLDivElement>(null);
+  const [frameHeightPx, setFrameHeightPx] = useState(280);
+
+  useEffect(() => {
+    const el = frameRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(entries => {
+      const h = entries[0]?.contentRect.height;
+      if (h && h > 0) setFrameHeightPx(h);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   const currentItem = vocabPool[currentIndex];
   const isFinished = currentIndex >= vocabPool.length;
 
   // Advance to next word (or finish)
-  const advanceToNext = useCallback((score: number, wrong: string[], att: VocabAttemptAudit[], result: WordResult, newTotal: number, newWrong: string[], newAttempts: VocabAttemptAudit[], newWordResults: WordResult[]) => {
+  const advanceToNext = useCallback((_score: number, _wrong: string[], _att: VocabAttemptAudit[], _result: WordResult, newTotal: number, newWrong: string[], newAttempts: VocabAttemptAudit[], newWordResults: WordResult[]) => {
     setCurrentResult(null);
     setProgress(0);
     scoredRef.current = false;
@@ -174,10 +187,9 @@ export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1Vocab
   const wordType = parseWordType(currentItem.clue);
   // Mask: first letter visible, rest as underscores
   const maskedWord = currentItem.word[0].toUpperCase() + ' ' + Array(currentItem.word.length - 1).fill('_').join(' ');
-  // Vertical travel: block starts off-screen top, travels to bottom
-  const frameHeight = 340; // px — approximate frame height
+  // Vertical travel: block starts at top, travels to bottom of measured frame
   const blockHeight = 120; // px — approximate block height
-  const maxTravel = frameHeight - blockHeight;
+  const maxTravel = Math.max(frameHeightPx - blockHeight, 0);
   const translateY = progress * maxTravel;
 
   return (
@@ -201,8 +213,8 @@ export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1Vocab
 
       {/* Game frame */}
       <div
-        className="relative bg-gradient-to-b from-indigo-950 to-slate-900 rounded-2xl overflow-hidden border border-indigo-800"
-        style={{ height: `${frameHeight}px` }}
+        ref={frameRef}
+        className="relative bg-gradient-to-b from-indigo-950 to-slate-900 rounded-2xl overflow-hidden border border-indigo-800 h-[clamp(220px,42vh,340px)]"
       >
         {/* Falling block */}
         <div

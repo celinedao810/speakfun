@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import {useState, useEffect, useRef, useCallback } from 'react';
 import { Mic, MicOff, CheckCircle, AlertCircle, RotateCcw, ChevronRight } from 'lucide-react';
 import { VocabExerciseItem, StructureExerciseItem, FreeTalkScoringResult } from '@/lib/types';
 import { scoreFreeTalk } from '@/lib/ai/aiClient';
@@ -150,7 +150,7 @@ export default function Exercise3FreeTalk({ vocabWords, structures, onComplete }
       <div className="space-y-5">
         {/* Big countdown timer */}
         <div className="text-center py-4">
-          <div className={`text-7xl font-black tabular-nums ${timerColor} transition-colors`}>
+          <div className={`text-5xl sm:text-7xl font-black tabular-nums ${timerColor} transition-colors`}>
             {timeLeft}
           </div>
           <p className="text-sm text-muted-foreground mt-1">seconds remaining</p>
@@ -199,7 +199,7 @@ export default function Exercise3FreeTalk({ vocabWords, structures, onComplete }
   // ── SCORING phase ──
   if (phase === 'SCORING') {
     return (
-      <div className="flex flex-col items-center justify-center py-20 gap-3">
+      <div className="flex flex-col items-center justify-center py-10 gap-3">
         <div className="w-10 h-10 border-4 border-emerald-600 border-t-transparent rounded-full animate-spin" />
         <p className="text-sm text-muted-foreground">Analyzing your speech...</p>
       </div>
@@ -219,7 +219,7 @@ export default function Exercise3FreeTalk({ vocabWords, structures, onComplete }
             ? <CheckCircle className="w-8 h-8 text-green-600 mx-auto mb-2" />
             : <AlertCircle className="w-8 h-8 text-red-500 mx-auto mb-2" />
           }
-          <p className={`text-4xl font-black ${scoreColor}`}>{result.score.toFixed(1)}<span className="text-xl font-semibold text-muted-foreground">/10</span></p>
+          <p className={`text-3xl sm:text-4xl font-black ${scoreColor}`}>{result.score.toFixed(1)}<span className="text-xl font-semibold text-muted-foreground">/10</span></p>
           <p className={`text-sm font-semibold mt-1 ${passedBaseline ? 'text-green-700' : 'text-red-600'}`}>
             {passedBaseline ? 'Baseline reached!' : `Baseline not reached (${BASELINE}/10 required)`}
           </p>

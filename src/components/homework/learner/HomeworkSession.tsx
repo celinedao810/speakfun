@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { CheckCircle, XCircle, Loader2, AlertCircle } from 'lucide-react';
 import {
   HomeworkWindow, HomeworkSubmission, HomeworkSessionState,
@@ -71,7 +71,7 @@ function Ex1Summary({
         </p>
       </div>
 
-      <div className="space-y-2 max-h-72 overflow-y-auto">
+      <div className="space-y-2 max-h-60 sm:max-h-72 overflow-y-auto">
         {wordResults.map((r, i) => (
           <div key={i} className={`flex items-center gap-3 px-4 py-2.5 rounded-xl border ${
             r.isCorrect ? 'bg-green-50 border-green-100' : 'bg-red-50 border-red-100'
@@ -140,7 +140,7 @@ function Ex2Summary({
         </p>
       </div>
 
-      <div className="space-y-2 max-h-72 overflow-y-auto">
+      <div className="space-y-2 max-h-60 sm:max-h-72 overflow-y-auto">
         {structureResults.map((r, i) => (
           <div key={i} className={`flex items-start gap-3 px-4 py-2.5 rounded-xl border ${
             r.isCorrect ? 'bg-green-50 border-green-100' : 'bg-red-50 border-red-100'
