@@ -126,7 +126,6 @@ export default function HomeworkSessionMap({ classId }: { classId: string }) {
   const cells = pairs.map(p => ({ pair: p, status: getStatus(p) }));
   const doneCount = cells.filter(c => c.status === 'done').length;
   const missedCount = cells.filter(c => c.status === 'missed').length;
-  const useColumns = cells.length > 10;
 
   return (
     <div className="bg-card rounded-xl border border-border p-5">
@@ -150,24 +149,8 @@ export default function HomeworkSessionMap({ classId }: { classId: string }) {
         </span>
       </div>
 
-      <div
-        className={useColumns ? 'grid gap-1.5' : 'flex flex-wrap gap-1.5'}
-        style={useColumns ? { gridTemplateColumns: 'repeat(3, 1fr)' } : undefined}
-      >
-        {useColumns ? (
-          (() => {
-            const colSize = Math.ceil(cells.length / 3);
-            return [0, 1, 2].map(col => (
-              <div key={col} className="flex flex-col gap-1.5">
-                {cells.slice(col * colSize, (col + 1) * colSize).map(c => (
-                  <SessionCell key={c.pair.window.id} {...c} />
-                ))}
-              </div>
-            ));
-          })()
-        ) : (
-          cells.map(c => <SessionCell key={c.pair.window.id} {...c} />)
-        )}
+      <div className="flex flex-wrap gap-1.5">
+        {cells.map(c => <SessionCell key={c.pair.window.id} {...c} />)}
       </div>
 
       <div className="flex flex-wrap gap-3 mt-4 text-[10px] text-muted-foreground/60">
