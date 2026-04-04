@@ -302,6 +302,15 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
           setVocabAttempts(savedAttempts);
         }
 
+        // If resuming to EX3, kick off topic generation immediately during load
+        // so it's ready (or nearly ready) by the time EX3 renders
+        if (existingSubmission?.ex2Completed && !existingSubmission?.allCompleted && hw.isReviewSession) {
+          generateFreeTalkTopic(
+            pool.map(v => v.word),
+            structuresToUse.slice(0, settingsData?.reviewStructureCount ?? 5).map(s => s.pattern),
+          ).then(t => { if (t) setFreeTalkTopic(t); }).catch(() => {});
+        }
+
         if (existingSubmission?.allCompleted) {
           setPhase('SCORECARD');
         } else if (existingSubmission?.ex2Completed) {
