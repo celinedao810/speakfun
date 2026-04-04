@@ -172,8 +172,15 @@ export const scoreFreeTalk = (
   audioBase64: string,
   vocabWords: string[],
   structurePatterns: string[],
+  topic?: string,
 ): Promise<FreeTalkScoringResult> =>
-  post('/api/ai/homework-score', { type: 'free-talk', audioBase64, vocabWords, structurePatterns });
+  post('/api/ai/homework-score', { type: 'free-talk', audioBase64, vocabWords, structurePatterns, topic });
+
+export const generateFreeTalkTopic = (
+  vocabWords: string[],
+  structurePatterns: string[],
+): Promise<string> =>
+  post('/api/ai/homework-score', { type: 'free-talk-topic', vocabWords, structurePatterns });
 
 // ── Safe client-side re-exports ─────────────────────────────────────────────
 

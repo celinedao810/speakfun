@@ -23,6 +23,7 @@ const AudioRecorder = forwardRef<AudioRecorderHandle, AudioRecorderProps>(({
   onTimeout,
   onRecordingStateChange
 }, ref) => {
+  const [isPending, setIsPending] = useState(false); // true while getUserMedia() is resolving
   const [isRecording, setIsRecording] = useState(false);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
@@ -60,6 +61,8 @@ const AudioRecorder = forwardRef<AudioRecorderHandle, AudioRecorderProps>(({
   }, [isRecording, maxDuration]);
 
   const startRecording = async () => {
+    if (isPending || isRecording) return;
+    setIsPending(true);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const recorder = new MediaRecorder(stream);
@@ -80,7 +83,11 @@ const AudioRecorder = forwardRef<AudioRecorderHandle, AudioRecorderProps>(({
       };
       recorder.start();
       setIsRecording(true);
-    } catch (err) { console.error('Recording failed:', err); }
+    } catch (err) {
+      console.error('Recording failed:', err);
+    } finally {
+      setIsPending(false);
+    }
   };
 
   const stopRecording = () => {
@@ -110,7 +117,12 @@ const AudioRecorder = forwardRef<AudioRecorderHandle, AudioRecorderProps>(({
           <Clock className="w-3.5 h-3.5" /> {timeLeft}s
         </div>
       )}
-      {!isRecording && !audioUrl && (
+      {isPending && (
+        <button disabled className="w-16 h-16 bg-indigo-400 text-white rounded-full flex items-center justify-center opacity-80 cursor-not-allowed">
+          <Loader2 className="w-6 h-6 animate-spin" />
+        </button>
+      )}
+      {!isRecording && !audioUrl && !isPending && (
         <button onClick={startRecording} disabled={isProcessing} className="w-16 h-16 bg-indigo-600 text-white rounded-full flex items-center justify-center hover:bg-indigo-700 transition-all hover:scale-110 disabled:opacity-50">
           <Mic className="w-8 h-8" />
         </button>

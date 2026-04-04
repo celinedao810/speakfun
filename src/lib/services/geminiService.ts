@@ -1547,20 +1547,31 @@ export const scoreFreeTalk = async (
   audioBase64: string,
   vocabWords: string[],
   structurePatterns: string[],
+  topic?: string,
 ): Promise<FreeTalkScoringResult> => {
   return safeExecute(async () => {
     const ai = new GoogleGenAI({ apiKey: getApiKey() });
     const vocabList = vocabWords.join(', ') || '(none)';
     const structureList = structurePatterns.join(' | ') || '(none)';
+    const topicLine = topic ? `\nSpeaking prompt given to learner: "${topic}"\n` : '';
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: {
         parts: [
           {
             text: `You are an English pronunciation and fluency coach. Evaluate this learner's 45-second free-speech recording.
-
+${topicLine}
 Target vocabulary words (for reference — learner is encouraged to use them): ${vocabList}
 Target grammar structures (for reference — learner is encouraged to use them): ${structureList}
+
+IMPORTANT — content check (do this FIRST before scoring):
+If the transcription contains fewer than 5 meaningful content words (ignoring filler sounds like "hmm", "uh", "ah", "um", silence markers, or noise descriptions), then:
+- Set score: 0
+- Set feedback: "Không đủ nội dung để đánh giá. Vui lòng nói thành câu để tôi có thể đánh giá phát âm, ngữ pháp và sự trôi chảy của bạn."
+- Set pronunciationErrors and grammarErrors to empty arrays
+- Set vocabularyFeedback and deliveryFeedback to empty strings
+- Do NOT attempt pronunciation/grammar/delivery scoring
+Only proceed with scoring below if the learner has spoken at least 5 real content words in sentence form.
 
 Scoring rules:
 - Base score: 10 points
@@ -1611,6 +1622,39 @@ Steps:
       vocabularyFeedback: result.vocabularyFeedback || '',
       deliveryFeedback: result.deliveryFeedback || '',
     };
+  });
+};
+
+// ============================================================================
+// Free Talk Topic Generator
+// ============================================================================
+
+export const generateFreeTalkTopic = async (
+  vocabWords: string[],
+  structurePatterns: string[],
+): Promise<string> => {
+  return safeExecute(async () => {
+    const ai = new GoogleGenAI({ apiKey: getApiKey() });
+    const vocabList = vocabWords.slice(0, 10).join(', ') || '(none)';
+    const structureList = structurePatterns.slice(0, 5).join(' | ') || '(none)';
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: `Given these IT English vocabulary words: ${vocabList}
+And these grammar structures: ${structureList}
+
+Generate ONE speaking prompt (1–2 sentences) for an English learner to speak about for 45 seconds.
+
+Rules:
+- Ask for the learner's opinion, preference, or personal experience — NOT theoretical knowledge
+- Use simple, natural language (not formal or academic)
+- Should feel like something a colleague might casually ask in an IT workplace
+- Should naturally invite use of the provided vocabulary and structures
+- Good examples: "What kind of tools do you find most useful in your daily work, and why?", "Tell me about a time when something went wrong with technology and how you handled it."
+- Avoid: "Explain how X works", "Describe the technical process of Y", "What is the definition of..."
+
+Return only the prompt text, no quotes, no explanation, no extra formatting.`,
+    });
+    return (response.text || '').trim();
   });
 };
 

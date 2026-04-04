@@ -7,6 +7,7 @@ import {
   scoreReadingPassage,
   scoreConversationTurn,
   scoreFreeTalk,
+  generateFreeTalkTopic,
 } from '@/lib/services/geminiService';
 
 export const maxDuration = 60;
@@ -68,12 +69,18 @@ export async function POST(request: NextRequest) {
     }
 
     if (type === 'free-talk') {
-      const { audioBase64, vocabWords, structurePatterns } = body;
+      const { audioBase64, vocabWords, structurePatterns, topic } = body;
       if (!audioBase64) {
         return NextResponse.json({ error: 'audioBase64 is required' }, { status: 400 });
       }
-      const result = await scoreFreeTalk(audioBase64, vocabWords ?? [], structurePatterns ?? []);
+      const result = await scoreFreeTalk(audioBase64, vocabWords ?? [], structurePatterns ?? [], topic);
       return NextResponse.json(result);
+    }
+
+    if (type === 'free-talk-topic') {
+      const { vocabWords, structurePatterns } = body;
+      const topic = await generateFreeTalkTopic(vocabWords ?? [], structurePatterns ?? []);
+      return NextResponse.json(topic);
     }
 
     return NextResponse.json({ error: 'Unknown type' }, { status: 400 });

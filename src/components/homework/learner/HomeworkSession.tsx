@@ -8,6 +8,7 @@ import {
   ClassHomeworkSettings, VocabAttemptAudit, StructureAttemptAudit,
 } from '@/lib/types';
 import { useAuth } from '@/context/AuthContext';
+import { generateFreeTalkTopic } from '@/lib/ai/aiClient';
 import Exercise1Vocab, { WordResult } from './Exercise1Vocab';
 import Exercise2Structure, { StructureResult } from './Exercise2Structure';
 import Exercise3FreeTalk from './Exercise3FreeTalk';
@@ -206,6 +207,8 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
   // Summary data to display between exercises
   const [ex1WordResults, setEx1WordResults] = useState<WordResult[]>([]);
   const [ex2StructureResults, setEx2StructureResults] = useState<StructureResult[]>([]);
+  // Ex3 speaking topic — generated in background when Ex2 completes
+  const [freeTalkTopic, setFreeTalkTopic] = useState<string>('');
 
   // Load exercise data on mount
   useEffect(() => {
@@ -344,8 +347,15 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
     setEx2Score(score);
     setEx2StructureResults(structureResults);
     await autoSave({ ex2Score: score, ex2Completed: true });
+    // Generate topic in background while learner reads the summary
+    if (hw.isReviewSession) {
+      generateFreeTalkTopic(
+        vocabPool.map(v => v.word),
+        structurePool.map(s => s.pattern),
+      ).then(t => { if (t) setFreeTalkTopic(t); }).catch(() => {});
+    }
     setPhase('EX2_SUMMARY');
-  }, [autoSave]);
+  }, [autoSave, hw.isReviewSession, vocabPool, structurePool]);
 
   const handleEx3Complete = useCallback(async (score: number, attempts: StructureAttemptAudit[] = []) => {
     // For new review sessions: score goes to ex3bScore (free talk)
@@ -506,6 +516,7 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
         <Exercise3FreeTalk
           vocabWords={vocabPool}
           structures={structurePool}
+          topic={freeTalkTopic || undefined}
           onComplete={(score) => handleEx3Complete(score, [])}
         />
       );
