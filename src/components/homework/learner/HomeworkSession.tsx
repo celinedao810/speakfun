@@ -44,7 +44,7 @@ function Ex1Summary({
   totalScore: number;
   onAutoAdvance: () => void;
 }) {
-  const [countdown, setCountdown] = useState(5);
+  const [countdown, setCountdown] = useState(30);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -96,7 +96,7 @@ function Ex1Summary({
         <div className="mt-2 w-full h-1.5 bg-muted rounded-full overflow-hidden">
           <div
             className="h-full bg-primary rounded-full transition-all duration-1000"
-            style={{ width: `${((5 - countdown) / 5) * 100}%` }}
+            style={{ width: `${((30 - countdown) / 30) * 100}%` }}
           />
         </div>
       </div>
@@ -113,7 +113,7 @@ function Ex2Summary({
   totalScore: number;
   onAutoAdvance: () => void;
 }) {
-  const [countdown, setCountdown] = useState(5);
+  const [countdown, setCountdown] = useState(30);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -165,7 +165,7 @@ function Ex2Summary({
         <div className="mt-2 w-full h-1.5 bg-muted rounded-full overflow-hidden">
           <div
             className="h-full bg-primary rounded-full transition-all duration-1000"
-            style={{ width: `${((5 - countdown) / 5) * 100}%` }}
+            style={{ width: `${((30 - countdown) / 30) * 100}%` }}
           />
         </div>
       </div>
@@ -301,6 +301,10 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
 
         if (existingSubmission?.allCompleted) {
           setPhase('SCORECARD');
+        } else if (existingSubmission?.ex2Completed) {
+          setPhase('EX3');
+        } else if (existingSubmission?.ex1Completed) {
+          setPhase('EX2');
         } else {
           setPhase('EX1');
         }
