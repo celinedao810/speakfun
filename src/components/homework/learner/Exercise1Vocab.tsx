@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { CheckCircle, XCircle, Mic } from 'lucide-react';
-import { VocabAttemptAudit, VocabExerciseItem, VocabScoringResult } from '@/lib/types';
+import { CheckCircle, XCircle, Mic, Loader2 } from 'lucide-react';
+import { VocabAttemptAudit, VocabExerciseItem } from '@/lib/types';
 import { scoreVocabGuess } from '@/lib/ai/aiClient';
 import AudioRecorder, { AudioRecorderHandle } from '@/components/AudioRecorder';
 
@@ -28,14 +28,20 @@ const FALL_DURATION_MS = 10000; // 10 seconds
 export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1VocabProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [progress, setProgress] = useState(0);
-  const [isScoring, setIsScoring] = useState(false);
-  // Small flash banner (not a blocking overlay)
-  const [flashResult, setFlashResult] = useState<VocabScoringResult | null>(null);
+  // wordResults is fixed-length, indexed by word position; null = pending/not yet answered
+  const [wordResults, setWordResults] = useState<(WordResult | null)[]>(() => Array(vocabPool.length).fill(null));
   const [totalScore, setTotalScore] = useState(0);
-  const [wrongVocabIds, setWrongVocabIds] = useState<string[]>([]);
-  const [attempts, setAttempts] = useState<VocabAttemptAudit[]>([]);
-  const [wordResults, setWordResults] = useState<WordResult[]>([]);
+  // Brief flash label after recording (does NOT block next word)
+  const [flashLabel, setFlashLabel] = useState<string | null>(null);
   const [resultTimeoutId, setResultTimeoutId] = useState<NodeJS.Timeout | null>(null);
+
+  // Mutable refs — safe to read inside async .then()/.catch() without stale closure
+  const totalScoreRef = useRef(0);
+  const wrongVocabIdsRef = useRef<string[]>([]);
+  const attemptsRef = useRef<VocabAttemptAudit[]>([]);
+  const wordResultsArrRef = useRef<(WordResult | null)[]>(Array(vocabPool.length).fill(null));
+  const pendingCountRef = useRef(0);   // how many AI calls still in-flight
+  const allAnsweredRef = useRef(false); // true once the last word is passed
 
   const recorderRef = useRef<AudioRecorderHandle>(null);
   const animFrameRef = useRef<number | null>(null);
@@ -58,76 +64,110 @@ export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1Vocab
   const currentItem = vocabPool[currentIndex];
   const isFinished = currentIndex >= vocabPool.length;
 
-  const advanceToNext = useCallback((newTotal: number, newWrong: string[], newAttempts: VocabAttemptAudit[], newWordResults: WordResult[]) => {
-    setFlashResult(null);
+  // Helper: call onComplete with all accumulated data
+  const fireOnComplete = useCallback(() => {
+    onComplete(
+      totalScoreRef.current,
+      wrongVocabIdsRef.current,
+      attemptsRef.current,
+      wordResultsArrRef.current.map((r, i) =>
+        r ?? { item: vocabPool[i], pointsEarned: 0, isCorrect: false }
+      ),
+    );
+  }, [onComplete, vocabPool]);
+
+  // Advance to next word immediately (no waiting for AI)
+  const advanceToNext = useCallback(() => {
+    setFlashLabel(null);
     setProgress(0);
     scoredRef.current = false;
     setCurrentIndex(i => {
       const next = i + 1;
       if (next >= vocabPool.length) {
-        onComplete(newTotal, newWrong, newAttempts, newWordResults);
+        allAnsweredRef.current = true;
+        if (pendingCountRef.current === 0) {
+          fireOnComplete();
+        }
+        // else: fireOnComplete() will be called from the last .finally() below
       }
       return next;
     });
-  }, [vocabPool.length, onComplete]);
+  }, [vocabPool.length, fireOnComplete]);
 
-  const handleRecordingComplete = useCallback(async (base64: string) => {
+  // Fire-and-forget AI scoring
+  const handleRecordingComplete = useCallback((base64: string) => {
     if (scoredRef.current || !currentItem) return;
     scoredRef.current = true;
-    setIsScoring(true);
 
+    // Capture word/index before advancing (avoids stale closure in async)
+    const capturedIndex = currentIndex;
+    const capturedItem = currentItem;
     const timestamp = new Date().toISOString();
-    try {
-      const result = await scoreVocabGuess(currentItem.word, currentItem.ipa, base64, true);
-      result.vocabItemId = currentItem.id;
 
-      const pts = result.pointsEarned;
-      const isCorrect = result.isCorrectWord;
-      const newTotal = totalScore + pts;
-      const newWrong = isCorrect ? wrongVocabIds : (wrongVocabIds.includes(currentItem.id) ? wrongVocabIds : [...wrongVocabIds, currentItem.id]);
-      const audit: VocabAttemptAudit = {
-        vocabItemId: currentItem.id,
-        lessonId: currentItem.lessonId,
-        targetWord: currentItem.word,
-        recognizedWord: result.recognizedWord || '',
-        isCorrectWord: isCorrect,
-        pronunciationScore: result.pronunciationScore,
-        pointsEarned: pts,
-        feedback: result.feedback,
-        timedMode: true,
-        timeTakenMs: 0,
-        timedOut: false,
-        attemptTimestamp: timestamp,
-      };
-      const wordResult: WordResult = { item: currentItem, pointsEarned: pts, isCorrect };
-      const newAttempts = [...attempts, audit];
-      const newWordResults = [...wordResults, wordResult];
+    // Brief "Recorded!" flash then advance immediately — no blocking
+    setFlashLabel('Recorded!');
+    const tid = setTimeout(advanceToNext, 400);
+    setResultTimeoutId(tid);
 
-      setTotalScore(newTotal);
-      setWrongVocabIds(newWrong);
-      setAttempts(newAttempts);
-      setWordResults(newWordResults);
-      setFlashResult(result);
+    // Fire AI call in background
+    pendingCountRef.current++;
+    scoreVocabGuess(capturedItem.word, capturedItem.ipa, base64, true)
+      .then(result => {
+        result.vocabItemId = capturedItem.id;
+        const pts = result.pointsEarned;
+        const isCorrect = result.isCorrectWord;
 
-      // Advance after brief flash
-      const tid = setTimeout(() => {
-        advanceToNext(newTotal, newWrong, newAttempts, newWordResults);
-      }, 1200);
-      setResultTimeoutId(tid);
-    } catch {
-      const newWrong = wrongVocabIds.includes(currentItem.id) ? wrongVocabIds : [...wrongVocabIds, currentItem.id];
-      const wordResult: WordResult = { item: currentItem, pointsEarned: 0, isCorrect: false };
-      const newWordResults = [...wordResults, wordResult];
-      setWrongVocabIds(newWrong);
-      setWordResults(newWordResults);
-      const tid = setTimeout(() => {
-        advanceToNext(totalScore, newWrong, attempts, newWordResults);
-      }, 800);
-      setResultTimeoutId(tid);
-    } finally {
-      setIsScoring(false);
-    }
-  }, [currentItem, totalScore, wrongVocabIds, attempts, wordResults, advanceToNext]);
+        // Update mutable refs first (safe across async boundaries)
+        totalScoreRef.current += pts;
+        if (!isCorrect && !wrongVocabIdsRef.current.includes(capturedItem.id)) {
+          wrongVocabIdsRef.current = [...wrongVocabIdsRef.current, capturedItem.id];
+        }
+        const audit: VocabAttemptAudit = {
+          vocabItemId: capturedItem.id,
+          lessonId: capturedItem.lessonId,
+          targetWord: capturedItem.word,
+          recognizedWord: result.recognizedWord || '',
+          isCorrectWord: isCorrect,
+          pronunciationScore: result.pronunciationScore,
+          pointsEarned: pts,
+          feedback: result.feedback,
+          timedMode: true,
+          timeTakenMs: 0,
+          timedOut: false,
+          attemptTimestamp: timestamp,
+        };
+        attemptsRef.current = [...attemptsRef.current, audit];
+        const wordResult: WordResult = { item: capturedItem, pointsEarned: pts, isCorrect };
+        wordResultsArrRef.current[capturedIndex] = wordResult;
+
+        // Reactively update display state
+        setTotalScore(totalScoreRef.current);
+        setWordResults(prev => {
+          const updated = [...prev];
+          updated[capturedIndex] = wordResult;
+          return updated;
+        });
+      })
+      .catch(() => {
+        // On error: mark as wrong, 0pt
+        if (!wrongVocabIdsRef.current.includes(capturedItem.id)) {
+          wrongVocabIdsRef.current = [...wrongVocabIdsRef.current, capturedItem.id];
+        }
+        const wordResult: WordResult = { item: capturedItem, pointsEarned: 0, isCorrect: false };
+        wordResultsArrRef.current[capturedIndex] = wordResult;
+        setWordResults(prev => {
+          const updated = [...prev];
+          updated[capturedIndex] = wordResult;
+          return updated;
+        });
+      })
+      .finally(() => {
+        pendingCountRef.current--;
+        if (allAnsweredRef.current && pendingCountRef.current === 0) {
+          fireOnComplete();
+        }
+      });
+  }, [currentIndex, currentItem, advanceToNext, fireOnComplete]);
 
   // Falling block animation
   useEffect(() => {
@@ -145,18 +185,30 @@ export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1Vocab
       if (p < 1) {
         animFrameRef.current = requestAnimationFrame(tick);
       } else {
+        // Timed out — mark as missed (0pt) and advance
         if (!scoredRef.current) {
           scoredRef.current = true;
           recorderRef.current?.stop?.();
-          const newWrong = wrongVocabIds.includes(currentItem.id) ? wrongVocabIds : [...wrongVocabIds, currentItem.id];
-          const wordResult: WordResult = { item: currentItem, pointsEarned: 0, isCorrect: false };
-          const newWordResults = [...wordResults, wordResult];
-          setWrongVocabIds(newWrong);
-          setWordResults(newWordResults);
+          const capturedItem = vocabPool[currentIndex];
+
+          if (!wrongVocabIdsRef.current.includes(capturedItem.id)) {
+            wrongVocabIdsRef.current = [...wrongVocabIdsRef.current, capturedItem.id];
+          }
+          const wordResult: WordResult = { item: capturedItem, pointsEarned: 0, isCorrect: false };
+          wordResultsArrRef.current[currentIndex] = wordResult;
+          setWordResults(prev => {
+            const updated = [...prev];
+            updated[currentIndex] = wordResult;
+            return updated;
+          });
+
           setCurrentIndex(i => {
             const next = i + 1;
             if (next >= vocabPool.length) {
-              onComplete(totalScore, newWrong, attempts, newWordResults);
+              allAnsweredRef.current = true;
+              if (pendingCountRef.current === 0) {
+                fireOnComplete();
+              }
             }
             return next;
           });
@@ -174,13 +226,27 @@ export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1Vocab
 
   useEffect(() => () => { if (resultTimeoutId) clearTimeout(resultTimeoutId); }, [resultTimeoutId]);
 
-  if (isFinished) return null;
+  // All words answered but AI calls still resolving
+  if (isFinished) {
+    if (pendingCountRef.current > 0) {
+      return (
+        <div className="flex flex-col items-center justify-center py-12 gap-3">
+          <Loader2 className="w-8 h-8 text-indigo-500 animate-spin" />
+          <p className="text-sm text-slate-500">Finalizing scores...</p>
+        </div>
+      );
+    }
+    return null;
+  }
 
   const wordType = parseWordType(currentItem.clue);
   const maskedWord = currentItem.word[0].toUpperCase() + ' ' + Array(currentItem.word.length - 1).fill('_').join(' ');
   const blockHeight = 120;
   const maxTravel = Math.max(frameHeightPx - blockHeight, 0);
   const translateY = progress * maxTravel;
+
+  // Count how many AI results are still pending (for display)
+  const pendingCount = wordResults.slice(0, currentIndex).filter(r => r === null).length;
 
   return (
     <div className="space-y-3">
@@ -193,24 +259,38 @@ export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1Vocab
         </div>
       </div>
 
-      {/* Results trail */}
-      {wordResults.length > 0 && (
-        <div className="flex flex-wrap gap-1">
-          {wordResults.map((wr, i) => (
-            <div
-              key={i}
-              title={`${wr.item.word}: ${wr.isCorrect ? `+${wr.pointsEarned.toFixed(1)}pt` : '0pt'}`}
-              className={`flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white ${
-                wr.isCorrect ? 'bg-green-500' : 'bg-red-400'
-              }`}
-            >
-              {wr.isCorrect
-                ? <CheckCircle className="w-3 h-3" />
-                : <XCircle className="w-3 h-3" />
-              }
-              <span className="max-w-[60px] truncate">{wr.item.word}</span>
-            </div>
+      {/* Results trail — gray pulsing pill = AI still pending for that word */}
+      {currentIndex > 0 && (
+        <div className="flex flex-wrap gap-1 items-center">
+          {wordResults.slice(0, currentIndex).map((wr, i) => (
+            wr === null ? (
+              <div
+                key={i}
+                className="rounded-full px-2 py-0.5 bg-slate-200 animate-pulse text-[10px] text-slate-400 font-medium"
+              >
+                …
+              </div>
+            ) : (
+              <div
+                key={i}
+                title={`${wr.item.word}: ${wr.isCorrect ? `+${wr.pointsEarned.toFixed(1)}pt` : '0pt'}`}
+                className={`flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white ${
+                  wr.isCorrect ? 'bg-green-500' : 'bg-red-400'
+                }`}
+              >
+                {wr.isCorrect
+                  ? <CheckCircle className="w-3 h-3" />
+                  : <XCircle className="w-3 h-3" />
+                }
+                <span className="max-w-[60px] truncate">{wr.item.word}</span>
+              </div>
+            )
           ))}
+          {pendingCount > 0 && (
+            <span className="text-[10px] text-slate-400 ml-1 flex items-center gap-1">
+              <Loader2 className="w-2.5 h-2.5 animate-spin" />{pendingCount} scoring
+            </span>
+          )}
         </div>
       )}
 
@@ -222,27 +302,11 @@ export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1Vocab
         />
       </div>
 
-      {/* Flash result banner (non-blocking, sits above frame) */}
-      {flashResult && (
-        <div className={`flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-white ${
-          flashResult.isCorrectWord ? 'bg-green-500' : 'bg-red-500'
-        }`}>
-          {flashResult.isCorrectWord
-            ? <CheckCircle className="w-4 h-4 shrink-0" />
-            : <XCircle className="w-4 h-4 shrink-0" />
-          }
-          <span className="font-bold">{currentItem.word}</span>
-          <span className="text-white/80 text-xs">/{currentItem.ipa}/</span>
-          <span className="ml-auto text-xs">
-            {flashResult.isCorrectWord ? `+${flashResult.pointsEarned.toFixed(1)}pt` : '0pt'}
-          </span>
-        </div>
-      )}
-
-      {/* Scoring banner */}
-      {isScoring && !flashResult && (
-        <div className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs text-indigo-300 bg-indigo-900/60">
-          <span className="animate-pulse">Analyzing...</span>
+      {/* Flash label after recording */}
+      {flashLabel && (
+        <div className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-white bg-indigo-500">
+          <CheckCircle className="w-4 h-4 shrink-0" />
+          {flashLabel}
         </div>
       )}
 
@@ -270,7 +334,7 @@ export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1Vocab
         </div>
       </div>
 
-      {/* Mic — always visible, key resets AudioRecorder each new word */}
+      {/* Mic — always ready, key resets AudioRecorder for each word */}
       <div className="flex flex-col items-center gap-2">
         <p className="text-xs text-slate-500 flex items-center gap-1">
           <Mic className="w-3.5 h-3.5" /> Say the word before the block disappears
@@ -279,7 +343,7 @@ export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1Vocab
           key={currentIndex}
           ref={recorderRef}
           onRecordingComplete={handleRecordingComplete}
-          isProcessing={isScoring}
+          isProcessing={false}
           maxDuration={11}
         />
       </div>
