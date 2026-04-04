@@ -46,39 +46,15 @@ export function todayUtc7(): string {
  */
 export function computeMaxPoints(
   exercises: LessonExercises[],
-  wordsPerSession: number,
-  structuresPerSession: number,
-  isReview: boolean,
-  pendingReadingLessonId: string | null,
-  reviewWordCount?: number,
-  reviewStructureCount?: number
+  wordCount: number,
+  structureCount: number,
 ): number {
   const totalVocab = exercises.reduce((s, e) => s + e.vocabItems.length, 0);
   const totalStructures = exercises.reduce((s, e) => s + e.structureItems.length, 0);
-  const wordLimit = isReview ? (reviewWordCount ?? wordsPerSession) : wordsPerSession;
-  const structureLimit = isReview ? (reviewStructureCount ?? structuresPerSession) : structuresPerSession;
-  const vocabPool = Math.min(totalVocab, wordLimit);
-  const structurePool = Math.min(totalStructures, structureLimit);
-
-  if (isReview) {
-    // All sessions are now review sessions: ex3 is always free talk (10pt max)
-    return vocabPool * 1 + structurePool * 3 + 10;
-  }
-
-  // Legacy path: regular (non-review) sessions keep old formula for existing windows
-  const pendingLesson = pendingReadingLessonId
-    ? exercises.find(e => e.lessonId === pendingReadingLessonId)
-    : null;
-  let ex3Pts = 0;
-  if (pendingLesson) {
-    if (pendingLesson.conversationExercise) {
-      const learnerTurns = pendingLesson.conversationExercise.turns.filter(t => t.speaker === 'LEARNER').length;
-      ex3Pts = learnerTurns * 10;
-    } else if (pendingLesson.readingPassage) {
-      ex3Pts = 20 + totalVocab;
-    }
-  }
-  return vocabPool * 1 + structurePool * (7 + 7) + ex3Pts;
+  const vocabPool = Math.min(totalVocab, wordCount);
+  const structurePool = Math.min(totalStructures, structureCount);
+  // ex1: 1pt/word, ex2: 3pt/structure, ex3: 10pt free talk
+  return vocabPool * 1 + structurePool * 3 + 10;
 }
 
 // ---------------------------------------------------------------------------
@@ -159,12 +135,8 @@ export async function generateWindowForClass(
   // 8. Compute max possible points
   const maxPossiblePoints = computeMaxPoints(
     readyExercises,
-    settings.wordsPerSession,
-    settings.structuresPerSession,
-    true, // always review
-    null,
-    settings.reviewWordCount,
-    settings.reviewStructureCount
+    settings.reviewWordCount ?? settings.wordsPerSession,
+    settings.reviewStructureCount ?? settings.structuresPerSession,
   );
 
   // 9. Race-condition guard: check if a concurrent request already created this session.

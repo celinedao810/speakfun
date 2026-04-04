@@ -130,7 +130,7 @@ export default function HomeworkHub({ classId }: HomeworkHubProps) {
             <p className="text-sm font-semibold text-emerald-800">Homework Complete!</p>
             <p className="text-xs text-emerald-600 mt-0.5">
               Score: <span className="font-bold">{submission.totalScore.toFixed(1)} pts</span>
-              {' '}· Vocab {submission.ex1Score.toFixed(1)} + Sentences {submission.ex2Score.toFixed(1)} + {hw.isReviewSession ? 'Free Talk' : 'Conversation'} {(submission.ex3aScore + submission.ex3bScore).toFixed(1)}
+              {' '}· Vocab {submission.ex1Score.toFixed(1)} + Sentences {submission.ex2Score.toFixed(1)} + Free Talk {(submission.ex3aScore + submission.ex3bScore).toFixed(1)}
             </p>
           </div>
           <Trophy className="w-5 h-5 text-amber-400 shrink-0" />
@@ -169,11 +169,6 @@ export default function HomeworkHub({ classId }: HomeworkHubProps) {
         <BookMarked className="w-4 h-4 text-primary" />
         <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Today&apos;s Homework</span>
         <span className="text-xs text-muted-foreground/50 font-normal">Session {hw.sessionNumber}</span>
-        {hw.isReviewSession && (
-          <span className="text-xs px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full font-medium ml-auto">
-            Review Day
-          </span>
-        )}
       </div>
 
       <div className="flex items-center justify-between gap-4">
@@ -183,7 +178,7 @@ export default function HomeworkHub({ classId }: HomeworkHubProps) {
             {[
               { label: 'Vocab', done: submission?.ex1Completed },
               { label: 'Sentences', done: submission?.ex2Completed },
-              { label: hw.isReviewSession ? 'Free Talk' : 'Conversation', done: submission?.ex3Completed },
+              { label: 'Free Talk', done: submission?.ex3Completed },
             ].map(({ label, done }) => (
               <div key={label} className="flex items-center gap-1">
                 {done ? (

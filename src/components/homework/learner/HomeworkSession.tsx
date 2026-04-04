@@ -12,8 +12,6 @@ import { generateFreeTalkTopic } from '@/lib/ai/aiClient';
 import Exercise1Vocab, { WordResult } from './Exercise1Vocab';
 import Exercise2Structure, { StructureResult } from './Exercise2Structure';
 import Exercise3FreeTalk from './Exercise3FreeTalk';
-import Exercise3Conversation from './Exercise3Conversation';
-import Exercise3Reading from './Exercise3Reading';
 import HomeworkScorecard from './HomeworkScorecard';
 
 type SessionPhase =
@@ -195,25 +193,19 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
   // Exercise data
   const [vocabPool, setVocabPool] = useState<VocabExerciseItem[]>([]);
   const [structurePool, setStructurePool] = useState<StructureExerciseItem[]>([]);
-  const [allStructures, setAllStructures] = useState<StructureExerciseItem[]>([]);
-  // Legacy: non-review session exercises
-  const [conversationItem, setConversationItem] = useState<LessonExercises['conversationExercise'] | null>(null);
-  const [readingItem, setReadingItem] = useState<{ lessonId: string; readingPassage: string; vocabWords: VocabExerciseItem[] } | null>(null);
-  const [readingLessonId, setReadingLessonId] = useState<string | null>(null);
 
   const learnerRole = profile?.preferences?.role || profile?.job_title || '';
 
   // Scores & tracking
   const [ex1Score, setEx1Score] = useState(existingSubmission?.ex1Score ?? 0);
   const [ex2Score, setEx2Score] = useState(existingSubmission?.ex2Score ?? 0);
-  const [ex3aScore, setEx3aScore] = useState(existingSubmission?.ex3aScore ?? 0);
   const [ex3bScore, setEx3bScore] = useState(existingSubmission?.ex3bScore ?? 0);
   const [vocabAttempts, setVocabAttempts] = useState<VocabAttemptAudit[]>([]);
   const [wrongVocabIds, setWrongVocabIds] = useState<string[]>([]);
   const [structureAttempts, setStructureAttempts] = useState<StructureAttemptAudit[]>([]);
   const [wordsCommittedCount, setWordsCommittedCount] = useState(0);
   const [structuresCommittedCount, setStructuresCommittedCount] = useState(0);
-  const [finalScores, setFinalScores] = useState<{ ex1: number; ex2: number; ex3a: number; ex3b: number; total: number } | null>(null);
+  const [finalScores, setFinalScores] = useState<{ ex1: number; ex2: number; ex3b: number; total: number } | null>(null);
 
   // Summary data to display between exercises
   const [ex1WordResults, setEx1WordResults] = useState<WordResult[]>([]);
@@ -243,45 +235,38 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
         const aggregatedStructures: StructureExerciseItem[] = exData.flatMap(e => e.structureItems ?? []);
 
         const prevWrong = existingSubmission?.wrongVocabIds ?? [];
-        const limit = hw.isReviewSession
-          ? (settingsData?.reviewWordCount ?? 15)
-          : (settingsData?.wordsPerSession ?? 10);
+        const limit = settingsData?.reviewWordCount ?? 15;
 
-        let pool: VocabExerciseItem[];
-        if (hw.isReviewSession) {
-          const masteryRes = await fetch(`/api/homework/vocab-notebook?classId=${classId}`);
-          const masteryData = masteryRes.ok ? await masteryRes.json() : null;
-          const masteryEntries: Array<{ vocabItemId: string; lessonId: string; isCommitted: boolean }> =
-            masteryData?.entries ?? [];
+        // Vocab pool: prioritise wrong-not-mastered, then fresh-not-mastered, then mastered
+        const masteryRes = await fetch(`/api/homework/vocab-notebook?classId=${classId}`);
+        const masteryData = masteryRes.ok ? await masteryRes.json() : null;
+        const masteryEntries: Array<{ vocabItemId: string; lessonId: string; isCommitted: boolean }> =
+          masteryData?.entries ?? [];
 
-          const seenKeys = new Set<string>();
-          const masteredKeys = new Set<string>();
-          for (const e of masteryEntries) {
-            const k = `${e.lessonId}:${e.vocabItemId}`;
-            seenKeys.add(k);
-            if (e.isCommitted) masteredKeys.add(k);
-          }
-
-          const key = (v: VocabExerciseItem) => `${v.lessonId}:${v.id}`;
-          const wrongIds = new Set(prevWrong);
-          const seenVocab = allVocab.filter(v => seenKeys.has(key(v)));
-          const wrongNotMastered = seenVocab.filter(v => wrongIds.has(v.id) && !masteredKeys.has(key(v)));
-          const freshNotMastered = seenVocab
-            .filter(v => !wrongIds.has(v.id) && !masteredKeys.has(key(v)))
-            .sort(() => Math.random() - 0.5);
-          const masteredItems = seenVocab.filter(v => masteredKeys.has(key(v))).sort(() => Math.random() - 0.5);
-          pool = [...wrongNotMastered, ...freshNotMastered, ...masteredItems].slice(0, limit);
-        } else {
-          const wrongItems = allVocab.filter(v => prevWrong.includes(v.id));
-          const freshItems = allVocab.filter(v => !prevWrong.includes(v.id));
-          pool = [...wrongItems, ...[...freshItems].sort(() => Math.random() - 0.5)].slice(0, limit);
+        const seenKeys = new Set<string>();
+        const masteredKeys = new Set<string>();
+        for (const e of masteryEntries) {
+          const k = `${e.lessonId}:${e.vocabItemId}`;
+          seenKeys.add(k);
+          if (e.isCommitted) masteredKeys.add(k);
         }
+
+        const key = (v: VocabExerciseItem) => `${v.lessonId}:${v.id}`;
+        const wrongIds = new Set(prevWrong);
+        const seenVocab = allVocab.filter(v => seenKeys.has(key(v)));
+        const wrongNotMastered = seenVocab.filter(v => wrongIds.has(v.id) && !masteredKeys.has(key(v)));
+        const freshNotMastered = seenVocab
+          .filter(v => !wrongIds.has(v.id) && !masteredKeys.has(key(v)))
+          .sort(() => Math.random() - 0.5);
+        const masteredItems = seenVocab.filter(v => masteredKeys.has(key(v))).sort(() => Math.random() - 0.5);
+        // If mastery is empty (fresh start), fall back to all vocab shuffled
+        const pool = seenVocab.length > 0
+          ? [...wrongNotMastered, ...freshNotMastered, ...masteredItems].slice(0, limit)
+          : [...allVocab].sort(() => Math.random() - 0.5).slice(0, limit);
 
         setVocabPool(pool);
 
-        const structureLimit = hw.isReviewSession
-          ? (settingsData?.reviewStructureCount ?? 5)
-          : (settingsData?.structuresPerSession ?? 5);
+        const structureLimit = settingsData?.reviewStructureCount ?? 5;
 
         // If resuming to EX3, restore the exact structure set used in Ex2
         const savedStructureIds = existingSubmission?.sessionState?.usedStructureIds;
@@ -294,31 +279,9 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
           const rest = aggregatedStructures.filter(s => !idSet.has(s.id));
           structuresToUse = [...ordered, ...rest];
         } else {
-          structuresToUse = hw.isReviewSession
-            ? [...aggregatedStructures].sort(() => Math.random() - 0.5)
-            : aggregatedStructures;
+          structuresToUse = [...aggregatedStructures].sort(() => Math.random() - 0.5);
         }
         setStructurePool(structuresToUse.slice(0, structureLimit));
-        setAllStructures(aggregatedStructures);
-
-        // Legacy: non-review session Ex3
-        if (!hw.isReviewSession) {
-          const pendingId = hw.pendingReadingLessonId;
-          if (pendingId) {
-            const pendingEx = exData.find(e => e.lessonId === pendingId);
-            if (pendingEx?.conversationExercise) {
-              setConversationItem(pendingEx.conversationExercise);
-              setReadingLessonId(pendingId);
-            } else if (pendingEx?.readingPassage) {
-              setReadingItem({ lessonId: pendingId, readingPassage: pendingEx.readingPassage, vocabWords: pendingEx.vocabItems ?? [] });
-              setReadingLessonId(pendingId);
-            }
-          }
-
-          // Legacy: review conversation for old non-review sessions that still use conversation
-          const cached = existingSubmission?.sessionState?.reviewConversationData;
-          if (cached) setConversationItem(cached);
-        }
 
         // Restore vocab attempts
         const savedAttempts = existingSubmission?.sessionState?.vocabAttempts;
@@ -327,11 +290,10 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
         }
 
         // If resuming to EX3, kick off topic generation immediately during load
-        // so it's ready (or nearly ready) by the time EX3 renders
-        if (existingSubmission?.ex2Completed && !existingSubmission?.allCompleted && hw.isReviewSession) {
+        if (existingSubmission?.ex2Completed && !existingSubmission?.allCompleted) {
           generateFreeTalkTopic(
             pool.map(v => v.word),
-            structuresToUse.slice(0, settingsData?.reviewStructureCount ?? 5).map(s => s.pattern),
+            structuresToUse.slice(0, structureLimit).map(s => s.pattern),
             profile?.preferences?.role || profile?.job_title || undefined,
           ).then(t => { if (t) setFreeTalkTopic(t); }).catch(() => {});
         }
@@ -354,7 +316,7 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
   }, [hw, classId, existingSubmission]);
 
   const autoSave = useCallback(async (partial: {
-    ex1Score?: number; ex2Score?: number; ex3aScore?: number; ex3bScore?: number;
+    ex1Score?: number; ex2Score?: number; ex3bScore?: number;
     ex1Completed?: boolean; ex2Completed?: boolean; ex3Completed?: boolean;
     wrongVocabIds?: string[];
     sessionState?: HomeworkSessionState;
@@ -380,37 +342,25 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
   const handleEx2Complete = useCallback(async (score: number, structureResults: StructureResult[]) => {
     setEx2Score(score);
     setEx2StructureResults(structureResults);
-    // Save which structure IDs were used so Ex3 (on resume) shows the same set
     await autoSave({
       ex2Score: score,
       ex2Completed: true,
       sessionState: { usedStructureIds: structurePool.map(s => s.id) },
     });
-    // Generate topic in background while learner reads the summary
-    if (hw.isReviewSession) {
-      generateFreeTalkTopic(
-        vocabPool.map(v => v.word),
-        structurePool.map(s => s.pattern),
-        learnerRole || undefined,
-      ).then(t => { if (t) setFreeTalkTopic(t); }).catch(() => {});
-    }
+    generateFreeTalkTopic(
+      vocabPool.map(v => v.word),
+      structurePool.map(s => s.pattern),
+      learnerRole || undefined,
+    ).then(t => { if (t) setFreeTalkTopic(t); }).catch(() => {});
     setPhase('EX2_SUMMARY');
-  }, [autoSave, hw.isReviewSession, vocabPool, structurePool]);
+  }, [autoSave, vocabPool, structurePool, learnerRole]);
 
   const handleEx3Complete = useCallback(async (score: number, attempts: StructureAttemptAudit[] = []) => {
-    // For new review sessions: score goes to ex3bScore (free talk)
-    // For legacy sessions: score goes to ex3aScore (reading/conversation)
-    if (hw.isReviewSession) {
-      setEx3bScore(score);
-      setStructureAttempts(attempts);
-      await autoSave({ ex3bScore: score, ex3Completed: true });
-    } else {
-      setEx3aScore(score);
-      setStructureAttempts(attempts);
-      await autoSave({ ex3aScore: score, ex3Completed: true });
-    }
+    setEx3bScore(score);
+    setStructureAttempts(attempts);
+    await autoSave({ ex3bScore: score, ex3Completed: true });
     setPhase('SUBMITTING');
-  }, [hw.isReviewSession, autoSave]);
+  }, [autoSave]);
 
   // Submit on entering SUBMITTING phase
   useEffect(() => {
@@ -418,7 +368,7 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
 
     const submit = async () => {
       try {
-        const totalScore = ex1Score + ex2Score + ex3aScore + ex3bScore;
+        const totalScore = ex1Score + ex2Score + ex3bScore;
         const res = await fetch('/api/homework/submit', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -427,12 +377,12 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
             classId,
             ex1Score,
             ex2Score,
-            ex3aScore,
+            ex3aScore: 0,
             ex3bScore,
             wrongVocabIds,
             vocabAttempts,
             structureAttempts,
-            readingLessonId,
+            readingLessonId: null,
           }),
         });
         const data = await res.json();
@@ -440,7 +390,7 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
 
         setWordsCommittedCount(data.wordsCommittedCount ?? 0);
         setStructuresCommittedCount(data.structuresCommittedCount ?? 0);
-        setFinalScores({ ex1: ex1Score, ex2: ex2Score, ex3a: ex3aScore, ex3b: ex3bScore, total: totalScore });
+        setFinalScores({ ex1: ex1Score, ex2: ex2Score, ex3b: ex3bScore, total: totalScore });
         setPhase('SCORECARD');
       } catch (err: unknown) {
         setError(err instanceof Error ? err.message : 'Submission failed');
@@ -449,7 +399,7 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
     };
 
     submit();
-  }, [phase, hw.id, classId, ex1Score, ex2Score, ex3aScore, ex3bScore, wrongVocabIds, vocabAttempts, structureAttempts, readingLessonId]);
+  }, [phase, hw.id, classId, ex1Score, ex2Score, ex3bScore, wrongVocabIds, vocabAttempts, structureAttempts]);
 
   // ── Render ──
 
@@ -487,7 +437,6 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
     const scores = finalScores ?? {
       ex1: existingSubmission!.ex1Score,
       ex2: existingSubmission!.ex2Score,
-      ex3a: existingSubmission!.ex3aScore,
       ex3b: existingSubmission!.ex3bScore,
       total: existingSubmission!.totalScore,
     };
@@ -498,14 +447,14 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
         maxPossiblePoints={hw.maxPossiblePoints}
         ex1Score={scores.ex1}
         ex2Score={scores.ex2}
-        ex3aScore={scores.ex3a}
+        ex3aScore={0}
         ex3bScore={scores.ex3b}
         totalScore={scores.total}
         vocabAttempts={vocabAttempts}
         wrongVocabIds={wrongVocabIds}
         wordsCommittedCount={wordsCommittedCount}
         structuresCommittedCount={structuresCommittedCount}
-        isReview={hw.isReviewSession}
+        isReview={true}
         onDone={onDone}
       />
     );
@@ -550,40 +499,14 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
   }
 
   if (phase === 'EX3') {
-    // New review sessions: free talk
-    if (hw.isReviewSession) {
-      return (
-        <Exercise3FreeTalk
-          vocabWords={vocabPool}
-          structures={structurePool}
-          topic={freeTalkTopic || undefined}
-          onComplete={(score) => handleEx3Complete(score, [])}
-        />
-      );
-    }
-    // Legacy: non-review sessions use old conversation or reading exercise
-    if (conversationItem) {
-      return (
-        <Exercise3Conversation
-          item={conversationItem}
-          structures={allStructures}
-          learnerRole={learnerRole}
-          learnerName={profile?.full_name || ''}
-          onComplete={handleEx3Complete}
-        />
-      );
-    }
-    if (readingItem) {
-      return (
-        <Exercise3Reading
-          item={readingItem}
-          onComplete={(score) => handleEx3Complete(score, [])}
-        />
-      );
-    }
-    // No Ex3 for legacy sessions without reading/conversation — auto-submit
-    handleEx3Complete(0, []);
-    return null;
+    return (
+      <Exercise3FreeTalk
+        vocabWords={vocabPool}
+        structures={structurePool}
+        topic={freeTalkTopic || undefined}
+        onComplete={(score) => handleEx3Complete(score, [])}
+      />
+    );
   }
 
   return null;
