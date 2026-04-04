@@ -27,9 +27,10 @@ const FALL_DURATION_MS = 10000; // 10 seconds
 
 export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1VocabProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [progress, setProgress] = useState(0); // 0 → 1 over FALL_DURATION_MS
+  const [progress, setProgress] = useState(0);
   const [isScoring, setIsScoring] = useState(false);
-  const [currentResult, setCurrentResult] = useState<VocabScoringResult | null>(null);
+  // Small flash banner (not a blocking overlay)
+  const [flashResult, setFlashResult] = useState<VocabScoringResult | null>(null);
   const [totalScore, setTotalScore] = useState(0);
   const [wrongVocabIds, setWrongVocabIds] = useState<string[]>([]);
   const [attempts, setAttempts] = useState<VocabAttemptAudit[]>([]);
@@ -57,9 +58,8 @@ export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1Vocab
   const currentItem = vocabPool[currentIndex];
   const isFinished = currentIndex >= vocabPool.length;
 
-  // Advance to next word (or finish)
-  const advanceToNext = useCallback((_score: number, _wrong: string[], _att: VocabAttemptAudit[], _result: WordResult, newTotal: number, newWrong: string[], newAttempts: VocabAttemptAudit[], newWordResults: WordResult[]) => {
-    setCurrentResult(null);
+  const advanceToNext = useCallback((newTotal: number, newWrong: string[], newAttempts: VocabAttemptAudit[], newWordResults: WordResult[]) => {
+    setFlashResult(null);
     setProgress(0);
     scoredRef.current = false;
     setCurrentIndex(i => {
@@ -71,14 +71,10 @@ export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1Vocab
     });
   }, [vocabPool.length, onComplete]);
 
-  // Score current recording
   const handleRecordingComplete = useCallback(async (base64: string) => {
     if (scoredRef.current || !currentItem) return;
     scoredRef.current = true;
     setIsScoring(true);
-
-    // Pause the fall animation while scoring
-    if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
 
     const timestamp = new Date().toISOString();
     try {
@@ -111,23 +107,22 @@ export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1Vocab
       setWrongVocabIds(newWrong);
       setAttempts(newAttempts);
       setWordResults(newWordResults);
-      setCurrentResult(result);
+      setFlashResult(result);
 
-      // Auto-advance after 2 seconds
+      // Advance after brief flash
       const tid = setTimeout(() => {
-        advanceToNext(pts, newWrong, newAttempts, wordResult, newTotal, newWrong, newAttempts, newWordResults);
-      }, 2000);
+        advanceToNext(newTotal, newWrong, newAttempts, newWordResults);
+      }, 1200);
       setResultTimeoutId(tid);
     } catch {
-      // On error, treat as wrong and advance
       const newWrong = wrongVocabIds.includes(currentItem.id) ? wrongVocabIds : [...wrongVocabIds, currentItem.id];
       const wordResult: WordResult = { item: currentItem, pointsEarned: 0, isCorrect: false };
       const newWordResults = [...wordResults, wordResult];
       setWrongVocabIds(newWrong);
       setWordResults(newWordResults);
       const tid = setTimeout(() => {
-        advanceToNext(0, newWrong, attempts, wordResult, totalScore, newWrong, attempts, newWordResults);
-      }, 1000);
+        advanceToNext(totalScore, newWrong, attempts, newWordResults);
+      }, 800);
       setResultTimeoutId(tid);
     } finally {
       setIsScoring(false);
@@ -150,16 +145,14 @@ export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1Vocab
       if (p < 1) {
         animFrameRef.current = requestAnimationFrame(tick);
       } else {
-        // Block reached bottom — if not yet scored, count as wrong and advance
         if (!scoredRef.current) {
           scoredRef.current = true;
-          recorderRef.current?.stop?.(); // auto-stop if recording was started
+          recorderRef.current?.stop?.();
           const newWrong = wrongVocabIds.includes(currentItem.id) ? wrongVocabIds : [...wrongVocabIds, currentItem.id];
           const wordResult: WordResult = { item: currentItem, pointsEarned: 0, isCorrect: false };
           const newWordResults = [...wordResults, wordResult];
           setWrongVocabIds(newWrong);
           setWordResults(newWordResults);
-          // Advance immediately (no result to show)
           setCurrentIndex(i => {
             const next = i + 1;
             if (next >= vocabPool.length) {
@@ -179,21 +172,18 @@ export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1Vocab
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentIndex, isFinished]);
 
-  // Cleanup result timeout on unmount
   useEffect(() => () => { if (resultTimeoutId) clearTimeout(resultTimeoutId); }, [resultTimeoutId]);
 
   if (isFinished) return null;
 
   const wordType = parseWordType(currentItem.clue);
-  // Mask: first letter visible, rest as underscores
   const maskedWord = currentItem.word[0].toUpperCase() + ' ' + Array(currentItem.word.length - 1).fill('_').join(' ');
-  // Vertical travel: block starts at top, travels to bottom of measured frame
-  const blockHeight = 120; // px — approximate block height
+  const blockHeight = 120;
   const maxTravel = Math.max(frameHeightPx - blockHeight, 0);
   const translateY = progress * maxTravel;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {/* Header */}
       <div className="flex items-center justify-between">
         <span className="text-sm font-semibold text-slate-700">Vocabulary</span>
@@ -203,6 +193,27 @@ export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1Vocab
         </div>
       </div>
 
+      {/* Results trail */}
+      {wordResults.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {wordResults.map((wr, i) => (
+            <div
+              key={i}
+              title={`${wr.item.word}: ${wr.isCorrect ? `+${wr.pointsEarned.toFixed(1)}pt` : '0pt'}`}
+              className={`flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white ${
+                wr.isCorrect ? 'bg-green-500' : 'bg-red-400'
+              }`}
+            >
+              {wr.isCorrect
+                ? <CheckCircle className="w-3 h-3" />
+                : <XCircle className="w-3 h-3" />
+              }
+              <span className="max-w-[60px] truncate">{wr.item.word}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Progress bar (time-based) */}
       <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
         <div
@@ -211,10 +222,34 @@ export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1Vocab
         />
       </div>
 
+      {/* Flash result banner (non-blocking, sits above frame) */}
+      {flashResult && (
+        <div className={`flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-white ${
+          flashResult.isCorrectWord ? 'bg-green-500' : 'bg-red-500'
+        }`}>
+          {flashResult.isCorrectWord
+            ? <CheckCircle className="w-4 h-4 shrink-0" />
+            : <XCircle className="w-4 h-4 shrink-0" />
+          }
+          <span className="font-bold">{currentItem.word}</span>
+          <span className="text-white/80 text-xs">/{currentItem.ipa}/</span>
+          <span className="ml-auto text-xs">
+            {flashResult.isCorrectWord ? `+${flashResult.pointsEarned.toFixed(1)}pt` : '0pt'}
+          </span>
+        </div>
+      )}
+
+      {/* Scoring banner */}
+      {isScoring && !flashResult && (
+        <div className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs text-indigo-300 bg-indigo-900/60">
+          <span className="animate-pulse">Analyzing...</span>
+        </div>
+      )}
+
       {/* Game frame */}
       <div
         ref={frameRef}
-        className="relative bg-gradient-to-b from-indigo-950 to-slate-900 rounded-2xl overflow-hidden border border-indigo-800 h-[clamp(220px,42vh,340px)]"
+        className="relative bg-gradient-to-b from-indigo-950 to-slate-900 rounded-2xl overflow-hidden border border-indigo-800 h-[clamp(200px,38vh,300px)]"
       >
         {/* Falling block */}
         <div
@@ -222,68 +257,32 @@ export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1Vocab
           style={{ top: `${translateY}px` }}
         >
           <div className="bg-indigo-700/90 backdrop-blur rounded-2xl px-5 py-4 border border-indigo-400/40 shadow-lg">
-            {/* Masked word */}
             <p className="font-mono text-xl font-bold text-white tracking-widest text-center mb-1">
               {maskedWord}
             </p>
-            {/* Word type */}
             {wordType && (
               <p className="text-xs text-indigo-300 text-center uppercase tracking-wide mb-2">{wordType}</p>
             )}
-            {/* Definition */}
             <p className="text-sm text-indigo-100 text-center leading-relaxed">
               {currentItem.clue.replace(/^(noun|verb|adjective|adverb|phrase|idiom|expression)[:\s]*/i, '').trim()}
             </p>
           </div>
         </div>
-
-        {/* Result overlay */}
-        {currentResult && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/60 rounded-2xl">
-            <div className={`rounded-2xl px-6 py-5 text-center shadow-xl w-[80%] ${
-              currentResult.isCorrectWord ? 'bg-green-600' : 'bg-red-600'
-            }`}>
-              {currentResult.isCorrectWord ? (
-                <CheckCircle className="w-8 h-8 text-white mx-auto mb-2" />
-              ) : (
-                <XCircle className="w-8 h-8 text-white mx-auto mb-2" />
-              )}
-              <p className="text-white font-bold text-lg">{currentItem.word}</p>
-              <p className="text-white/80 text-xs mt-1">/{currentItem.ipa}/</p>
-              <p className="text-white/90 text-sm font-semibold mt-2">
-                {currentResult.isCorrectWord ? `+${currentResult.pointsEarned.toFixed(1)} pt` : '0 pt'}
-              </p>
-              {currentResult.feedback && (
-                <p className="text-white/70 text-xs mt-1">{currentResult.feedback}</p>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Scoring indicator */}
-        {isScoring && !currentResult && (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="bg-black/50 rounded-full px-4 py-2">
-              <p className="text-white text-xs animate-pulse">Analyzing...</p>
-            </div>
-          </div>
-        )}
       </div>
 
-      {/* Mic at bottom */}
-      {!currentResult && (
-        <div className="flex flex-col items-center gap-2">
-          <p className="text-xs text-slate-500 flex items-center gap-1">
-            <Mic className="w-3.5 h-3.5" /> Say the word before the block disappears
-          </p>
-          <AudioRecorder
-            ref={recorderRef}
-            onRecordingComplete={handleRecordingComplete}
-            isProcessing={isScoring}
-            maxDuration={11}
-          />
-        </div>
-      )}
+      {/* Mic — always visible, key resets AudioRecorder each new word */}
+      <div className="flex flex-col items-center gap-2">
+        <p className="text-xs text-slate-500 flex items-center gap-1">
+          <Mic className="w-3.5 h-3.5" /> Say the word before the block disappears
+        </p>
+        <AudioRecorder
+          key={currentIndex}
+          ref={recorderRef}
+          onRecordingComplete={handleRecordingComplete}
+          isProcessing={isScoring}
+          maxDuration={11}
+        />
+      </div>
     </div>
   );
 }
