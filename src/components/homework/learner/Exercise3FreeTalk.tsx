@@ -177,6 +177,7 @@ export default function Exercise3FreeTalk({ vocabWords, structures, topic, onCom
             onRecordingStateChange={handleRecordingStateChange}
             isProcessing={false}
             maxDuration={RECORD_DURATION + 1}
+            hideStop
           />
         </div>
       </div>

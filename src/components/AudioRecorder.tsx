@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect, useImperativeHandle, forwardRef } from 'react';
+import { useState, useRef, useEffect, useImperativeHandle, forwardRef } from 'react';
 import { Mic, Square, Trash2, Loader2, Clock, XCircle } from 'lucide-react';
 
 interface AudioRecorderProps {
@@ -9,6 +9,7 @@ interface AudioRecorderProps {
   maxDuration?: number;
   onTimeout?: () => void;
   onRecordingStateChange?: (isRecording: boolean) => void;
+  hideStop?: boolean; // when true, hides the manual stop button (recording ends only via maxDuration)
 }
 
 export interface AudioRecorderHandle {
@@ -16,12 +17,13 @@ export interface AudioRecorderHandle {
   reset: () => void;
 }
 
-const AudioRecorder = forwardRef<AudioRecorderHandle, AudioRecorderProps>(({ 
-  onRecordingComplete, 
+const AudioRecorder = forwardRef<AudioRecorderHandle, AudioRecorderProps>(({
+  onRecordingComplete,
   isProcessing,
   maxDuration,
   onTimeout,
-  onRecordingStateChange
+  onRecordingStateChange,
+  hideStop,
 }, ref) => {
   const [isPending, setIsPending] = useState(false); // true while getUserMedia() is resolving
   const [isRecording, setIsRecording] = useState(false);
@@ -129,12 +131,16 @@ const AudioRecorder = forwardRef<AudioRecorderHandle, AudioRecorderProps>(({
       )}
       {isRecording && (
         <div className="flex items-center gap-4">
-          <button onClick={stopRecording} className="w-16 h-16 bg-red-600 text-white rounded-full flex items-center justify-center animate-pulse">
-            <Square className="w-8 h-8" />
-          </button>
-          <button onClick={cancelRecording} className="flex items-center gap-2 px-4 py-2 bg-white border-2 border-slate-200 text-slate-500 font-black rounded-xl">
-            <XCircle className="w-4 h-4" /> Discard
-          </button>
+          {!hideStop && (
+            <button onClick={stopRecording} className="w-16 h-16 bg-red-600 text-white rounded-full flex items-center justify-center animate-pulse">
+              <Square className="w-8 h-8" />
+            </button>
+          )}
+          {!hideStop && (
+            <button onClick={cancelRecording} className="flex items-center gap-2 px-4 py-2 bg-white border-2 border-slate-200 text-slate-500 font-black rounded-xl">
+              <XCircle className="w-4 h-4" /> Discard
+            </button>
+          )}
         </div>
       )}
       {audioUrl && (

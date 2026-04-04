@@ -271,9 +271,22 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
         const structureLimit = hw.isReviewSession
           ? (settingsData?.reviewStructureCount ?? 5)
           : (settingsData?.structuresPerSession ?? 5);
-        const structuresToUse = hw.isReviewSession
-          ? [...aggregatedStructures].sort(() => Math.random() - 0.5)
-          : aggregatedStructures;
+
+        // If resuming to EX3, restore the exact structure set used in Ex2
+        const savedStructureIds = existingSubmission?.sessionState?.usedStructureIds;
+        let structuresToUse: StructureExerciseItem[];
+        if (savedStructureIds && savedStructureIds.length > 0) {
+          const idSet = new Set(savedStructureIds);
+          const ordered = savedStructureIds
+            .map(id => aggregatedStructures.find(s => s.id === id))
+            .filter((s): s is StructureExerciseItem => s !== undefined);
+          const rest = aggregatedStructures.filter(s => !idSet.has(s.id));
+          structuresToUse = [...ordered, ...rest];
+        } else {
+          structuresToUse = hw.isReviewSession
+            ? [...aggregatedStructures].sort(() => Math.random() - 0.5)
+            : aggregatedStructures;
+        }
         setStructurePool(structuresToUse.slice(0, structureLimit));
         setAllStructures(aggregatedStructures);
 
@@ -355,7 +368,12 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
   const handleEx2Complete = useCallback(async (score: number, structureResults: StructureResult[]) => {
     setEx2Score(score);
     setEx2StructureResults(structureResults);
-    await autoSave({ ex2Score: score, ex2Completed: true });
+    // Save which structure IDs were used so Ex3 (on resume) shows the same set
+    await autoSave({
+      ex2Score: score,
+      ex2Completed: true,
+      sessionState: { usedStructureIds: structurePool.map(s => s.id) },
+    });
     // Generate topic in background while learner reads the summary
     if (hw.isReviewSession) {
       generateFreeTalkTopic(

@@ -1642,16 +1642,15 @@ export const generateFreeTalkTopic = async (
       contents: `Given these IT English vocabulary words: ${vocabList}
 And these grammar structures: ${structureList}
 
-Generate ONE speaking prompt for an English learner to speak about for 45 seconds.
+Generate ONE interview-style speaking question for an IT professional to answer in 45 seconds.
 
 Rules:
 - ONE sentence only, maximum 20 words
-- Ask for the learner's opinion, preference, or personal experience — NOT theoretical knowledge
-- Use simple, natural language (not formal or academic)
-- Should feel like something a colleague might casually ask in an IT workplace
+- Style: behavioral or situational — like a job interview question (e.g. "Tell me about a time...", "How do you usually handle...", "What do you prefer...")
+- Role-relevant but not overly technical — anyone in an IT role can answer it
 - Should naturally invite use of the provided vocabulary and structures
-- Good examples: "What kind of tools do you find most useful in your daily work, and why?", "Tell me about a time when technology helped you work better."
-- Avoid: "Explain how X works", "Describe the technical process of Y", "What is the definition of..."
+- Good examples: "Tell me about a time you had to explain a technical issue to a non-technical colleague.", "How do you usually handle unexpected problems during a project?"
+- Avoid: "Explain how X works", "What is the definition of...", overly specific tools or technologies
 
 Return only the question text, no quotes, no explanation, no extra formatting.`,
     });

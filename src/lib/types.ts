@@ -563,6 +563,8 @@ export interface HomeworkSessionState {
   vocabAttempts?: VocabAttemptAudit[];
   // Cached review conversation so it survives page refresh mid-session.
   reviewConversationData?: ConversationExercise;
+  // Saved after Ex2 completes so Ex3 uses the exact same structure set.
+  usedStructureIds?: string[];
 }
 
 export interface HomeworkSubmission {
