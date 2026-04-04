@@ -57,18 +57,18 @@ export default function HomeworkNotebook({ classId }: { classId: string }) {
         {!loading && (
           <div className="flex items-center gap-1.5 mr-2">
             {(vocabData?.entries.length ?? 0) > 0 && (
-              <span className="text-xs font-medium bg-indigo-100 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-400 px-2 py-0.5 rounded-full">
+              <span className="text-xs font-semibold text-indigo-600 dark:text-indigo-400">
                 {vocabData!.entries.length} words
               </span>
             )}
             {totalStructItems > 0 && (
-              <span className="text-xs font-medium bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-400 px-2 py-0.5 rounded-full">
-                {totalStructItems} structures
+              <span className="text-xs font-semibold text-violet-600 dark:text-violet-400">
+                · {totalStructItems} structures
               </span>
             )}
             {(totalVocabMastered + totalStructMastered) > 0 && (
-              <span className="text-xs font-medium bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 px-2 py-0.5 rounded-full">
-                {totalVocabMastered + totalStructMastered} mastered
+              <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                · {totalVocabMastered + totalStructMastered} mastered
               </span>
             )}
           </div>

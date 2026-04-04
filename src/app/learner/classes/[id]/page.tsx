@@ -140,15 +140,15 @@ export default function LearnerClassDetailPage() {
         <HomeworkProgress classId={classId} />
       </div>
 
-      {/* My Notebook (Vocab + Structures) */}
-      <div className="mt-6">
-        <HomeworkNotebook classId={classId} />
-      </div>
-
       {/* Leaderboard */}
       <div className="mt-8">
         <h3 className="text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wide">Leaderboard</h3>
         <HomeworkLeaderboard classId={classId} currentLearnerId={user?.id} />
+      </div>
+
+      {/* My Notebook (Vocab + Structures) */}
+      <div className="mt-6">
+        <HomeworkNotebook classId={classId} />
       </div>
 
     </div>
