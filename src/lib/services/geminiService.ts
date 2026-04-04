@@ -1642,17 +1642,18 @@ export const generateFreeTalkTopic = async (
       contents: `Given these IT English vocabulary words: ${vocabList}
 And these grammar structures: ${structureList}
 
-Generate ONE speaking prompt (1–2 sentences) for an English learner to speak about for 45 seconds.
+Generate ONE speaking prompt for an English learner to speak about for 45 seconds.
 
 Rules:
+- ONE sentence only, maximum 20 words
 - Ask for the learner's opinion, preference, or personal experience — NOT theoretical knowledge
 - Use simple, natural language (not formal or academic)
 - Should feel like something a colleague might casually ask in an IT workplace
 - Should naturally invite use of the provided vocabulary and structures
-- Good examples: "What kind of tools do you find most useful in your daily work, and why?", "Tell me about a time when something went wrong with technology and how you handled it."
+- Good examples: "What kind of tools do you find most useful in your daily work, and why?", "Tell me about a time when technology helped you work better."
 - Avoid: "Explain how X works", "Describe the technical process of Y", "What is the definition of..."
 
-Return only the prompt text, no quotes, no explanation, no extra formatting.`,
+Return only the question text, no quotes, no explanation, no extra formatting.`,
     });
     return (response.text || '').trim();
   });

@@ -1,7 +1,7 @@
 "use client";
 
-import {useState, useEffect, useRef, useCallback } from 'react';
-import { Mic, MicOff, CheckCircle, AlertCircle, RotateCcw, ChevronRight } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { CheckCircle, AlertCircle, RotateCcw, ChevronRight, MicOff } from 'lucide-react';
 import { VocabExerciseItem, StructureExerciseItem, FreeTalkScoringResult } from '@/lib/types';
 import { scoreFreeTalk } from '@/lib/ai/aiClient';
 import AudioRecorder, { AudioRecorderHandle } from '@/components/AudioRecorder';
@@ -16,11 +16,12 @@ interface Exercise3FreeTalkProps {
   onComplete: (score: number) => void;
 }
 
-type Phase = 'READY' | 'RECORDING' | 'SCORING' | 'FEEDBACK';
+type Phase = 'READY' | 'SCORING' | 'FEEDBACK';
 
 export default function Exercise3FreeTalk({ vocabWords, structures, topic, onComplete }: Exercise3FreeTalkProps) {
   const [phase, setPhase] = useState<Phase>('READY');
   const [timeLeft, setTimeLeft] = useState(RECORD_DURATION);
+  const [isRecording, setIsRecording] = useState(false);
   const [bestScore, setBestScore] = useState(0);
   const [result, setResult] = useState<FreeTalkScoringResult | null>(null);
   const [recordingUrl, setRecordingUrl] = useState<string | null>(null);
@@ -29,24 +30,30 @@ export default function Exercise3FreeTalk({ vocabWords, structures, topic, onCom
   const recorderRef = useRef<AudioRecorderHandle>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Countdown during recording
+  // Countdown only while actively recording
   useEffect(() => {
-    if (phase !== 'RECORDING') return;
-
+    if (!isRecording) {
+      if (timerRef.current) clearInterval(timerRef.current);
+      setTimeLeft(RECORD_DURATION);
+      return;
+    }
     setTimeLeft(RECORD_DURATION);
     timerRef.current = setInterval(() => {
       setTimeLeft(t => {
         if (t <= 1) {
           clearInterval(timerRef.current!);
-          // Auto-stop — AudioRecorder maxDuration handles the actual stop
           return 0;
         }
         return t - 1;
       });
     }, 1000);
-
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, [phase]);
+  }, [isRecording]);
+
+  const handleRecordingStateChange = useCallback((recording: boolean) => {
+    setIsRecording(recording);
+    if (recording) setAttemptCount(a => a + 1);
+  }, []);
 
   const handleRecordingComplete = useCallback(async (base64: string) => {
     if (timerRef.current) clearInterval(timerRef.current);
@@ -66,17 +73,14 @@ export default function Exercise3FreeTalk({ vocabWords, structures, topic, onCom
     } catch {
       setPhase('READY');
     }
-  }, [vocabWords, structures]);
-
-  const handleStartRecording = () => {
-    setPhase('RECORDING');
-    setAttemptCount(a => a + 1);
-  };
+  }, [vocabWords, structures, topic]);
 
   const handleReRecord = () => {
     setResult(null);
     setRecordingUrl(null);
     setTimeLeft(RECORD_DURATION);
+    setIsRecording(false);
+    recorderRef.current?.reset();
     setPhase('READY');
   };
 
@@ -87,46 +91,56 @@ export default function Exercise3FreeTalk({ vocabWords, structures, topic, onCom
   const timerColor = timeLeft > 15 ? 'text-green-400' : timeLeft > 5 ? 'text-amber-400' : 'text-red-400';
   const passedBaseline = (result?.score ?? 0) >= BASELINE;
 
-  // ── READY phase ──
+  // ── READY phase (includes live recording state) ──
   if (phase === 'READY') {
     return (
-      <div className="space-y-5">
-        <div className="text-center">
-          <div className="inline-flex items-center justify-center w-14 h-14 bg-emerald-100 rounded-2xl mb-3">
-            <Mic className="w-7 h-7 text-emerald-600" />
+      <div className="space-y-4">
+        {/* Countdown — only visible while recording */}
+        {isRecording && (
+          <div className="text-center py-2">
+            <div className={`text-5xl sm:text-6xl font-black tabular-nums ${timerColor} transition-colors`}>
+              {timeLeft}
+            </div>
+            <p className="text-xs text-muted-foreground mt-0.5">seconds remaining</p>
           </div>
-          <h3 className="text-lg font-bold text-foreground mb-1">Free Talk · 45 seconds</h3>
-          <p className="text-sm text-muted-foreground">
-            Speak freely for 45 seconds using the words and structures below.
-            {attemptCount > 0 && bestScore < BASELINE && (
-              <span className="block mt-1 text-amber-600 font-medium">
-                Best so far: {bestScore.toFixed(1)}/10 — keep going, you need {BASELINE}/10 to pass!
-              </span>
-            )}
-          </p>
-        </div>
+        )}
+
+        {/* Header — only when not recording */}
+        {!isRecording && (
+          <div className="text-center">
+            <h3 className="text-lg font-bold text-foreground mb-1">Free Talk · 45 seconds</h3>
+            <p className="text-sm text-muted-foreground">
+              Speak freely for 45 seconds using the words and structures below.
+              {attemptCount > 0 && bestScore < BASELINE && (
+                <span className="block mt-1 text-amber-600 font-medium">
+                  Best so far: {bestScore.toFixed(1)}/10 — keep going, you need {BASELINE}/10 to pass!
+                </span>
+              )}
+            </p>
+          </div>
+        )}
 
         {/* Today's topic */}
         {topic && (
-          <div className="bg-emerald-50 rounded-xl p-4 border border-emerald-200">
-            <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wide mb-1.5">Today&apos;s topic</p>
+          <div className={`bg-emerald-50 rounded-xl p-4 border border-emerald-200 ${isRecording ? 'py-2.5' : ''}`}>
+            <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wide mb-1">Today&apos;s topic</p>
             <p className="text-sm text-emerald-900 font-medium leading-relaxed">{topic}</p>
           </div>
         )}
-        {!topic && (
+        {!topic && !isRecording && (
           <div className="bg-emerald-50 rounded-xl p-3 border border-emerald-200 flex items-center gap-2">
             <div className="w-3.5 h-3.5 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin shrink-0" />
             <p className="text-xs text-emerald-600">Preparing your topic...</p>
           </div>
         )}
 
-        {/* Guidance: vocab words */}
+        {/* Vocabulary */}
         {vocabWords.length > 0 && (
-          <div className="bg-indigo-50 rounded-xl p-4 border border-indigo-100">
-            <p className="text-xs font-semibold text-indigo-600 uppercase tracking-wide mb-2">Vocabulary to use</p>
-            <div className="flex flex-wrap gap-2">
+          <div className={`bg-indigo-50 rounded-xl border border-indigo-100 ${isRecording ? 'px-3 py-2' : 'p-4'}`}>
+            <p className="text-xs font-semibold text-indigo-600 uppercase tracking-wide mb-1.5">Vocabulary to use</p>
+            <div className="flex flex-wrap gap-1.5">
               {vocabWords.map(v => (
-                <span key={v.id} className="bg-indigo-100 text-indigo-800 text-xs px-2.5 py-1 rounded-full font-medium">
+                <span key={v.id} className="bg-indigo-100 text-indigo-800 text-xs px-2.5 py-0.5 rounded-full font-medium">
                   {v.word}
                 </span>
               ))}
@@ -134,11 +148,11 @@ export default function Exercise3FreeTalk({ vocabWords, structures, topic, onCom
           </div>
         )}
 
-        {/* Guidance: structures */}
+        {/* Structures */}
         {structures.length > 0 && (
-          <div className="bg-violet-50 rounded-xl p-4 border border-violet-100">
-            <p className="text-xs font-semibold text-violet-600 uppercase tracking-wide mb-2">Structures to use</p>
-            <div className="space-y-1.5">
+          <div className={`bg-violet-50 rounded-xl border border-violet-100 ${isRecording ? 'px-3 py-2' : 'p-4'}`}>
+            <p className="text-xs font-semibold text-violet-600 uppercase tracking-wide mb-1.5">Structures to use</p>
+            <div className="space-y-1">
               {structures.map(s => (
                 <div key={s.id} className="flex items-start gap-2">
                   <span className="text-violet-400 mt-0.5">·</span>
@@ -149,69 +163,18 @@ export default function Exercise3FreeTalk({ vocabWords, structures, topic, onCom
           </div>
         )}
 
-        <button
-          onClick={handleStartRecording}
-          className="w-full py-3.5 bg-emerald-600 text-white rounded-xl font-semibold hover:bg-emerald-700 transition flex items-center justify-center gap-2 text-base"
-        >
-          <Mic className="w-5 h-5" />
-          Start Recording
-        </button>
-      </div>
-    );
-  }
-
-  // ── RECORDING phase ──
-  if (phase === 'RECORDING') {
-    return (
-      <div className="space-y-5">
-        {/* Big countdown timer */}
-        <div className="text-center py-4">
-          <div className={`text-5xl sm:text-7xl font-black tabular-nums ${timerColor} transition-colors`}>
-            {timeLeft}
-          </div>
-          <p className="text-sm text-muted-foreground mt-1">seconds remaining</p>
-        </div>
-
-        {/* Topic reminder */}
-        {topic && (
-          <div className="bg-emerald-50/70 rounded-xl px-4 py-2.5 border border-emerald-100">
-            <p className="text-xs font-semibold text-emerald-600 uppercase tracking-wide mb-0.5">Topic</p>
-            <p className="text-xs text-emerald-800 leading-relaxed">{topic}</p>
-          </div>
-        )}
-
-        {/* Guidance remains visible */}
-        {vocabWords.length > 0 && (
-          <div className="bg-indigo-50/70 rounded-xl px-4 py-3 border border-indigo-100">
-            <p className="text-xs font-semibold text-indigo-500 uppercase tracking-wide mb-1.5">Vocabulary</p>
-            <div className="flex flex-wrap gap-1.5">
-              {vocabWords.map(v => (
-                <span key={v.id} className="bg-indigo-100 text-indigo-700 text-xs px-2 py-0.5 rounded-full">
-                  {v.word}
-                </span>
-              ))}
+        {/* Mic / recording controls */}
+        <div className="flex flex-col items-center gap-1 pt-1">
+          {isRecording && (
+            <div className="flex items-center gap-2 text-red-500 mb-1">
+              <div className="w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse" />
+              <span className="text-sm font-medium">Recording...</span>
             </div>
-          </div>
-        )}
-        {structures.length > 0 && (
-          <div className="bg-violet-50/70 rounded-xl px-4 py-3 border border-violet-100">
-            <p className="text-xs font-semibold text-violet-500 uppercase tracking-wide mb-1.5">Structures</p>
-            <div className="space-y-1">
-              {structures.map(s => (
-                <p key={s.id} className="text-xs text-violet-700 font-mono">· {s.pattern}</p>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <div className="flex flex-col items-center gap-2">
-          <div className="flex items-center gap-2 text-emerald-600">
-            <div className="w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse" />
-            <span className="text-sm font-medium">Recording...</span>
-          </div>
+          )}
           <AudioRecorder
             ref={recorderRef}
             onRecordingComplete={handleRecordingComplete}
+            onRecordingStateChange={handleRecordingStateChange}
             isProcessing={false}
             maxDuration={RECORD_DURATION + 1}
           />
@@ -256,7 +219,7 @@ export default function Exercise3FreeTalk({ vocabWords, structures, topic, onCom
         {result.transcription && (
           <div className="bg-muted/40 rounded-xl p-4 border border-border">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Your speech</p>
-            <p className="text-sm text-foreground italic">"{result.transcription}"</p>
+            <p className="text-sm text-foreground italic">&ldquo;{result.transcription}&rdquo;</p>
           </div>
         )}
 
