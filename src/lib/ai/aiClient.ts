@@ -151,8 +151,9 @@ export const scoreOwnSentence = (
   structurePattern: string,
   audioBase64: string,
   timerMode: boolean,
+  exampleSentence?: string,
 ): Promise<StructureScoringResult> =>
-  post('/api/ai/homework-score', { type: 'own-sentence', structurePattern, audioBase64, timerMode });
+  post('/api/ai/homework-score', { type: 'own-sentence', structurePattern, audioBase64, timerMode, exampleSentence });
 
 export const scoreReadingPassage = (
   readingPassage: string,
@@ -179,8 +180,9 @@ export const scoreFreeTalk = (
 export const generateFreeTalkTopic = (
   vocabWords: string[],
   structurePatterns: string[],
+  learnerRole?: string,
 ): Promise<string> =>
-  post('/api/ai/homework-score', { type: 'free-talk-topic', vocabWords, structurePatterns });
+  post('/api/ai/homework-score', { type: 'free-talk-topic', vocabWords, structurePatterns, learnerRole });
 
 // ── Safe client-side re-exports ─────────────────────────────────────────────
 

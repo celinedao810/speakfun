@@ -141,19 +141,30 @@ function Ex2Summary({
         </p>
       </div>
 
-      <div className="space-y-2 max-h-60 sm:max-h-72 overflow-y-auto">
+      <div className="space-y-2 max-h-72 sm:max-h-80 overflow-y-auto">
         {structureResults.map((r, i) => (
-          <div key={i} className={`flex items-start gap-3 px-4 py-2.5 rounded-xl border ${
+          <div key={i} className={`rounded-xl border px-4 py-2.5 ${
             r.isCorrect ? 'bg-green-50 border-green-100' : 'bg-red-50 border-red-100'
           }`}>
-            {r.isCorrect
-              ? <CheckCircle className="w-4 h-4 text-green-600 shrink-0 mt-0.5" />
-              : <XCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
-            }
-            <span className="text-xs font-mono text-foreground flex-1 leading-snug">{r.item.pattern}</span>
-            <span className={`text-sm font-bold shrink-0 ${r.isCorrect ? 'text-green-700' : 'text-red-600'}`}>
-              {r.isCorrect ? `+${r.pointsEarned.toFixed(1)}` : '0'}
-            </span>
+            <div className="flex items-start gap-3">
+              {r.isCorrect
+                ? <CheckCircle className="w-4 h-4 text-green-600 shrink-0 mt-0.5" />
+                : <XCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+              }
+              <span className="text-xs font-mono text-foreground flex-1 leading-snug">{r.item.pattern}</span>
+              <span className={`text-sm font-bold shrink-0 ${r.isCorrect ? 'text-green-700' : 'text-red-600'}`}>
+                {r.isCorrect ? `+${r.pointsEarned.toFixed(1)}` : '0'}
+              </span>
+            </div>
+            {r.transcription && (
+              <p className="mt-1.5 ml-7 text-xs text-muted-foreground italic">"{r.transcription}"</p>
+            )}
+            {!r.isCorrect && r.correctedSentence && (
+              <p className="mt-1 ml-7 text-xs text-green-700 font-medium">✓ {r.correctedSentence}</p>
+            )}
+            {r.feedback && (
+              <p className="mt-1 ml-7 text-xs text-slate-500">{r.feedback}</p>
+            )}
           </div>
         ))}
       </div>
@@ -321,6 +332,7 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
           generateFreeTalkTopic(
             pool.map(v => v.word),
             structuresToUse.slice(0, settingsData?.reviewStructureCount ?? 5).map(s => s.pattern),
+            profile?.preferences?.role || profile?.job_title || undefined,
           ).then(t => { if (t) setFreeTalkTopic(t); }).catch(() => {});
         }
 
@@ -379,6 +391,7 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
       generateFreeTalkTopic(
         vocabPool.map(v => v.word),
         structurePool.map(s => s.pattern),
+        learnerRole || undefined,
       ).then(t => { if (t) setFreeTalkTopic(t); }).catch(() => {});
     }
     setPhase('EX2_SUMMARY');

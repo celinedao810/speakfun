@@ -15,6 +15,9 @@ export interface StructureResult {
   item: StructureExerciseItem;
   pointsEarned: number;
   isCorrect: boolean;
+  feedback?: string;
+  transcription?: string;
+  correctedSentence?: string;
 }
 
 const FALL_DURATION_MS = 20000; // 20 seconds
@@ -69,13 +72,20 @@ export default function Exercise2Structure({ structures, onComplete }: Exercise2
     setIsScoring(true);
 
     try {
-      const result = await scoreOwnSentence(currentStructure.pattern, base64, false);
+      const result = await scoreOwnSentence(currentStructure.pattern, base64, false, currentStructure.exampleSentence);
       result.structureItemId = currentStructure.id;
 
       const pts = result.pointsEarned;
       const isCorrect = result.grammarCorrect ?? pts > 0;
       const newTotal = totalScore + pts;
-      const sResult: StructureResult = { item: currentStructure, pointsEarned: pts, isCorrect };
+      const sResult: StructureResult = {
+        item: currentStructure,
+        pointsEarned: pts,
+        isCorrect,
+        feedback: result.feedback,
+        transcription: result.transcription,
+        correctedSentence: result.correctedSentence,
+      };
       const newResults = [...structureResults, sResult];
 
       setTotalScore(newTotal);

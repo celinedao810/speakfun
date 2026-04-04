@@ -23,7 +23,7 @@ function parseWordType(clue: string): string {
   return m ? m[1].toLowerCase() : '';
 }
 
-const FALL_DURATION_MS = 20000; // 20 seconds
+const FALL_DURATION_MS = 15000; // 15 seconds
 
 export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1VocabProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -344,7 +344,7 @@ export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1Vocab
           ref={recorderRef}
           onRecordingComplete={handleRecordingComplete}
           isProcessing={false}
-          maxDuration={21}
+          maxDuration={16}
         />
       </div>
     </div>

@@ -42,11 +42,11 @@ export async function POST(request: NextRequest) {
     }
 
     if (type === 'own-sentence') {
-      const { structurePattern, audioBase64, timerMode } = body;
+      const { structurePattern, audioBase64, timerMode, exampleSentence } = body;
       if (!structurePattern || !audioBase64) {
         return NextResponse.json({ error: 'structurePattern and audioBase64 are required' }, { status: 400 });
       }
-      const result = await scoreOwnSentence(structurePattern, audioBase64, timerMode ?? false);
+      const result = await scoreOwnSentence(structurePattern, audioBase64, timerMode ?? false, exampleSentence);
       return NextResponse.json(result);
     }
 
@@ -78,8 +78,8 @@ export async function POST(request: NextRequest) {
     }
 
     if (type === 'free-talk-topic') {
-      const { vocabWords, structurePatterns } = body;
-      const topic = await generateFreeTalkTopic(vocabWords ?? [], structurePatterns ?? []);
+      const { vocabWords, structurePatterns, learnerRole } = body;
+      const topic = await generateFreeTalkTopic(vocabWords ?? [], structurePatterns ?? [], learnerRole);
       return NextResponse.json(topic);
     }
 

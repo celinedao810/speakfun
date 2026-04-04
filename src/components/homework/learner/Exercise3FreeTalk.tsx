@@ -7,7 +7,8 @@ import { scoreFreeTalk } from '@/lib/ai/aiClient';
 import AudioRecorder, { AudioRecorderHandle } from '@/components/AudioRecorder';
 
 const RECORD_DURATION = 45;
-const BASELINE = 8;
+const BASELINE = 7;
+const MAX_ATTEMPTS_BEFORE_SKIP = 5;
 
 interface Exercise3FreeTalkProps {
   vocabWords: VocabExerciseItem[];
@@ -26,6 +27,7 @@ export default function Exercise3FreeTalk({ vocabWords, structures, topic, onCom
   const [result, setResult] = useState<FreeTalkScoringResult | null>(null);
   const [recordingUrl, setRecordingUrl] = useState<string | null>(null);
   const [attemptCount, setAttemptCount] = useState(0);
+  const [attemptHistory, setAttemptHistory] = useState<{ attempt: number; score: number }[]>([]);
 
   const recorderRef = useRef<AudioRecorderHandle>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -68,6 +70,7 @@ export default function Exercise3FreeTalk({ vocabWords, structures, topic, onCom
         topic,
       );
       setBestScore(prev => Math.max(prev, r.score));
+      setAttemptHistory(prev => [...prev, { attempt: prev.length + 1, score: r.score }]);
       setResult(r);
       setPhase('FEEDBACK');
     } catch {
@@ -85,11 +88,14 @@ export default function Exercise3FreeTalk({ vocabWords, structures, topic, onCom
   };
 
   const handleContinue = () => {
-    onComplete(bestScore);
+    // Passed: use best score. Skipping after max attempts: use latest score.
+    const scoreToSave = passedBaseline ? bestScore : (result?.score ?? 0);
+    onComplete(scoreToSave);
   };
 
   const timerColor = timeLeft > 15 ? 'text-green-400' : timeLeft > 5 ? 'text-amber-400' : 'text-red-400';
   const passedBaseline = (result?.score ?? 0) >= BASELINE;
+  const canSkip = attemptCount >= MAX_ATTEMPTS_BEFORE_SKIP;
 
   // ── READY phase (includes live recording state) ──
   if (phase === 'READY') {
@@ -113,7 +119,7 @@ export default function Exercise3FreeTalk({ vocabWords, structures, topic, onCom
               Speak freely for 45 seconds using the words and structures below.
               {attemptCount > 0 && bestScore < BASELINE && (
                 <span className="block mt-1 text-amber-600 font-medium">
-                  Best so far: {bestScore.toFixed(1)}/10 — keep going, you need {BASELINE}/10 to pass!
+                  Best so far: {bestScore.toFixed(1)}/10 — you need {BASELINE}/10 to pass ({attemptCount}/{MAX_ATTEMPTS_BEFORE_SKIP} attempts used)
                 </span>
               )}
             </p>
@@ -122,7 +128,7 @@ export default function Exercise3FreeTalk({ vocabWords, structures, topic, onCom
 
         {/* Today's topic */}
         {topic && (
-          <div className={`bg-emerald-50 rounded-xl p-4 border border-emerald-200 ${isRecording ? 'py-2.5' : ''}`}>
+          <div className={`bg-emerald-50 rounded-xl border border-emerald-200 ${isRecording ? 'px-4 py-2.5' : 'p-4'}`}>
             <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wide mb-1">Today&apos;s topic</p>
             <p className="text-sm text-emerald-900 font-medium leading-relaxed">{topic}</p>
           </div>
@@ -131,6 +137,16 @@ export default function Exercise3FreeTalk({ vocabWords, structures, topic, onCom
           <div className="bg-emerald-50 rounded-xl p-3 border border-emerald-200 flex items-center gap-2">
             <div className="w-3.5 h-3.5 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin shrink-0" />
             <p className="text-xs text-emerald-600">Preparing your topic...</p>
+          </div>
+        )}
+
+        {/* Tip note — only in READY state, not while recording */}
+        {!isRecording && (
+          <div className="bg-amber-50 rounded-xl px-4 py-3 border border-amber-100">
+            <p className="text-xs text-amber-800 leading-relaxed">
+              <strong>Tip:</strong> The topic above is just a suggestion — you don&apos;t have to follow it exactly.
+              Try to use <strong>at least one word</strong> or <strong>one structure</strong> from the lists below in your answer.
+            </p>
           </div>
         )}
 
@@ -207,14 +223,32 @@ export default function Exercise3FreeTalk({ vocabWords, structures, topic, onCom
             ? <CheckCircle className="w-8 h-8 text-green-600 mx-auto mb-2" />
             : <AlertCircle className="w-8 h-8 text-red-500 mx-auto mb-2" />
           }
-          <p className={`text-3xl sm:text-4xl font-black ${scoreColor}`}>{result.score.toFixed(1)}<span className="text-xl font-semibold text-muted-foreground">/10</span></p>
-          <p className={`text-sm font-semibold mt-1 ${passedBaseline ? 'text-green-700' : 'text-red-600'}`}>
-            {passedBaseline ? 'Baseline reached!' : `Baseline not reached (${BASELINE}/10 required)`}
+          <p className={`text-3xl sm:text-4xl font-black ${scoreColor}`}>
+            {result.score.toFixed(1)}<span className="text-xl font-semibold text-muted-foreground">/10</span>
           </p>
+          <p className={`text-sm font-semibold mt-1 ${passedBaseline ? 'text-green-700' : 'text-red-600'}`}>
+            {passedBaseline ? 'Passed!' : `Need ${BASELINE}/10 to pass`}
+          </p>
+          {passedBaseline && attemptHistory.length > 0 && (
+            <p className="text-xs text-green-600 mt-1">Passed on attempt {attemptHistory.length}</p>
+          )}
           {bestScore > result.score && (
             <p className="text-xs text-muted-foreground mt-1">Best attempt: {bestScore.toFixed(1)}/10</p>
           )}
         </div>
+
+        {/* Attempt history pills */}
+        {attemptHistory.length > 1 && (
+          <div className="flex flex-wrap gap-2">
+            {attemptHistory.map(h => (
+              <span key={h.attempt} className={`text-xs px-2.5 py-1 rounded-full font-medium ${
+                h.score >= BASELINE ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-600'
+              }`}>
+                #{h.attempt}: {h.score.toFixed(1)}
+              </span>
+            ))}
+          </div>
+        )}
 
         {/* Transcription */}
         {result.transcription && (
@@ -282,21 +316,29 @@ export default function Exercise3FreeTalk({ vocabWords, structures, topic, onCom
               className="w-full py-3 bg-amber-500 text-white rounded-xl font-semibold hover:bg-amber-600 transition flex items-center justify-center gap-2"
             >
               <RotateCcw className="w-4 h-4" />
-              Re-record to reach baseline
+              Try again
             </button>
           )}
-          <button
-            onClick={handleContinue}
-            className={`w-full py-3 rounded-xl font-semibold transition flex items-center justify-center gap-2 ${
-              passedBaseline
-                ? 'bg-emerald-600 text-white hover:bg-emerald-700'
-                : 'bg-muted text-muted-foreground hover:bg-muted/80'
-            }`}
-          >
-            {passedBaseline ? <CheckCircle className="w-4 h-4" /> : <MicOff className="w-4 h-4" />}
-            {passedBaseline ? 'Continue' : 'Skip & Continue'}
-            <ChevronRight className="w-4 h-4" />
-          </button>
+          {passedBaseline && (
+            <button
+              onClick={handleContinue}
+              className="w-full py-3 bg-emerald-600 text-white rounded-xl font-semibold hover:bg-emerald-700 transition flex items-center justify-center gap-2"
+            >
+              <CheckCircle className="w-4 h-4" />
+              Continue
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          )}
+          {!passedBaseline && canSkip && (
+            <button
+              onClick={handleContinue}
+              className="w-full py-3 rounded-xl font-semibold transition flex items-center justify-center gap-2 bg-muted text-muted-foreground hover:bg-muted/80"
+            >
+              <MicOff className="w-4 h-4" />
+              Skip & Continue (attempt {attemptCount}/{MAX_ATTEMPTS_BEFORE_SKIP})
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          )}
         </div>
       </div>
     );

@@ -625,6 +625,7 @@ export interface StructureScoringResult {
   pointsEarned: number;
   feedback: string;
   transcription?: string;
+  correctedSentence?: string;
   penaltiesApplied: number;
 }
 

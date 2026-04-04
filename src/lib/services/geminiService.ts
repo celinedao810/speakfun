@@ -1426,11 +1426,15 @@ Give feedback in Vietnamese.`
 export const scoreOwnSentence = async (
   structurePattern: string,
   audioBase64: string,
-  timerMode: boolean
+  timerMode: boolean,
+  exampleSentence?: string,
 ): Promise<StructureScoringResult> => {
   return safeExecute(async () => {
     const ai = new GoogleGenAI({ apiKey: getApiKey() });
     const basePoints = 3;
+    const exampleLine = exampleSentence
+      ? `\nExample sentence shown to learner (they must NOT copy this): "${exampleSentence}"\n`
+      : '';
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: {
@@ -1438,16 +1442,22 @@ export const scoreOwnSentence = async (
           {
             text: `Evaluate this learner-generated English sentence for a speaking exercise.
 
-Target grammar structure: "${structurePattern}"
+Target grammar structure: "${structurePattern}"${exampleLine}
 Base points: ${basePoints} (subtract 0.5 per error, 0 if grammatically incorrect)
 
+IMPORTANT — example copy check (do this FIRST):
+If the transcription closely matches the given example sentence (same sentence, minor word changes, or a paraphrase of it), the learner has not created their own sentence.
+In this case: set grammarCorrect=false, pointsEarned=0, correctedSentence="", feedback="Bạn cần tự tạo câu của mình, không được đọc lại câu mẫu."
+
+Only if the transcription is an original sentence (not copied from the example):
 Step 1: Transcribe what was said.
 Step 2: Check if the sentence uses the target structure correctly (grammarCorrect).
 Step 3: Check if the sentence makes sense (makesSense).
 Step 4: Count grammar and pronunciation errors.
 Step 5: pointsEarned = 0 if not grammarCorrect, else max(0, ${basePoints} - errors × 0.5).
 Step 6: Pronunciation score 0-100.
-Step 7: Feedback in Vietnamese.`
+Step 7: Feedback in Vietnamese.
+Step 8: correctedSentence = empty string if grammarCorrect=true, otherwise write a corrected version of what the learner said (in English).`
           },
           { inlineData: { mimeType: 'audio/webm', data: audioBase64 } }
         ]
@@ -1464,8 +1474,9 @@ Step 7: Feedback in Vietnamese.`
             pointsEarned: { type: Type.NUMBER },
             penaltiesApplied: { type: Type.NUMBER },
             feedback: { type: Type.STRING },
+            correctedSentence: { type: Type.STRING },
           },
-          required: ['transcription', 'grammarCorrect', 'makesSense', 'pronunciationScore', 'pointsEarned', 'penaltiesApplied', 'feedback'],
+          required: ['transcription', 'grammarCorrect', 'makesSense', 'pronunciationScore', 'pointsEarned', 'penaltiesApplied', 'feedback', 'correctedSentence'],
         },
       },
     });
@@ -1478,6 +1489,7 @@ Step 7: Feedback in Vietnamese.`
       pointsEarned: result.pointsEarned || 0,
       feedback: result.feedback || '',
       transcription: result.transcription || '',
+      correctedSentence: result.correctedSentence || '',
       penaltiesApplied: result.penaltiesApplied || 0,
     };
   });
@@ -1575,11 +1587,11 @@ Only proceed with scoring below if the learner has spoken at least 5 real conten
 
 Scoring rules:
 - Base score: 10 points
-- Deduct 0.5pt per pronunciation error (mispronounced word, wrong stress, unclear sounds)
+- Pronunciation (lenient): Only deduct 0.5pt for errors that clearly impede understanding. Do NOT penalise natural accent variation, minor mispronunciation of non-key words, or imperfect but intelligible speech. A learner who speaks fluently with a slight accent is better than one who speaks haltingly with perfect pronunciation.
 - Deduct 0.5pt per grammar error (wrong tense, missing article, subject-verb agreement, etc.)
 - Deduct 0.5pt per delivery issue (unnatural pausing, very slow pace, choppy rhythm)
 - Minimum score: 0
-- Baseline is 8pt — the learner must reach this to pass
+- Baseline is 7pt — the learner must reach this to pass
 
 Steps:
 1. Transcribe exactly what was said.
@@ -1632,25 +1644,28 @@ Steps:
 export const generateFreeTalkTopic = async (
   vocabWords: string[],
   structurePatterns: string[],
+  learnerRole?: string,
 ): Promise<string> => {
   return safeExecute(async () => {
     const ai = new GoogleGenAI({ apiKey: getApiKey() });
     const vocabList = vocabWords.slice(0, 10).join(', ') || '(none)';
     const structureList = structurePatterns.slice(0, 5).join(' | ') || '(none)';
+    const roleLine = learnerRole ? `Learner's job role: ${learnerRole}` : 'Learner context: IT professional';
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: `Given these IT English vocabulary words: ${vocabList}
 And these grammar structures: ${structureList}
+${roleLine}
 
-Generate ONE interview-style speaking question for an IT professional to answer in 45 seconds.
+Generate ONE interview-style speaking question for this learner to answer in 45 seconds.
 
 Rules:
 - ONE sentence only, maximum 20 words
-- Style: behavioral or situational — like a job interview question (e.g. "Tell me about a time...", "How do you usually handle...", "What do you prefer...")
-- Role-relevant but not overly technical — anyone in an IT role can answer it
+- Style: behavioral or situational — ask about experience, opinion, or approach (e.g. "Tell me about a time...", "How do you usually handle...", "What do you prefer...")
+- MUST be answerable by anyone in this role WITHOUT deep technical knowledge — focus on soft skills, communication, and work habits
 - Should naturally invite use of the provided vocabulary and structures
-- Good examples: "Tell me about a time you had to explain a technical issue to a non-technical colleague.", "How do you usually handle unexpected problems during a project?"
-- Avoid: "Explain how X works", "What is the definition of...", overly specific tools or technologies
+- Good examples: "Tell me about a time you had to explain a complex idea to a colleague.", "How do you usually handle unexpected problems at work?"
+- Bad examples (avoid): "Tell me about a time you fixed a variable infrastructure function." (too technical/specific), "Explain how X works.", "What is the definition of..."
 
 Return only the question text, no quotes, no explanation, no extra formatting.`,
     });
