@@ -15,6 +15,7 @@ export interface WordResult {
   item: VocabExerciseItem;
   pointsEarned: number;
   isCorrect: boolean;
+  recognizedWord?: string;
 }
 
 /** Parse word type from the first word(s) of the clue field. */
@@ -137,7 +138,7 @@ export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1Vocab
           attemptTimestamp: timestamp,
         };
         attemptsRef.current = [...attemptsRef.current, audit];
-        const wordResult: WordResult = { item: capturedItem, pointsEarned: pts, isCorrect };
+        const wordResult: WordResult = { item: capturedItem, pointsEarned: pts, isCorrect, recognizedWord: result.recognizedWord || '' };
         wordResultsArrRef.current[capturedIndex] = wordResult;
 
         // Reactively update display state

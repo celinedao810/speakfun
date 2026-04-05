@@ -72,17 +72,22 @@ function Ex1Summary({
 
       <div className="space-y-2 max-h-60 sm:max-h-72 overflow-y-auto">
         {wordResults.map((r, i) => (
-          <div key={i} className={`flex items-center gap-3 px-4 py-2.5 rounded-xl border ${
+          <div key={i} className={`rounded-xl border px-4 py-2.5 ${
             r.isCorrect ? 'bg-green-50 border-green-100' : 'bg-red-50 border-red-100'
           }`}>
-            {r.isCorrect
-              ? <CheckCircle className="w-4 h-4 text-green-600 shrink-0" />
-              : <XCircle className="w-4 h-4 text-red-500 shrink-0" />
-            }
-            <span className="text-sm font-medium text-foreground flex-1">{r.item.word}</span>
-            <span className={`text-sm font-bold ${r.isCorrect ? 'text-green-700' : 'text-red-600'}`}>
-              {r.isCorrect ? `+${r.pointsEarned.toFixed(1)}` : '0'}
-            </span>
+            <div className="flex items-center gap-3">
+              {r.isCorrect
+                ? <CheckCircle className="w-4 h-4 text-green-600 shrink-0" />
+                : <XCircle className="w-4 h-4 text-red-500 shrink-0" />
+              }
+              <span className="text-sm font-medium text-foreground flex-1">{r.item.word}</span>
+              <span className={`text-sm font-bold ${r.isCorrect ? 'text-green-700' : 'text-red-600'}`}>
+                {r.isCorrect ? `+${r.pointsEarned.toFixed(1)}` : '0'}
+              </span>
+            </div>
+            {!r.isCorrect && r.recognizedWord && r.recognizedWord !== r.item.word.toLowerCase() && (
+              <p className="mt-1 ml-7 text-xs text-red-500 italic">heard: "{r.recognizedWord}"</p>
+            )}
           </div>
         ))}
       </div>

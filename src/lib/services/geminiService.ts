@@ -1315,10 +1315,10 @@ export const scoreVocabGuess = async (
 Target word: "${targetWord}"
 IPA: ${ipa}
 
-Step 1: Transcribe what the learner said.
-Step 2: Check if they said the correct word (exact match, ignoring minor accent differences).
-Step 3: If correct, score pronunciation 0-100 based on vowels, consonants, and stress.
-Step 4: Give brief feedback in Vietnamese.`
+Step 1: Transcribe exactly what the learner said (recognizedWord).
+Step 2: Determine isCorrectWord — set true if the learner clearly attempted the target word, even with a non-native accent, slight mispronunciation, or minor stress error. Only set false if they said a completely different word, stayed silent, or produced unintelligible sounds.
+Step 3: Score pronunciation 0-100 based on how closely vowels, consonants, and stress match the IPA. Be lenient with natural non-native accents.
+Step 4: Give brief feedback in Vietnamese (1 sentence).`
           },
           { inlineData: { mimeType: 'audio/webm', data: audioBase64 } }
         ]
