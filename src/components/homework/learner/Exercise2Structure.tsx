@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { CheckCircle, XCircle, Mic } from 'lucide-react';
+import { CheckCircle, XCircle, Mic, Loader2 } from 'lucide-react';
 import { StructureExerciseItem, StructureScoringResult } from '@/lib/types';
 import { scoreOwnSentence } from '@/lib/ai/aiClient';
 import AudioRecorder, { AudioRecorderHandle } from '@/components/AudioRecorder';
@@ -25,12 +25,17 @@ const FALL_DURATION_MS = 20000; // 20 seconds
 export default function Exercise2Structure({ structures, onComplete }: Exercise2StructureProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [progress, setProgress] = useState(0);
-  const [isScoring, setIsScoring] = useState(false);
-  // Small flash banner (not a blocking overlay)
-  const [flashResult, setFlashResult] = useState<StructureScoringResult | null>(null);
+  const [structureResults, setStructureResults] = useState<(StructureResult | null)[]>(() => Array(structures.length).fill(null));
   const [totalScore, setTotalScore] = useState(0);
-  const [structureResults, setStructureResults] = useState<StructureResult[]>([]);
+  // Brief flash label after recording (does NOT block next structure)
+  const [flashLabel, setFlashLabel] = useState<string | null>(null);
   const [resultTimeoutId, setResultTimeoutId] = useState<NodeJS.Timeout | null>(null);
+
+  // Mutable refs — safe to read inside async .then()/.catch() without stale closure
+  const totalScoreRef = useRef(0);
+  const structureResultsArrRef = useRef<(StructureResult | null)[]>(Array(structures.length).fill(null));
+  const pendingCountRef = useRef(0);   // how many AI calls still in-flight
+  const allAnsweredRef = useRef(false); // true once the last structure is passed
 
   const recorderRef = useRef<AudioRecorderHandle>(null);
   const animFrameRef = useRef<number | null>(null);
@@ -53,57 +58,89 @@ export default function Exercise2Structure({ structures, onComplete }: Exercise2
   const currentStructure = structures[currentIndex];
   const isFinished = currentIndex >= structures.length;
 
-  const advanceToNext = useCallback((newTotal: number, newResults: StructureResult[]) => {
-    setFlashResult(null);
+  // Helper: call onComplete with all accumulated data
+  const fireOnComplete = useCallback(() => {
+    onComplete(
+      totalScoreRef.current,
+      structureResultsArrRef.current.map((r, i) =>
+        r ?? { item: structures[i], pointsEarned: 0, isCorrect: false }
+      ),
+    );
+  }, [onComplete, structures]);
+
+  // Advance to next structure immediately (no waiting for AI)
+  const advanceToNext = useCallback(() => {
+    setFlashLabel(null);
     setProgress(0);
     scoredRef.current = false;
     setCurrentIndex(i => {
       const next = i + 1;
       if (next >= structures.length) {
-        onComplete(newTotal, newResults);
+        allAnsweredRef.current = true;
+        if (pendingCountRef.current === 0) {
+          fireOnComplete();
+        }
       }
       return next;
     });
-  }, [structures.length, onComplete]);
+  }, [structures.length, fireOnComplete]);
 
-  const handleRecordingComplete = useCallback(async (base64: string) => {
+  // Fire-and-forget AI scoring
+  const handleRecordingComplete = useCallback((base64: string) => {
     if (scoredRef.current || !currentStructure) return;
     scoredRef.current = true;
-    setIsScoring(true);
 
-    try {
-      const result = await scoreOwnSentence(currentStructure.pattern, base64, false, currentStructure.exampleSentence);
-      result.structureItemId = currentStructure.id;
+    // Capture before advancing (avoids stale closure in async)
+    const capturedIndex = currentIndex;
+    const capturedStructure = currentStructure;
 
-      const pts = result.pointsEarned;
-      const isCorrect = result.grammarCorrect ?? pts > 0;
-      const newTotal = totalScore + pts;
-      const sResult: StructureResult = {
-        item: currentStructure,
-        pointsEarned: pts,
-        isCorrect,
-        feedback: result.feedback,
-        transcription: result.transcription,
-        correctedSentence: result.correctedSentence,
-      };
-      const newResults = [...structureResults, sResult];
+    // Brief "Recorded!" flash then advance immediately — no blocking
+    setFlashLabel('Recorded!');
+    const tid = setTimeout(advanceToNext, 400);
+    setResultTimeoutId(tid);
 
-      setTotalScore(newTotal);
-      setStructureResults(newResults);
-      setFlashResult(result);
+    // Fire AI call in background
+    pendingCountRef.current++;
+    scoreOwnSentence(capturedStructure.pattern, base64, false, capturedStructure.exampleSentence)
+      .then((result: StructureScoringResult) => {
+        result.structureItemId = capturedStructure.id;
+        const pts = result.pointsEarned;
+        const isCorrect = result.grammarCorrect ?? pts > 0;
 
-      const tid = setTimeout(() => advanceToNext(newTotal, newResults), 1200);
-      setResultTimeoutId(tid);
-    } catch {
-      const sResult: StructureResult = { item: currentStructure, pointsEarned: 0, isCorrect: false };
-      const newResults = [...structureResults, sResult];
-      setStructureResults(newResults);
-      const tid = setTimeout(() => advanceToNext(totalScore, newResults), 800);
-      setResultTimeoutId(tid);
-    } finally {
-      setIsScoring(false);
-    }
-  }, [currentStructure, totalScore, structureResults, advanceToNext]);
+        totalScoreRef.current += pts;
+        const sResult: StructureResult = {
+          item: capturedStructure,
+          pointsEarned: pts,
+          isCorrect,
+          feedback: result.feedback,
+          transcription: result.transcription,
+          correctedSentence: result.correctedSentence,
+        };
+        structureResultsArrRef.current[capturedIndex] = sResult;
+
+        setTotalScore(totalScoreRef.current);
+        setStructureResults(prev => {
+          const updated = [...prev];
+          updated[capturedIndex] = sResult;
+          return updated;
+        });
+      })
+      .catch(() => {
+        const sResult: StructureResult = { item: capturedStructure, pointsEarned: 0, isCorrect: false };
+        structureResultsArrRef.current[capturedIndex] = sResult;
+        setStructureResults(prev => {
+          const updated = [...prev];
+          updated[capturedIndex] = sResult;
+          return updated;
+        });
+      })
+      .finally(() => {
+        pendingCountRef.current--;
+        if (allAnsweredRef.current && pendingCountRef.current === 0) {
+          fireOnComplete();
+        }
+      });
+  }, [currentIndex, currentStructure, advanceToNext, fireOnComplete]);
 
   // Falling block animation
   useEffect(() => {
@@ -121,16 +158,27 @@ export default function Exercise2Structure({ structures, onComplete }: Exercise2
       if (p < 1) {
         animFrameRef.current = requestAnimationFrame(tick);
       } else {
+        // Timed out — mark as missed (0pt) and advance
         if (!scoredRef.current) {
           scoredRef.current = true;
           recorderRef.current?.stop?.();
-          const sResult: StructureResult = { item: currentStructure, pointsEarned: 0, isCorrect: false };
-          const newResults = [...structureResults, sResult];
-          setStructureResults(newResults);
+          const capturedStructure = structures[currentIndex];
+
+          const sResult: StructureResult = { item: capturedStructure, pointsEarned: 0, isCorrect: false };
+          structureResultsArrRef.current[currentIndex] = sResult;
+          setStructureResults(prev => {
+            const updated = [...prev];
+            updated[currentIndex] = sResult;
+            return updated;
+          });
+
           setCurrentIndex(i => {
             const next = i + 1;
             if (next >= structures.length) {
-              onComplete(totalScore, newResults);
+              allAnsweredRef.current = true;
+              if (pendingCountRef.current === 0) {
+                fireOnComplete();
+              }
             }
             return next;
           });
@@ -148,12 +196,25 @@ export default function Exercise2Structure({ structures, onComplete }: Exercise2
 
   useEffect(() => () => { if (resultTimeoutId) clearTimeout(resultTimeoutId); }, [resultTimeoutId]);
 
-  if (isFinished) return null;
+  // All structures answered but AI calls still resolving
+  if (isFinished) {
+    if (pendingCountRef.current > 0) {
+      return (
+        <div className="flex flex-col items-center justify-center py-12 gap-3">
+          <Loader2 className="w-8 h-8 text-primary animate-spin" />
+          <p className="text-sm text-slate-500">Finalizing scores...</p>
+        </div>
+      );
+    }
+    return null;
+  }
 
-  const isCorrectFlash = flashResult ? (flashResult.grammarCorrect ?? flashResult.pointsEarned > 0) : false;
   const blockHeight = 150;
   const maxTravel = Math.max(frameHeightPx - blockHeight, 0);
   const translateY = progress * maxTravel;
+
+  // Count how many AI results are still pending (for display)
+  const pendingCount = structureResults.slice(0, currentIndex).filter(r => r === null).length;
 
   return (
     <div className="space-y-3">
@@ -166,24 +227,38 @@ export default function Exercise2Structure({ structures, onComplete }: Exercise2
         </div>
       </div>
 
-      {/* Results trail */}
-      {structureResults.length > 0 && (
-        <div className="flex flex-wrap gap-1">
-          {structureResults.map((sr, i) => (
-            <div
-              key={i}
-              title={`${sr.item.pattern}: ${sr.isCorrect ? `+${sr.pointsEarned.toFixed(1)}pt` : '0pt'}`}
-              className={`flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white ${
-                sr.isCorrect ? 'bg-green-500' : 'bg-red-400'
-              }`}
-            >
-              {sr.isCorrect
-                ? <CheckCircle className="w-3 h-3" />
-                : <XCircle className="w-3 h-3" />
-              }
-              <span className="max-w-[72px] truncate">{sr.item.pattern.split(' ').slice(0, 3).join(' ')}</span>
-            </div>
+      {/* Results trail — gray pulsing pill = AI still pending for that structure */}
+      {currentIndex > 0 && (
+        <div className="flex flex-wrap gap-1 items-center">
+          {structureResults.slice(0, currentIndex).map((sr, i) => (
+            sr === null ? (
+              <div
+                key={i}
+                className="rounded-full px-2 py-0.5 bg-slate-200 animate-pulse text-[10px] text-slate-400 font-medium"
+              >
+                …
+              </div>
+            ) : (
+              <div
+                key={i}
+                title={`${sr.item.pattern}: ${sr.isCorrect ? `+${sr.pointsEarned.toFixed(1)}pt` : '0pt'}`}
+                className={`flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white ${
+                  sr.isCorrect ? 'bg-green-500' : 'bg-red-400'
+                }`}
+              >
+                {sr.isCorrect
+                  ? <CheckCircle className="w-3 h-3" />
+                  : <XCircle className="w-3 h-3" />
+                }
+                <span className="max-w-[72px] truncate">{sr.item.pattern.split(' ').slice(0, 3).join(' ')}</span>
+              </div>
+            )
           ))}
+          {pendingCount > 0 && (
+            <span className="text-[10px] text-slate-400 ml-1 flex items-center gap-1">
+              <Loader2 className="w-2.5 h-2.5 animate-spin" />{pendingCount} scoring
+            </span>
+          )}
         </div>
       )}
 
@@ -195,26 +270,11 @@ export default function Exercise2Structure({ structures, onComplete }: Exercise2
         />
       </div>
 
-      {/* Flash result banner */}
-      {flashResult && (
-        <div className={`flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-white ${
-          isCorrectFlash ? 'bg-green-500' : 'bg-red-500'
-        }`}>
-          {isCorrectFlash
-            ? <CheckCircle className="w-4 h-4 shrink-0" />
-            : <XCircle className="w-4 h-4 shrink-0" />
-          }
-          <span className="truncate flex-1 text-xs">{flashResult.transcription ? `"${flashResult.transcription}"` : currentStructure.pattern}</span>
-          <span className="ml-auto text-xs shrink-0">
-            {isCorrectFlash ? `+${flashResult.pointsEarned.toFixed(1)}pt` : '0pt'}
-          </span>
-        </div>
-      )}
-
-      {/* Scoring banner */}
-      {isScoring && !flashResult && (
-        <div className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs text-violet-300 bg-violet-900/60">
-          <span className="animate-pulse">Analyzing...</span>
+      {/* Flash label after recording */}
+      {flashLabel && (
+        <div className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-white bg-primary">
+          <CheckCircle className="w-4 h-4 shrink-0" />
+          {flashLabel}
         </div>
       )}
 
@@ -242,7 +302,7 @@ export default function Exercise2Structure({ structures, onComplete }: Exercise2
         </div>
       </div>
 
-      {/* Mic — always visible, key resets AudioRecorder each new structure */}
+      {/* Mic — always ready, key resets AudioRecorder for each structure */}
       <div className="flex flex-col items-center gap-2">
         <p className="text-xs text-slate-500 flex items-center gap-1">
           <Mic className="w-3.5 h-3.5" /> Make your own sentence using this structure
@@ -251,7 +311,7 @@ export default function Exercise2Structure({ structures, onComplete }: Exercise2
           key={currentIndex}
           ref={recorderRef}
           onRecordingComplete={handleRecordingComplete}
-          isProcessing={isScoring}
+          isProcessing={false}
           maxDuration={21}
         />
       </div>
