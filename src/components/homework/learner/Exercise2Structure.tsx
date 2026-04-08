@@ -20,7 +20,7 @@ export interface StructureResult {
   correctedSentence?: string;
 }
 
-const FALL_DURATION_MS = 20000; // 20 seconds
+const FALL_DURATION_MS = 25000; // 25 seconds
 
 export default function Exercise2Structure({ structures, onComplete }: Exercise2StructureProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -316,7 +316,7 @@ export default function Exercise2Structure({ structures, onComplete }: Exercise2
           ref={recorderRef}
           onRecordingComplete={handleRecordingComplete}
           isProcessing={false}
-          maxDuration={21}
+          maxDuration={26}
         />
       </div>
     </div>
