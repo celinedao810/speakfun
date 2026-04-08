@@ -1446,10 +1446,11 @@ Target grammar structure: "${structurePattern}"${exampleLine}
 Base points: ${basePoints} (subtract 0.5 per error, 0 if grammatically incorrect)
 
 IMPORTANT — example copy check (do this FIRST):
-If the transcription closely matches the given example sentence (same sentence, minor word changes, or a paraphrase of it), the learner has not created their own sentence.
-In this case: set grammarCorrect=false, pointsEarned=0, correctedSentence="", feedback="Bạn cần tự tạo câu của mình, không được đọc lại câu mẫu."
+Only flag as copied if the transcription is essentially the same sentence as the example — i.e., the learner read it word-for-word or changed only 1–2 words while keeping the rest of the sentence identical.
+Do NOT flag as copied just because the learner reused some common words, shared the same topic, or used a similar sentence opening. As long as the learner clearly composed a different sentence overall, it is original.
+If flagged as copied: set grammarCorrect=false, pointsEarned=0, correctedSentence="", feedback="Bạn cần tự tạo câu của mình, không được đọc lại câu mẫu."
 
-Only if the transcription is an original sentence (not copied from the example):
+Only if the transcription is an original sentence (not a near-identical copy of the example):
 Step 1: Transcribe what was said.
 Step 2: Check if the sentence uses the target structure correctly (grammarCorrect).
 Step 3: Check if the sentence makes sense (makesSense).
