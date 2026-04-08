@@ -54,6 +54,7 @@ export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1Vocab
 
   const recorderRef = useRef<AudioRecorderHandle>(null);
   const animFrameRef = useRef<number | null>(null);
+  const graceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const startTimeRef = useRef<number>(0);
   const scoredRef = useRef(false);
   const frameRef = useRef<HTMLDivElement>(null);
@@ -233,35 +234,36 @@ export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1Vocab
         animFrameRef.current = requestAnimationFrame(tick);
       } else {
         if (!scoredRef.current) {
-          if (recorderRef.current?.getIsActive()) {
-            recorderRef.current.stop();
-            return;
-          }
-          scoredRef.current = true;
-          const capturedItem = roundPool[currentIndex];
+          recorderRef.current?.stop(); // works if recording; no-op if isPending
+          graceTimerRef.current = setTimeout(() => {
+            if (scoredRef.current) return; // handleRecordingComplete already ran
+            recorderRef.current?.reset(); // cancel any lingering recording
+            scoredRef.current = true;
+            const capturedItem = roundPool[currentIndex];
 
-          if (!wrongVocabIdsRef.current.includes(capturedItem.id)) {
-            wrongVocabIdsRef.current = [...wrongVocabIdsRef.current, capturedItem.id];
-          }
-          const wordResult: WordResult = { item: capturedItem, pointsEarned: 0, isCorrect: false };
-          wordResultsArrRef.current[currentIndex] = wordResult;
-          setWordResults(prev => {
-            const updated = [...prev];
-            updated[currentIndex] = wordResult;
-            return updated;
-          });
-
-          setCurrentIndex(i => {
-            const next = i + 1;
-            if (next >= roundPool.length) {
-              allAnsweredRef.current = true;
-              if (pendingCountRef.current === 0) {
-                fireOnComplete();
-              }
+            if (!wrongVocabIdsRef.current.includes(capturedItem.id)) {
+              wrongVocabIdsRef.current = [...wrongVocabIdsRef.current, capturedItem.id];
             }
-            return next;
-          });
-          setProgress(0);
+            const wordResult: WordResult = { item: capturedItem, pointsEarned: 0, isCorrect: false };
+            wordResultsArrRef.current[currentIndex] = wordResult;
+            setWordResults(prev => {
+              const updated = [...prev];
+              updated[currentIndex] = wordResult;
+              return updated;
+            });
+
+            setCurrentIndex(i => {
+              const next = i + 1;
+              if (next >= roundPool.length) {
+                allAnsweredRef.current = true;
+                if (pendingCountRef.current === 0) {
+                  fireOnComplete();
+                }
+              }
+              return next;
+            });
+            setProgress(0);
+          }, 600);
         }
       }
     };
@@ -269,19 +271,41 @@ export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1Vocab
     animFrameRef.current = requestAnimationFrame(tick);
     return () => {
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+      if (graceTimerRef.current) clearTimeout(graceTimerRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentIndex, isFinished, round]);
 
   useEffect(() => () => { if (resultTimeoutId) clearTimeout(resultTimeoutId); }, [resultTimeoutId]);
 
-  // All words answered but AI calls still resolving
+  // All words answered but AI calls still resolving — show results trail, not a blocking spinner
   if (isFinished) {
     if (pendingCountRef.current > 0) {
       return (
-        <div className="flex flex-col items-center justify-center py-12 gap-3">
-          <Loader2 className="w-8 h-8 text-indigo-500 animate-spin" />
-          <p className="text-sm text-slate-500">Finalizing scores…</p>
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-slate-500 flex items-center gap-1.5">
+              <Loader2 className="w-3 h-3 animate-spin text-indigo-400" />
+              Scoring…
+            </span>
+            <span className="text-sm font-bold text-indigo-600">{totalScore.toFixed(1)} pts</span>
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {wordResults.map((wr, i) =>
+              wr === null ? (
+                <div key={i} className="rounded-full px-2 py-0.5 bg-slate-200 animate-pulse text-[10px] text-slate-400 font-medium">…</div>
+              ) : (
+                <div
+                  key={i}
+                  title={`${wr.item.word}: ${wr.isCorrect ? `+${wr.pointsEarned.toFixed(1)}pt` : '0pt'}`}
+                  className={`flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white ${wr.isCorrect ? 'bg-green-500' : 'bg-red-400'}`}
+                >
+                  {wr.isCorrect ? <CheckCircle className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
+                  <span className="max-w-[60px] truncate">{wr.item.word}</span>
+                </div>
+              )
+            )}
+          </div>
         </div>
       );
     }
@@ -299,12 +323,7 @@ export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1Vocab
     <div className="space-y-3">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold text-slate-700">Vocabulary</span>
-          {round === 2 && (
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-600">Round 2</span>
-          )}
-        </div>
+        <span className="text-sm font-semibold text-slate-700">Vocabulary</span>
         <div className="flex items-center gap-3">
           <span className="text-xs text-slate-400">{currentIndex + 1}/{roundPool.length}</span>
           <span className="text-lg font-bold text-indigo-600">{totalScore.toFixed(1)} pts</span>

@@ -162,8 +162,8 @@ export default function Exercise3FreeTalk({ vocabWords, structures, topic, onCom
           </div>
         )}
 
-        {/* Answer guide */}
-        {(guideLoading || answerGuide) && !isRecording && (
+        {/* Answer guide — always visible so learner can follow it while recording */}
+        {(guideLoading || answerGuide) && (
           <div className="bg-emerald-50 rounded-xl border border-emerald-100 p-4">
             <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wide mb-2">Answer guide</p>
             {guideLoading && !answerGuide ? (
@@ -214,9 +214,9 @@ export default function Exercise3FreeTalk({ vocabWords, structures, topic, onCom
           </div>
         )}
 
-        {/* Structures */}
-        {structures.length > 0 && (
-          <div className={`bg-violet-50 rounded-xl border border-violet-100 ${isRecording ? 'px-3 py-2' : 'p-4'}`}>
+        {/* Structures — hidden while recording (answer guide covers that role) */}
+        {structures.length > 0 && !isRecording && (
+          <div className="bg-violet-50 rounded-xl border border-violet-100 p-4">
             <p className="text-xs font-semibold text-violet-600 uppercase tracking-wide mb-1.5">Structures to use</p>
             <div className="space-y-1">
               {structures.map(s => (

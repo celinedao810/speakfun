@@ -39,6 +39,7 @@ export default function Exercise2Structure({ structures, onComplete }: Exercise2
 
   const recorderRef = useRef<AudioRecorderHandle>(null);
   const animFrameRef = useRef<number | null>(null);
+  const graceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const startTimeRef = useRef<number>(0);
   const scoredRef = useRef(false);
   const frameRef = useRef<HTMLDivElement>(null);
@@ -158,35 +159,34 @@ export default function Exercise2Structure({ structures, onComplete }: Exercise2
       if (p < 1) {
         animFrameRef.current = requestAnimationFrame(tick);
       } else {
-        // Timed out — if user is actively recording, stop and let handleRecordingComplete score it;
-        // only mark as missed if no recording was in progress
         if (!scoredRef.current) {
-          if (recorderRef.current?.getIsActive()) {
-            recorderRef.current.stop();
-            return;
-          }
-          scoredRef.current = true;
-          const capturedStructure = structures[currentIndex];
+          recorderRef.current?.stop(); // works if recording; no-op if isPending
+          graceTimerRef.current = setTimeout(() => {
+            if (scoredRef.current) return; // handleRecordingComplete already ran
+            recorderRef.current?.reset(); // cancel any lingering recording
+            scoredRef.current = true;
+            const capturedStructure = structures[currentIndex];
 
-          const sResult: StructureResult = { item: capturedStructure, pointsEarned: 0, isCorrect: false };
-          structureResultsArrRef.current[currentIndex] = sResult;
-          setStructureResults(prev => {
-            const updated = [...prev];
-            updated[currentIndex] = sResult;
-            return updated;
-          });
+            const sResult: StructureResult = { item: capturedStructure, pointsEarned: 0, isCorrect: false };
+            structureResultsArrRef.current[currentIndex] = sResult;
+            setStructureResults(prev => {
+              const updated = [...prev];
+              updated[currentIndex] = sResult;
+              return updated;
+            });
 
-          setCurrentIndex(i => {
-            const next = i + 1;
-            if (next >= structures.length) {
-              allAnsweredRef.current = true;
-              if (pendingCountRef.current === 0) {
-                fireOnComplete();
+            setCurrentIndex(i => {
+              const next = i + 1;
+              if (next >= structures.length) {
+                allAnsweredRef.current = true;
+                if (pendingCountRef.current === 0) {
+                  fireOnComplete();
+                }
               }
-            }
-            return next;
-          });
-          setProgress(0);
+              return next;
+            });
+            setProgress(0);
+          }, 600);
         }
       }
     };
@@ -194,6 +194,7 @@ export default function Exercise2Structure({ structures, onComplete }: Exercise2
     animFrameRef.current = requestAnimationFrame(tick);
     return () => {
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+      if (graceTimerRef.current) clearTimeout(graceTimerRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentIndex, isFinished]);

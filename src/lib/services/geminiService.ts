@@ -1644,29 +1644,29 @@ Steps:
 
 export const generateFreeTalkTopic = async (
   vocabWords: string[],
-  structurePatterns: string[],
+  _structurePatterns: string[],
   learnerRole?: string,
 ): Promise<string> => {
   return safeExecute(async () => {
     const ai = new GoogleGenAI({ apiKey: getApiKey() });
-    const vocabList = vocabWords.slice(0, 10).join(', ') || '(none)';
-    const structureList = structurePatterns.slice(0, 5).join(' | ') || '(none)';
     const roleLine = learnerRole ? `Learner's job role: ${learnerRole}` : 'Learner context: IT professional';
+    const topicArea = vocabWords.slice(0, 6).join(', ');
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
-      contents: `Given these IT English vocabulary words: ${vocabList}
-And these grammar structures: ${structureList}
-${roleLine}
+      contents: `${roleLine}
+Today's vocabulary topic area (for context only, NOT for inclusion in the question): ${topicArea}
 
-Generate ONE interview-style speaking question for this learner to answer in 45 seconds.
+Generate ONE interview-style or workplace speaking question for this learner to answer in 45 seconds.
 
 Rules:
 - ONE sentence only, maximum 20 words
 - Style: behavioral or situational — ask about experience, opinion, or approach (e.g. "Tell me about a time...", "How do you usually handle...", "What do you prefer...")
-- MUST be answerable by anyone in this role WITHOUT deep technical knowledge — focus on soft skills, communication, and work habits
-- Should naturally invite use of the provided vocabulary and structures
-- Good examples: "Tell me about a time you had to explain a complex idea to a colleague.", "How do you usually handle unexpected problems at work?"
-- Bad examples (avoid): "Tell me about a time you fixed a variable infrastructure function." (too technical/specific), "Explain how X works.", "What is the definition of..."
+- MUST be a natural, real-life question you would genuinely hear in a job interview or team meeting
+- MUST be answerable by anyone in this role WITHOUT deep technical knowledge — focus on soft skills, communication, teamwork, and work habits
+- The vocabulary topic area above is only to help you pick a relevant theme — do NOT copy those words into the question
+- The question must stand on its own as a genuine prompt, not an exercise
+- Good examples: "Tell me about a time you had to explain a complex idea to a colleague.", "How do you usually handle unexpected problems at work?", "What do you do when you disagree with a teammate's approach?"
+- Bad examples (avoid): questions that only make sense if you force certain words in ("How do you optimize user-friendly features?"), too technical, too abstract or unnatural
 
 Return only the question text, no quotes, no explanation, no extra formatting.`,
     });
@@ -1679,9 +1679,8 @@ Return only the question text, no quotes, no explanation, no extra formatting.`,
 // ============================================================================
 
 /**
- * Generates a 3–5 bullet answer guide for the Ex3 free-talk topic.
- * Writes a realistic sample answer outline that naturally incorporates
- * only the relevant session vocab and structures — never forced.
+ * Generates a flow-guide outline for the Ex3 free-talk topic.
+ * Each step shows only the structure starter + optional vocab hints — NOT a full sample sentence.
  */
 export const generateAnswerGuide = async (
   topic: string,
@@ -1691,27 +1690,28 @@ export const generateAnswerGuide = async (
   return safeExecute(async () => {
     const ai = new GoogleGenAI({ apiKey: getApiKey() });
     const vocabList = vocabWords.slice(0, 10).join(', ') || '(none)';
-    const structureList = structurePatterns.slice(0, 5).join(' | ') || '(none)';
+    const structureList = structurePatterns.slice(0, 5).map((s, i) => `${i + 1}. ${s}`).join('\n') || '(none)';
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
-      contents: `You are helping an English learner prepare a 45-second spoken response.
+      contents: `You are helping an English learner structure a 45-second spoken response.
 
 Speaking topic: "${topic}"
-Vocabulary words available (from today's session): ${vocabList}
-Grammar structures available (from today's session): ${structureList}
+Grammar structures from today's session (in order):
+${structureList}
+Vocabulary words from today's session: ${vocabList}
 
-Write a realistic 3–5 bullet answer outline that a real person would naturally say in a professional conversation.
+Create a step-by-step flow guide. Each step = one structure starter from the list above, with optional vocabulary hints.
 
 Rules:
-- The answer must sound natural and genuine — NOT a forced exercise
-- Only pick the vocabulary words and grammar structures that fit naturally into the answer. Skip any that feel forced or unnatural
-- Each bullet is one spoken "move" (opening, context, example, lesson learned, conclusion etc.)
-- Each bullet: 15–25 words, written as something the learner could actually say
-- Where you use a session word or structure, add a brief label at the end: [vocab: "word"] or [structure: "pattern"]
-- If no vocab/structure fits naturally for a bullet, just write the bullet without any label
-- The whole outline should read like a coherent, realistic answer — not a vocabulary drill
+- Use the session structures in a logical speaking order (re-order if needed for natural flow, but use all of them)
+- Each step shows ONLY the structure opener — do NOT write a full sentence
+  Good: "Let's start with..."
+  Bad: "Let's start with a recent problem I faced at work."
+- After the opener, add [vocab: "word"] tags ONLY for session vocabulary that naturally belongs in that step. Skip vocab if it doesn't fit.
+- Maximum 2 vocab tags per step
+- The steps together should suggest a logical answer flow: opening → background/issue → solution/approach → conclusion
 
-Return ONLY a JSON array of 3–5 strings. No object wrapper, just the array.`,
+Return ONLY a JSON array of strings (one per step). No object wrapper, just the array.`,
       config: {
         responseMimeType: 'application/json',
         responseSchema: {
