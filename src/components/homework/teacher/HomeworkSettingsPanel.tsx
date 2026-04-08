@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Settings, Save, Loader2 } from 'lucide-react';
 import { ClassHomeworkSettings } from '@/lib/types';
 import { upsertClassHomeworkSettings } from '@/lib/supabase/queries/homework';
@@ -15,8 +15,6 @@ interface HomeworkSettingsPanelProps {
 export default function HomeworkSettingsPanel({ classId, settings, onSaved }: HomeworkSettingsPanelProps) {
   const [saving, setSaving] = useState(false);
   const [values, setValues] = useState({
-    wordsPerSession: settings.wordsPerSession,
-    structuresPerSession: settings.structuresPerSession,
     correctGuessesToCommit: settings.correctGuessesToCommit,
     structureGuessesToCommit: settings.structureGuessesToCommit,
     reviewWordCount: settings.reviewWordCount,
@@ -30,6 +28,8 @@ export default function HomeworkSettingsPanel({ classId, settings, onSaved }: Ho
       classId,
       homeworkRestartedAt: settings.homeworkRestartedAt,
       reviewIntervalDays: settings.reviewIntervalDays,
+      wordsPerSession: settings.wordsPerSession,
+      structuresPerSession: settings.structuresPerSession,
       ...values,
       homeworkEndDate: values.homeworkEndDate || null,
     });
@@ -70,13 +70,11 @@ export default function HomeworkSettingsPanel({ classId, settings, onSaved }: Ho
         <h3 className="text-sm font-semibold text-foreground">Homework Settings</h3>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-4">
-        {field('Words per session', 'wordsPerSession', 5, 30, 'Vocab words shown daily')}
-        {field('Structures per session', 'structuresPerSession', 1, 10, 'Sentence structures daily')}
-        {field('Vocab mastery threshold', 'correctGuessesToCommit', 3, 14, 'Correct guesses to commit vocab')}
-        {field('Structure mastery threshold', 'structureGuessesToCommit', 3, 20, 'Correct turns to commit structure')}
-        {field('Review word count', 'reviewWordCount', 5, 30, 'Words in review session')}
-        {field('Review structure count', 'reviewStructureCount', 1, 10, 'Structures in review Ex2')}
+      <div className="grid grid-cols-2 gap-4 mb-4">
+        {field('Words per session', 'reviewWordCount', 5, 30, 'Vocabulary words shown in Ex1')}
+        {field('Structures per session', 'reviewStructureCount', 1, 10, 'Structures shown in Ex2')}
+        {field('Vocab mastery threshold', 'correctGuessesToCommit', 3, 14, 'Correct guesses to commit a word')}
+        {field('Structure mastery threshold', 'structureGuessesToCommit', 3, 20, 'Correct turns to commit a structure')}
       </div>
 
       {/* End date */}
