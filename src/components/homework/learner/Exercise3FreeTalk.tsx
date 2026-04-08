@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { CheckCircle, AlertCircle, RotateCcw, ChevronRight, MicOff } from 'lucide-react';
 import { VocabExerciseItem, StructureExerciseItem, FreeTalkScoringResult } from '@/lib/types';
-import { scoreFreeTalk } from '@/lib/ai/aiClient';
+import { scoreFreeTalk, generateAnswerGuide } from '@/lib/ai/aiClient';
 import AudioRecorder, { AudioRecorderHandle } from '@/components/AudioRecorder';
 
 const RECORD_DURATION = 45;
@@ -28,6 +28,8 @@ export default function Exercise3FreeTalk({ vocabWords, structures, topic, onCom
   const [recordingUrl, setRecordingUrl] = useState<string | null>(null);
   const [attemptCount, setAttemptCount] = useState(0);
   const [attemptHistory, setAttemptHistory] = useState<{ attempt: number; score: number }[]>([]);
+  const [answerGuide, setAnswerGuide] = useState<string[] | null>(null);
+  const [guideLoading, setGuideLoading] = useState(false);
 
   const recorderRef = useRef<AudioRecorderHandle>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -51,6 +53,16 @@ export default function Exercise3FreeTalk({ vocabWords, structures, topic, onCom
     }, 1000);
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [isRecording]);
+
+  // Fetch answer guide once the topic is ready
+  useEffect(() => {
+    if (!topic) return;
+    setGuideLoading(true);
+    generateAnswerGuide(topic, vocabWords.map(v => v.word), structures.map(s => s.pattern))
+      .then(bullets => { if (bullets?.length) setAnswerGuide(bullets); })
+      .catch(() => {})
+      .finally(() => setGuideLoading(false));
+  }, [topic]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleRecordingStateChange = useCallback((recording: boolean) => {
     setIsRecording(recording);
@@ -147,6 +159,44 @@ export default function Exercise3FreeTalk({ vocabWords, structures, topic, onCom
               <strong>Tip:</strong> The topic above is just a suggestion — you don&apos;t have to follow it exactly.
               Try to use <strong>at least one word</strong> or <strong>one structure</strong> from the lists below in your answer.
             </p>
+          </div>
+        )}
+
+        {/* Answer guide */}
+        {(guideLoading || answerGuide) && !isRecording && (
+          <div className="bg-emerald-50 rounded-xl border border-emerald-100 p-4">
+            <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wide mb-2">Answer guide</p>
+            {guideLoading && !answerGuide ? (
+              <div className="flex items-center gap-2 text-xs text-emerald-600">
+                <div className="w-3 h-3 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin shrink-0" />
+                Preparing a suggested outline…
+              </div>
+            ) : answerGuide && (
+              <ol className="space-y-2">
+                {answerGuide.map((bullet, i) => {
+                  // Split label tags like [vocab: "word"] or [structure: "..."] from the text
+                  const parts = bullet.split(/(\[(?:vocab|structure):[^\]]+\])/g);
+                  return (
+                    <li key={i} className="flex gap-2 text-xs text-emerald-900 leading-relaxed">
+                      <span className="shrink-0 font-bold text-emerald-500">{i + 1}.</span>
+                      <span>
+                        {parts.map((part, j) => {
+                          if (/^\[(?:vocab|structure):/.test(part)) {
+                            return (
+                              <span key={j} className="inline-block mx-0.5 px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded text-[10px] font-semibold">
+                                {part.slice(1, -1)}
+                              </span>
+                            );
+                          }
+                          return <span key={j}>{part}</span>;
+                        })}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ol>
+            )}
+            <p className="text-[10px] text-emerald-500 mt-2 italic">This is just a suggested outline — feel free to answer in your own way.</p>
           </div>
         )}
 

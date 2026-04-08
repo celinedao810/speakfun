@@ -8,6 +8,7 @@ import {
   scoreConversationTurn,
   scoreFreeTalk,
   generateFreeTalkTopic,
+  generateAnswerGuide,
 } from '@/lib/services/geminiService';
 
 export const maxDuration = 60;
@@ -81,6 +82,12 @@ export async function POST(request: NextRequest) {
       const { vocabWords, structurePatterns, learnerRole } = body;
       const topic = await generateFreeTalkTopic(vocabWords ?? [], structurePatterns ?? [], learnerRole);
       return NextResponse.json(topic);
+    }
+
+    if (type === 'answer-guide') {
+      const { topic, vocabWords, structurePatterns } = body;
+      const bullets = await generateAnswerGuide(topic ?? '', vocabWords ?? [], structurePatterns ?? []);
+      return NextResponse.json(bullets);
     }
 
     return NextResponse.json({ error: 'Unknown type' }, { status: 400 });

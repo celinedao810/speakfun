@@ -184,6 +184,13 @@ export const generateFreeTalkTopic = (
 ): Promise<string> =>
   post('/api/ai/homework-score', { type: 'free-talk-topic', vocabWords, structurePatterns, learnerRole });
 
+export const generateAnswerGuide = (
+  topic: string,
+  vocabWords: string[],
+  structurePatterns: string[],
+): Promise<string[]> =>
+  post('/api/ai/homework-score', { type: 'answer-guide', topic, vocabWords, structurePatterns });
+
 // ── Safe client-side re-exports ─────────────────────────────────────────────
 
 // generateAudio already calls /api/tts (no Gemini key needed)

@@ -1675,6 +1675,57 @@ Return only the question text, no quotes, no explanation, no extra formatting.`,
 };
 
 // ============================================================================
+// Answer Guide Generator (Ex3 hint)
+// ============================================================================
+
+/**
+ * Generates a 3–5 bullet answer guide for the Ex3 free-talk topic.
+ * Writes a realistic sample answer outline that naturally incorporates
+ * only the relevant session vocab and structures — never forced.
+ */
+export const generateAnswerGuide = async (
+  topic: string,
+  vocabWords: string[],
+  structurePatterns: string[],
+): Promise<string[]> => {
+  return safeExecute(async () => {
+    const ai = new GoogleGenAI({ apiKey: getApiKey() });
+    const vocabList = vocabWords.slice(0, 10).join(', ') || '(none)';
+    const structureList = structurePatterns.slice(0, 5).join(' | ') || '(none)';
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: `You are helping an English learner prepare a 45-second spoken response.
+
+Speaking topic: "${topic}"
+Vocabulary words available (from today's session): ${vocabList}
+Grammar structures available (from today's session): ${structureList}
+
+Write a realistic 3–5 bullet answer outline that a real person would naturally say in a professional conversation.
+
+Rules:
+- The answer must sound natural and genuine — NOT a forced exercise
+- Only pick the vocabulary words and grammar structures that fit naturally into the answer. Skip any that feel forced or unnatural
+- Each bullet is one spoken "move" (opening, context, example, lesson learned, conclusion etc.)
+- Each bullet: 15–25 words, written as something the learner could actually say
+- Where you use a session word or structure, add a brief label at the end: [vocab: "word"] or [structure: "pattern"]
+- If no vocab/structure fits naturally for a bullet, just write the bullet without any label
+- The whole outline should read like a coherent, realistic answer — not a vocabulary drill
+
+Return ONLY a JSON array of 3–5 strings. No object wrapper, just the array.`,
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.ARRAY,
+          items: { type: Type.STRING },
+        },
+      },
+    });
+    const parsed = JSON.parse(response.text || '[]');
+    return Array.isArray(parsed) ? parsed.filter((s: unknown) => typeof s === 'string') : [];
+  });
+};
+
+// ============================================================================
 // Lesson Plan Generator
 // ============================================================================
 
