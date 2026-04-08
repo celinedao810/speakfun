@@ -1693,23 +1693,25 @@ export const generateAnswerGuide = async (
     const structureList = structurePatterns.slice(0, 5).map((s, i) => `${i + 1}. ${s}`).join('\n') || '(none)';
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
-      contents: `You are helping an English learner structure a 45-second spoken response.
+      contents: `You are helping an English learner structure a 45-second spoken response to this topic:
+"${topic}"
 
-Speaking topic: "${topic}"
-Grammar structures from today's session (in order):
+Available grammar structure starters (from today's session):
 ${structureList}
-Vocabulary words from today's session: ${vocabList}
 
-Create a step-by-step flow guide. Each step = one structure starter from the list above, with optional vocabulary hints.
+Available vocabulary words (from today's session): ${vocabList}
+
+Task: Build a 3–5 step flow guide that forms a coherent, logical answer to the topic above.
 
 Rules:
-- Use the session structures in a logical speaking order (re-order if needed for natural flow, but use all of them)
-- Each step shows ONLY the structure opener — do NOT write a full sentence
-  Good: "Let's start with..."
-  Bad: "Let's start with a recent problem I faced at work."
-- After the opener, add [vocab: "word"] tags ONLY for session vocabulary that naturally belongs in that step. Skip vocab if it doesn't fit.
+- ONLY include structure starters that genuinely help answer this specific topic — skip any that don't fit
+- Re-order the starters as needed to make a natural flow (opening → context/background → challenge/detail → solution/approach → conclusion)
+- Each step = the structure opener ONLY — do NOT write a full sentence
+  Good: "Let's start with..."  |  "The issue was..."  |  "We had to..."
+  Bad: "Let's start with a recent problem I faced." (too specific, fills in details)
+- After each opener, add [vocab: "word"] tags ONLY for session vocabulary that naturally fits that step. Skip if it doesn't fit.
 - Maximum 2 vocab tags per step
-- The steps together should suggest a logical answer flow: opening → background/issue → solution/approach → conclusion
+- The result must read as a sensible answer outline for the given topic — not just a list of all available structures
 
 Return ONLY a JSON array of strings (one per step). No object wrapper, just the array.`,
       config: {
