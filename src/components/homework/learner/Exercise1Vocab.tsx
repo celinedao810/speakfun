@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { CheckCircle, XCircle, Mic, Loader2, RefreshCw } from 'lucide-react';
+import { CheckCircle, XCircle, Mic, Loader2 } from 'lucide-react';
 import { VocabAttemptAudit, VocabExerciseItem } from '@/lib/types';
 import { scoreVocabGuess } from '@/lib/ai/aiClient';
 import AudioRecorder, { AudioRecorderHandle } from '@/components/AudioRecorder';
@@ -30,8 +30,6 @@ export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1Vocab
   // === Round management ===
   const [round, setRound] = useState<1 | 2>(1);
   const [roundPool, setRoundPool] = useState<VocabExerciseItem[]>(vocabPool);
-  const [showRound2Intro, setShowRound2Intro] = useState(false);
-
   // Saved after round 1 ends, used to merge with round 2 results
   const round1CorrectScoreRef = useRef(0);
   const round1WordResultsRef = useRef<WordResult[]>([]);
@@ -95,30 +93,24 @@ export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1Vocab
       round1WordResultsRef.current = currentWordResults;
       round1AttemptsRef.current = [...attemptsRef.current];
 
-      // Show round 2 intro, then reset state and begin retry
-      setShowRound2Intro(true);
-      setTimeout(() => {
-        setShowRound2Intro(false);
+      // Reset all per-round state and jump directly to round 2
+      setCurrentIndex(0);
+      setProgress(0);
+      setWordResults(Array(wrongItems.length).fill(null));
+      setTotalScore(0);
+      setFlashLabel(null);
 
-        // Reset all per-round state
-        setCurrentIndex(0);
-        setProgress(0);
-        setWordResults(Array(wrongItems.length).fill(null));
-        setTotalScore(0);
-        setFlashLabel(null);
+      // Reset all mutable refs
+      totalScoreRef.current = 0;
+      wrongVocabIdsRef.current = [];
+      attemptsRef.current = [];
+      wordResultsArrRef.current = Array(wrongItems.length).fill(null);
+      pendingCountRef.current = 0;
+      allAnsweredRef.current = false;
+      scoredRef.current = false;
 
-        // Reset all mutable refs
-        totalScoreRef.current = 0;
-        wrongVocabIdsRef.current = [];
-        attemptsRef.current = [];
-        wordResultsArrRef.current = Array(wrongItems.length).fill(null);
-        pendingCountRef.current = 0;
-        allAnsweredRef.current = false;
-        scoredRef.current = false;
-
-        setRoundPool(wrongItems);
-        setRound(2);
-      }, 3000);
+      setRoundPool(wrongItems);
+      setRound(2);
     } else {
       // Round 2 complete — merge with round 1 results
       const round2Results = currentWordResults;
@@ -282,28 +274,6 @@ export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1Vocab
   }, [currentIndex, isFinished, round]);
 
   useEffect(() => () => { if (resultTimeoutId) clearTimeout(resultTimeoutId); }, [resultTimeoutId]);
-
-  // Round 2 intro transition screen
-  if (showRound2Intro) {
-    const missedWords = round1WordResultsRef.current.filter(r => !r.isCorrect).map(r => r.item.word);
-    return (
-      <div className="flex flex-col items-center justify-center py-10 gap-5 text-center">
-        <div className="w-14 h-14 rounded-full bg-amber-100 flex items-center justify-center">
-          <RefreshCw className="w-7 h-7 text-amber-500" />
-        </div>
-        <div>
-          <p className="text-base font-bold text-slate-700">Round 2 — Let&apos;s try again!</p>
-          <p className="text-sm text-slate-500 mt-1">You missed {missedWords.length} word{missedWords.length > 1 ? 's' : ''}:</p>
-        </div>
-        <div className="flex flex-wrap gap-2 justify-center max-w-xs">
-          {missedWords.map(w => (
-            <span key={w} className="px-3 py-1 bg-red-50 border border-red-200 text-red-600 text-sm font-semibold rounded-full">{w}</span>
-          ))}
-        </div>
-        <p className="text-xs text-slate-400">Starting in a moment…</p>
-      </div>
-    );
-  }
 
   // All words answered but AI calls still resolving
   if (isFinished) {
