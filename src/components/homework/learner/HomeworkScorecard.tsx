@@ -18,7 +18,6 @@ interface ScorecardProps {
   wrongVocabIds: string[];
   wordsCommittedCount: number;
   structuresCommittedCount?: number;
-  isReview: boolean;
   onDone: () => void;
 }
 
@@ -52,7 +51,6 @@ export default function HomeworkScorecard({
   vocabAttempts,
   wordsCommittedCount,
   structuresCommittedCount = 0,
-  isReview,
   onDone,
 }: ScorecardProps) {
   const pct = maxPossiblePoints > 0 ? Math.round((totalScore / maxPossiblePoints) * 100) : 0;
@@ -75,7 +73,7 @@ export default function HomeworkScorecard({
           <Trophy className="w-8 h-8 text-amber-500" />
         </div>
         <h2 className="text-xl font-bold text-foreground">
-          {isReview ? 'Review Complete!' : 'Homework Done!'}
+          Homework Done!
         </h2>
         <p className="text-sm text-muted-foreground mt-1">Great work on today's exercises</p>
       </div>
@@ -112,7 +110,7 @@ export default function HomeworkScorecard({
         {(ex3aScore + ex3bScore > 0) && (
           <ScoreRow
             icon={<MessageCircle className="w-4 h-4 text-violet-600" />}
-            label={isReview ? 'Free Talk' : 'Conversation / Reading'}
+            label="Free Talk"
             score={ex3aScore + ex3bScore}
             color="bg-violet-50"
           />

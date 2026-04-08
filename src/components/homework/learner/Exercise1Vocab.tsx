@@ -241,7 +241,7 @@ export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1Vocab
         animFrameRef.current = requestAnimationFrame(tick);
       } else {
         if (!scoredRef.current) {
-          if (recorderRef.current?.getIsRecording()) {
+          if (recorderRef.current?.getIsActive()) {
             recorderRef.current.stop();
             return;
           }

@@ -16,6 +16,8 @@ export interface AudioRecorderHandle {
   stop: () => void;
   reset: () => void;
   getIsRecording: () => boolean;
+  /** true if mic permission is pending OR actively recording — use this in timeout handlers */
+  getIsActive: () => boolean;
 }
 
 const AudioRecorder = forwardRef<AudioRecorderHandle, AudioRecorderProps>(({
@@ -38,6 +40,7 @@ const AudioRecorder = forwardRef<AudioRecorderHandle, AudioRecorderProps>(({
     stop: stopRecording,
     reset: cancelRecording,
     getIsRecording: () => isRecording,
+    getIsActive: () => isPending || isRecording,
   }));
 
   useEffect(() => {

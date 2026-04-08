@@ -463,7 +463,6 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
         wrongVocabIds={wrongVocabIds}
         wordsCommittedCount={wordsCommittedCount}
         structuresCommittedCount={structuresCommittedCount}
-        isReview={true}
         onDone={onDone}
       />
     );

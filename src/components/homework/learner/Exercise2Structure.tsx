@@ -161,7 +161,7 @@ export default function Exercise2Structure({ structures, onComplete }: Exercise2
         // Timed out — if user is actively recording, stop and let handleRecordingComplete score it;
         // only mark as missed if no recording was in progress
         if (!scoredRef.current) {
-          if (recorderRef.current?.getIsRecording()) {
+          if (recorderRef.current?.getIsActive()) {
             recorderRef.current.stop();
             return;
           }

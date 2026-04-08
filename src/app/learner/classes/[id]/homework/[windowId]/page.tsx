@@ -117,7 +117,7 @@ export default function HomeworkSessionPage() {
       {/* Session date header */}
       <div className="mb-4">
         <h1 className="text-lg font-bold text-foreground">
-          {hw.isReviewSession ? 'Review Session' : "Today's Homework"}
+          Session {hw.sessionNumber}
         </h1>
         {lessonName && (
           <p className="text-sm font-medium text-primary mt-0.5">{lessonName}</p>
