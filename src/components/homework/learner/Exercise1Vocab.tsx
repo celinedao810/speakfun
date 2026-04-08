@@ -186,10 +186,15 @@ export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1Vocab
       if (p < 1) {
         animFrameRef.current = requestAnimationFrame(tick);
       } else {
-        // Timed out — mark as missed (0pt) and advance
+        // Timed out — if user is actively recording, stop and let handleRecordingComplete score it;
+        // only mark as missed if no recording was in progress
         if (!scoredRef.current) {
+          if (recorderRef.current?.getIsRecording()) {
+            // Let the recording complete normally — don't set scoredRef
+            recorderRef.current.stop();
+            return;
+          }
           scoredRef.current = true;
-          recorderRef.current?.stop?.();
           const capturedItem = vocabPool[currentIndex];
 
           if (!wrongVocabIdsRef.current.includes(capturedItem.id)) {

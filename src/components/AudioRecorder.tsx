@@ -15,6 +15,7 @@ interface AudioRecorderProps {
 export interface AudioRecorderHandle {
   stop: () => void;
   reset: () => void;
+  getIsRecording: () => boolean;
 }
 
 const AudioRecorder = forwardRef<AudioRecorderHandle, AudioRecorderProps>(({
@@ -35,7 +36,8 @@ const AudioRecorder = forwardRef<AudioRecorderHandle, AudioRecorderProps>(({
 
   useImperativeHandle(ref, () => ({
     stop: stopRecording,
-    reset: cancelRecording
+    reset: cancelRecording,
+    getIsRecording: () => isRecording,
   }));
 
   useEffect(() => {

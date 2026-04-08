@@ -158,10 +158,14 @@ export default function Exercise2Structure({ structures, onComplete }: Exercise2
       if (p < 1) {
         animFrameRef.current = requestAnimationFrame(tick);
       } else {
-        // Timed out — mark as missed (0pt) and advance
+        // Timed out — if user is actively recording, stop and let handleRecordingComplete score it;
+        // only mark as missed if no recording was in progress
         if (!scoredRef.current) {
+          if (recorderRef.current?.getIsRecording()) {
+            recorderRef.current.stop();
+            return;
+          }
           scoredRef.current = true;
-          recorderRef.current?.stop?.();
           const capturedStructure = structures[currentIndex];
 
           const sResult: StructureResult = { item: capturedStructure, pointsEarned: 0, isCorrect: false };
