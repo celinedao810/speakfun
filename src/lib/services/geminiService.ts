@@ -1696,22 +1696,22 @@ export const generateAnswerGuide = async (
       contents: `You are helping an English learner structure a 45-second spoken response to this topic:
 "${topic}"
 
-Available grammar structure starters (from today's session):
+Session grammar structure starters (optional — use only if they fit):
 ${structureList}
 
-Available vocabulary words (from today's session): ${vocabList}
+Session vocabulary words (optional hints): ${vocabList}
 
-Task: Build a 3–5 step flow guide that forms a coherent, logical answer to the topic above.
+Task: Write a 3–5 step flow guide that forms a coherent, logical answer to the topic.
 
 Rules:
-- ONLY include structure starters that genuinely help answer this specific topic — skip any that don't fit
-- Re-order the starters as needed to make a natural flow (opening → context/background → challenge/detail → solution/approach → conclusion)
-- Each step = the structure opener ONLY — do NOT write a full sentence
-  Good: "Let's start with..."  |  "The issue was..."  |  "We had to..."
-  Bad: "Let's start with a recent problem I faced." (too specific, fills in details)
-- After each opener, add [vocab: "word"] tags ONLY for session vocabulary that naturally fits that step. Skip if it doesn't fit.
+- Design the steps to build a natural spoken answer: opening → context/example → challenge/detail → response/approach → takeaway
+- For each step, write the best opener for that moment — this can be any natural English phrase, not limited to the session structures
+- If a session structure starter fits naturally in a step, use it; otherwise write whatever opener works best
+- Each step = the opener phrase ONLY — do NOT complete the sentence or add specific details
+  Good: "When that happens, I usually..."  |  "One example would be..."  |  "The key thing I learned..."
+  Bad: "When that happens, I usually ask my manager." (too specific)
+- After each opener, add [vocab: "word"] tags ONLY for session vocabulary that naturally belongs in that step. Skip if it doesn't fit.
 - Maximum 2 vocab tags per step
-- The result must read as a sensible answer outline for the given topic — not just a list of all available structures
 
 Return ONLY a JSON array of strings (one per step). No object wrapper, just the array.`,
       config: {
