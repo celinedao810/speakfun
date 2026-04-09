@@ -214,20 +214,6 @@ export default function Exercise3FreeTalk({ vocabWords, structures, topic, onCom
           </div>
         )}
 
-        {/* Structures — hidden while recording (answer guide covers that role) */}
-        {structures.length > 0 && !isRecording && (
-          <div className="bg-violet-50 rounded-xl border border-violet-100 p-4">
-            <p className="text-xs font-semibold text-violet-600 uppercase tracking-wide mb-1.5">Structures to use</p>
-            <div className="space-y-1">
-              {structures.map(s => (
-                <div key={s.id} className="flex items-start gap-2">
-                  <span className="text-violet-400 mt-0.5">·</span>
-                  <span className="text-xs text-violet-800 font-mono">{s.pattern}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
 
         {/* Mic / recording controls */}
         <div className="flex flex-col items-center gap-1 pt-1">

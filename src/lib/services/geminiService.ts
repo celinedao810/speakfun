@@ -1596,14 +1596,14 @@ Scoring rules:
 
 Steps:
 1. Transcribe exactly what was said.
-2. List each pronunciation error specifically (e.g. "said 'develop' as 'deh-vel-op', stress on wrong syllable").
-3. List each grammar error specifically (e.g. "said 'he go' instead of 'he goes'").
-4. Note any vocabulary from the target list the learner used correctly.
+2. List each pronunciation error specifically — write each error description IN VIETNAMESE (e.g. "phát âm 'develop' thành 'deh-vel-op', nhấn sai trọng âm").
+3. List each grammar error specifically — write each error description IN VIETNAMESE (e.g. "dùng 'he go' thay vì 'he goes'").
+4. Note any vocabulary from the target list the learner used correctly. The learner is only required to use AT LEAST ONE word from the list — do not penalise for not using all of them.
 5. Assess delivery: fluency, pacing, naturalness.
 6. Calculate final score = max(0, 10 - (pronunciation errors + grammar errors + delivery issues) × 0.5).
-7. Write overall feedback in Vietnamese, specifically naming errors.
-8. Write vocabularyFeedback in Vietnamese noting which target words were used or missed.
-9. Write deliveryFeedback in Vietnamese on fluency and pacing.`,
+7. Write overall feedback IN VIETNAMESE, specifically naming errors.
+8. Write vocabularyFeedback IN VIETNAMESE: mention which target word(s) were used (praise if at least one was used), and optionally suggest 1–2 others that could have fit naturally. Do NOT criticise for not using all words.
+9. Write deliveryFeedback IN VIETNAMESE on fluency and pacing.`,
           },
           { inlineData: { mimeType: 'audio/webm', data: audioBase64 } }
         ]
