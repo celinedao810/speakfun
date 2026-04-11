@@ -611,18 +611,47 @@ export async function batchUpdateVocabMastery(
     ((existing as VocabMasteryRow[]) || []).map(r => [`${r.lesson_id}:${r.vocab_item_id}`, r])
   );
 
+  // Aggregate duplicate attempts for the same (lessonId, vocabItemId). Ex1 round-2
+  // retries produce two audit rows per retried word; passing both to .upsert() as
+  // separate rows triggers Postgres "ON CONFLICT DO UPDATE command cannot affect
+  // row a second time" and silently drops the entire batch.
+  type VocabAgg = {
+    vocabItemId: string;
+    lessonId: string;
+    correctDelta: number;
+    incorrectDelta: number;
+    commitThreshold: number;
+  };
+  const aggregatedMap = new Map<string, VocabAgg>();
+  for (const u of updates) {
+    const k = `${u.lessonId}:${u.vocabItemId}`;
+    const agg = aggregatedMap.get(k);
+    if (agg) {
+      agg.correctDelta += u.correct ? 1 : 0;
+      agg.incorrectDelta += u.correct ? 0 : 1;
+    } else {
+      aggregatedMap.set(k, {
+        vocabItemId: u.vocabItemId,
+        lessonId: u.lessonId,
+        correctDelta: u.correct ? 1 : 0,
+        incorrectDelta: u.correct ? 0 : 1,
+        commitThreshold: u.commitThreshold,
+      });
+    }
+  }
+
   let newlyCommittedCount = 0;
-  const upsertRows = updates.map(u => {
-    const prev = existingMap.get(`${u.lessonId}:${u.vocabItemId}`);
-    const newCorrect = (prev?.correct_count || 0) + (u.correct ? 1 : 0);
-    const newIncorrect = (prev?.incorrect_count || 0) + (u.correct ? 0 : 1);
-    const isCommitted = newCorrect >= u.commitThreshold;
+  const upsertRows = Array.from(aggregatedMap.values()).map(a => {
+    const prev = existingMap.get(`${a.lessonId}:${a.vocabItemId}`);
+    const newCorrect = (prev?.correct_count || 0) + a.correctDelta;
+    const newIncorrect = (prev?.incorrect_count || 0) + a.incorrectDelta;
+    const isCommitted = newCorrect >= a.commitThreshold;
     if (isCommitted && !prev?.is_committed) newlyCommittedCount++;
     return {
       learner_id: learnerId,
       class_id: classId,
-      vocab_item_id: u.vocabItemId,
-      lesson_id: u.lessonId,
+      vocab_item_id: a.vocabItemId,
+      lesson_id: a.lessonId,
       correct_count: newCorrect,
       incorrect_count: newIncorrect,
       is_committed: isCommitted,
@@ -701,18 +730,47 @@ export async function batchUpdateStructureMastery(
     ((existing as StructureMasteryRow[]) || []).map(r => [`${r.lesson_id}:${r.structure_item_id}`, r])
   );
 
+  // Aggregate duplicate attempts for the same (lessonId, structureItemId). Ex2
+  // doesn't retry today so this is a no-op for current behaviour, but keeps the
+  // query safe against the same "ON CONFLICT ... cannot affect row a second time"
+  // Postgres error that bit batchUpdateVocabMastery.
+  type StructAgg = {
+    structureItemId: string;
+    lessonId: string;
+    correctDelta: number;
+    incorrectDelta: number;
+    commitThreshold: number;
+  };
+  const aggregatedMap = new Map<string, StructAgg>();
+  for (const u of updates) {
+    const k = `${u.lessonId}:${u.structureItemId}`;
+    const agg = aggregatedMap.get(k);
+    if (agg) {
+      agg.correctDelta += u.correct ? 1 : 0;
+      agg.incorrectDelta += u.correct ? 0 : 1;
+    } else {
+      aggregatedMap.set(k, {
+        structureItemId: u.structureItemId,
+        lessonId: u.lessonId,
+        correctDelta: u.correct ? 1 : 0,
+        incorrectDelta: u.correct ? 0 : 1,
+        commitThreshold: u.commitThreshold,
+      });
+    }
+  }
+
   let newlyCommittedCount = 0;
-  const upsertRows = updates.map(u => {
-    const prev = existingMap.get(`${u.lessonId}:${u.structureItemId}`);
-    const newCorrect = (prev?.correct_count || 0) + (u.correct ? 1 : 0);
-    const newIncorrect = (prev?.incorrect_count || 0) + (u.correct ? 0 : 1);
-    const isCommitted = newCorrect >= u.commitThreshold;
+  const upsertRows = Array.from(aggregatedMap.values()).map(a => {
+    const prev = existingMap.get(`${a.lessonId}:${a.structureItemId}`);
+    const newCorrect = (prev?.correct_count || 0) + a.correctDelta;
+    const newIncorrect = (prev?.incorrect_count || 0) + a.incorrectDelta;
+    const isCommitted = newCorrect >= a.commitThreshold;
     if (isCommitted && !prev?.is_committed) newlyCommittedCount++;
     return {
       learner_id: learnerId,
       class_id: classId,
-      structure_item_id: u.structureItemId,
-      lesson_id: u.lessonId,
+      structure_item_id: a.structureItemId,
+      lesson_id: a.lessonId,
       correct_count: newCorrect,
       incorrect_count: newIncorrect,
       is_committed: isCommitted,

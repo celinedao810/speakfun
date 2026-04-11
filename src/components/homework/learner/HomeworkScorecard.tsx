@@ -60,8 +60,16 @@ export default function HomeworkScorecard({
   const isHomeworkStar = allCompleted && ex2Score > 0 && ex3aScore + ex3bScore > 0;
   const isTopLearner = pct >= 95 && allCompleted;
 
-  const totalAttempts = vocabAttempts.length;
-  const correctAttempts = vocabAttempts.filter(a => a.isCorrectWord).length;
+  // De-dupe Ex1 attempts by word: Round 2 retries produce a second audit row for the
+  // same word, so counting raw attempts inflates the denominator. A word is "correct"
+  // if any of its attempts (round 1 or round 2) was correct.
+  const wordCorrectByKey = new Map<string, boolean>();
+  for (const a of vocabAttempts) {
+    const k = `${a.lessonId}:${a.vocabItemId}`;
+    wordCorrectByKey.set(k, (wordCorrectByKey.get(k) ?? false) || a.isCorrectWord);
+  }
+  const totalAttempts = wordCorrectByKey.size;
+  const correctAttempts = Array.from(wordCorrectByKey.values()).filter(Boolean).length;
 
   const hasBadges = isHomeworkStar || isTopLearner;
 
