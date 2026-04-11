@@ -1593,6 +1593,7 @@ Scoring rules:
 - Pronunciation (lenient): Only deduct 0.1pt for errors that clearly impede understanding. Do NOT penalise natural accent variation, minor mispronunciation of non-key words, or imperfect but intelligible speech. A learner who speaks fluently with a slight accent is better than one who speaks haltingly with perfect pronunciation.
 - Deduct 0.1pt per grammar error (wrong tense, missing article, subject-verb agreement, etc.)
 - Deduct 0.1pt per delivery issue (unnatural pausing, very slow pace, choppy rhythm)
+- Deduct 0.1pt for EACH silent pause longer than 3 seconds detected in the recording (count them; a 7-second silence counts as one long-pause penalty, not multiple)
 - Minimum score: 0
 - Baseline is 7pt — the learner must reach this to pass
 
@@ -1601,8 +1602,8 @@ Steps:
 2. List each pronunciation error specifically — write each error description IN VIETNAMESE (e.g. "phát âm 'develop' thành 'deh-vel-op', nhấn sai trọng âm").
 3. List each grammar error specifically — write each error description IN VIETNAMESE (e.g. "dùng 'he go' thay vì 'he goes'").
 4. Note any vocabulary from the target list the learner used correctly. The learner is only required to use AT LEAST ONE word from the list — do not penalise for not using all of them.
-5. Assess delivery: fluency, pacing, naturalness.
-6. Calculate final score = max(0, 10 - (pronunciation errors + grammar errors + delivery issues) × 0.1).
+5. Assess delivery: fluency, pacing, naturalness. Also count longPauses: the number of silent gaps longer than 3 seconds in the audio.
+6. Calculate final score = max(0, 10 - (pronunciation errors + grammar errors + delivery issues + longPauses) × 0.1).
 7. Write overall feedback IN VIETNAMESE, specifically naming errors.
 8. Write vocabularyFeedback IN VIETNAMESE: mention which target word(s) were used (praise if at least one was used), and optionally suggest 1–2 others that could have fit naturally. Do NOT criticise for not using all words.
 9. Write deliveryFeedback IN VIETNAMESE on fluency and pacing.`,
