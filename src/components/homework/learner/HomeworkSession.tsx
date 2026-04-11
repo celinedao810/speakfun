@@ -261,22 +261,40 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
         }
 
         const key = (v: VocabExerciseItem) => `${v.lessonId}:${v.id}`;
-        const wrongIds = new Set(prevWrong);
-        const wrongNotMastered = allVocab.filter(v =>
-          seenKeys.has(key(v)) && wrongIds.has(v.id) && !masteredKeys.has(key(v))
-        );
-        const freshNotMastered = allVocab
-          .filter(v => seenKeys.has(key(v)) && !wrongIds.has(v.id) && !masteredKeys.has(key(v)))
-          .sort(() => Math.random() - 0.5);
-        const unseenVocab = allVocab
-          .filter(v => !seenKeys.has(key(v)))
-          .sort(() => Math.random() - 0.5);
-        const masteredItems = allVocab
-          .filter(v => masteredKeys.has(key(v)))
-          .sort(() => Math.random() - 0.5);
-        // Priority: wrong → seen-not-mastered → brand-new → mastered (fills remaining slots)
-        const pool = [...wrongNotMastered, ...freshNotMastered, ...unseenVocab, ...masteredItems]
-          .slice(0, limit);
+
+        // If Ex1 already completed, rebuild the pool from the saved vocab attempts
+        // so Ex2/Ex3 display the exact same words Ex1 tested (instead of re-picking).
+        const savedVocabAttempts = existingSubmission?.sessionState?.vocabAttempts;
+        let pool: VocabExerciseItem[];
+        if (existingSubmission?.ex1Completed && savedVocabAttempts && savedVocabAttempts.length > 0) {
+          const seenPairs = new Set<string>();
+          const reconstructed: VocabExerciseItem[] = [];
+          for (const a of savedVocabAttempts) {
+            const k = `${a.lessonId}:${a.vocabItemId}`;
+            if (seenPairs.has(k)) continue;
+            seenPairs.add(k);
+            const v = allVocab.find(x => x.lessonId === a.lessonId && x.id === a.vocabItemId);
+            if (v) reconstructed.push(v);
+          }
+          pool = reconstructed;
+        } else {
+          const wrongIds = new Set(prevWrong);
+          const wrongNotMastered = allVocab.filter(v =>
+            seenKeys.has(key(v)) && wrongIds.has(v.id) && !masteredKeys.has(key(v))
+          );
+          const freshNotMastered = allVocab
+            .filter(v => seenKeys.has(key(v)) && !wrongIds.has(v.id) && !masteredKeys.has(key(v)))
+            .sort(() => Math.random() - 0.5);
+          const unseenVocab = allVocab
+            .filter(v => !seenKeys.has(key(v)))
+            .sort(() => Math.random() - 0.5);
+          const masteredItems = allVocab
+            .filter(v => masteredKeys.has(key(v)))
+            .sort(() => Math.random() - 0.5);
+          // Priority: wrong → seen-not-mastered → brand-new → mastered (fills remaining slots)
+          pool = [...wrongNotMastered, ...freshNotMastered, ...unseenVocab, ...masteredItems]
+            .slice(0, limit);
+        }
 
         setVocabPool(pool);
 
