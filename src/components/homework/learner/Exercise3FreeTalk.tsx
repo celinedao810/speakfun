@@ -6,7 +6,7 @@ import { VocabExerciseItem, StructureExerciseItem, FreeTalkScoringResult } from 
 import { scoreFreeTalk, generateAnswerGuide } from '@/lib/ai/aiClient';
 import AudioRecorder, { AudioRecorderHandle } from '@/components/AudioRecorder';
 
-const RECORD_DURATION = 45;
+const RECORD_DURATION = 120;
 const BASELINE = 7;
 const MAX_ATTEMPTS_BEFORE_SKIP = 5;
 
@@ -126,9 +126,9 @@ export default function Exercise3FreeTalk({ vocabWords, structures, topic, onCom
         {/* Header — only when not recording */}
         {!isRecording && (
           <div className="text-center">
-            <h3 className="text-lg font-bold text-foreground mb-1">Free Talk · 45 seconds</h3>
+            <h3 className="text-lg font-bold text-foreground mb-1">Free Talk · 2 minutes</h3>
             <p className="text-sm text-muted-foreground">
-              Speak freely for 45 seconds using the words and structures below.
+              Speak freely for 2 minutes using the words and structures below.
               {attemptCount > 0 && bestScore < BASELINE && (
                 <span className="block mt-1 text-amber-600 font-medium">
                   Best so far: {bestScore.toFixed(1)}/10 — you need {BASELINE}/10 to pass ({attemptCount}/{MAX_ATTEMPTS_BEFORE_SKIP} attempts used)

@@ -240,10 +240,29 @@ export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1Vocab
             recorderRef.current?.reset(); // cancel any lingering recording
             scoredRef.current = true;
             const capturedItem = roundPool[currentIndex];
+            const timestamp = new Date().toISOString();
 
             if (!wrongVocabIdsRef.current.includes(capturedItem.id)) {
               wrongVocabIdsRef.current = [...wrongVocabIdsRef.current, capturedItem.id];
             }
+
+            // Emit an audit record so mastery reflects the incorrect (timed-out) attempt
+            const audit: VocabAttemptAudit = {
+              vocabItemId: capturedItem.id,
+              lessonId: capturedItem.lessonId,
+              targetWord: capturedItem.word,
+              recognizedWord: '',
+              isCorrectWord: false,
+              pronunciationScore: 0,
+              pointsEarned: 0,
+              feedback: '',
+              timedMode: true,
+              timeTakenMs: FALL_DURATION_MS,
+              timedOut: true,
+              attemptTimestamp: timestamp,
+            };
+            attemptsRef.current = [...attemptsRef.current, audit];
+
             const wordResult: WordResult = { item: capturedItem, pointsEarned: 0, isCorrect: false };
             wordResultsArrRef.current[currentIndex] = wordResult;
             setWordResults(prev => {

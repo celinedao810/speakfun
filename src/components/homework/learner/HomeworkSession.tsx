@@ -262,16 +262,21 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
 
         const key = (v: VocabExerciseItem) => `${v.lessonId}:${v.id}`;
         const wrongIds = new Set(prevWrong);
-        const seenVocab = allVocab.filter(v => seenKeys.has(key(v)));
-        const wrongNotMastered = seenVocab.filter(v => wrongIds.has(v.id) && !masteredKeys.has(key(v)));
-        const freshNotMastered = seenVocab
-          .filter(v => !wrongIds.has(v.id) && !masteredKeys.has(key(v)))
+        const wrongNotMastered = allVocab.filter(v =>
+          seenKeys.has(key(v)) && wrongIds.has(v.id) && !masteredKeys.has(key(v))
+        );
+        const freshNotMastered = allVocab
+          .filter(v => seenKeys.has(key(v)) && !wrongIds.has(v.id) && !masteredKeys.has(key(v)))
           .sort(() => Math.random() - 0.5);
-        const masteredItems = seenVocab.filter(v => masteredKeys.has(key(v))).sort(() => Math.random() - 0.5);
-        // If mastery is empty (fresh start), fall back to all vocab shuffled
-        const pool = seenVocab.length > 0
-          ? [...wrongNotMastered, ...freshNotMastered, ...masteredItems].slice(0, limit)
-          : [...allVocab].sort(() => Math.random() - 0.5).slice(0, limit);
+        const unseenVocab = allVocab
+          .filter(v => !seenKeys.has(key(v)))
+          .sort(() => Math.random() - 0.5);
+        const masteredItems = allVocab
+          .filter(v => masteredKeys.has(key(v)))
+          .sort(() => Math.random() - 0.5);
+        // Priority: wrong → seen-not-mastered → brand-new → mastered (fills remaining slots)
+        const pool = [...wrongNotMastered, ...freshNotMastered, ...unseenVocab, ...masteredItems]
+          .slice(0, limit);
 
         setVocabPool(pool);
 
@@ -351,6 +356,16 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
   const handleEx2Complete = useCallback(async (score: number, structureResults: StructureResult[]) => {
     setEx2Score(score);
     setEx2StructureResults(structureResults);
+
+    const now = new Date().toISOString();
+    const attempts: StructureAttemptAudit[] = structureResults.map(r => ({
+      structureItemId: r.item.id,
+      lessonId: r.item.lessonId,
+      isCorrect: r.isCorrect,
+      attemptTimestamp: now,
+    }));
+    setStructureAttempts(attempts);
+
     await autoSave({
       ex2Score: score,
       ex2Completed: true,
