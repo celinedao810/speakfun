@@ -1552,8 +1552,10 @@ Step 4: Points: 0 if incorrect, ${withinTime ? '5' : '4'} if correct.`
 };
 
 /**
- * Evaluates a 45-second free-talk recording for Ex3.
- * Score: 10pt max, baseline 8pt. Deduct 0.5pt per pronunciation/grammar/delivery error.
+ * Evaluates a free-talk recording (up to 2 minutes) for Ex3.
+ * Score: 10pt max, baseline 7pt. Deduct 0.1pt per pronunciation/grammar/delivery error
+ * (penalty reduced from the original 0.5pt when the recording window was 45s, so the
+ * error budget comfortably scales with the longer duration).
  * Returns transcription, categorized errors, and overall feedback.
  */
 export const scoreFreeTalk = async (
@@ -1572,7 +1574,7 @@ export const scoreFreeTalk = async (
       contents: {
         parts: [
           {
-            text: `You are an English pronunciation and fluency coach. Evaluate this learner's 45-second free-speech recording.
+            text: `You are an English pronunciation and fluency coach. Evaluate this learner's free-speech recording (up to 2 minutes).
 ${topicLine}
 Target vocabulary words (for reference — learner is encouraged to use them): ${vocabList}
 Target grammar structures (for reference — learner is encouraged to use them): ${structureList}
@@ -1588,9 +1590,9 @@ Only proceed with scoring below if the learner has spoken at least 5 real conten
 
 Scoring rules:
 - Base score: 10 points
-- Pronunciation (lenient): Only deduct 0.5pt for errors that clearly impede understanding. Do NOT penalise natural accent variation, minor mispronunciation of non-key words, or imperfect but intelligible speech. A learner who speaks fluently with a slight accent is better than one who speaks haltingly with perfect pronunciation.
-- Deduct 0.5pt per grammar error (wrong tense, missing article, subject-verb agreement, etc.)
-- Deduct 0.5pt per delivery issue (unnatural pausing, very slow pace, choppy rhythm)
+- Pronunciation (lenient): Only deduct 0.1pt for errors that clearly impede understanding. Do NOT penalise natural accent variation, minor mispronunciation of non-key words, or imperfect but intelligible speech. A learner who speaks fluently with a slight accent is better than one who speaks haltingly with perfect pronunciation.
+- Deduct 0.1pt per grammar error (wrong tense, missing article, subject-verb agreement, etc.)
+- Deduct 0.1pt per delivery issue (unnatural pausing, very slow pace, choppy rhythm)
 - Minimum score: 0
 - Baseline is 7pt — the learner must reach this to pass
 
@@ -1600,7 +1602,7 @@ Steps:
 3. List each grammar error specifically — write each error description IN VIETNAMESE (e.g. "dùng 'he go' thay vì 'he goes'").
 4. Note any vocabulary from the target list the learner used correctly. The learner is only required to use AT LEAST ONE word from the list — do not penalise for not using all of them.
 5. Assess delivery: fluency, pacing, naturalness.
-6. Calculate final score = max(0, 10 - (pronunciation errors + grammar errors + delivery issues) × 0.5).
+6. Calculate final score = max(0, 10 - (pronunciation errors + grammar errors + delivery issues) × 0.1).
 7. Write overall feedback IN VIETNAMESE, specifically naming errors.
 8. Write vocabularyFeedback IN VIETNAMESE: mention which target word(s) were used (praise if at least one was used), and optionally suggest 1–2 others that could have fit naturally. Do NOT criticise for not using all words.
 9. Write deliveryFeedback IN VIETNAMESE on fluency and pacing.`,
