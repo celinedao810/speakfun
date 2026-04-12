@@ -3,15 +3,13 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
-import { UserPlus, Mail, Lock, User, Eye, EyeOff, GraduationCap, BookOpen } from 'lucide-react';
+import { UserPlus, Mail, Lock, User, Eye, EyeOff } from 'lucide-react';
 import Link from 'next/link';
-import { UserRole } from '@/lib/types';
 
 export default function SignupPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
-  const [role, setRole] = useState<UserRole>('LEARNER');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -28,7 +26,7 @@ export default function SignupPage() {
       options: {
         data: {
           full_name: fullName,
-          role,
+          role: 'LEARNER',
         },
       },
     });
@@ -44,7 +42,7 @@ export default function SignupPage() {
       const { error: profileError } = await supabase.from('profiles').upsert({
         id: data.user.id,
         full_name: fullName,
-        role,
+        role: 'LEARNER',
         placement_test_done: false,
       });
 
@@ -69,37 +67,6 @@ export default function SignupPage() {
         </div>
 
         <form onSubmit={handleSignup} className="space-y-4">
-          {/* Role selector */}
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-2">I am a</label>
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => setRole('LEARNER')}
-                className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition ${
-                  role === 'LEARNER'
-                    ? 'border-primary bg-primary/10 text-primary'
-                    : 'border-border hover:border-border/80 text-muted-foreground'
-                }`}
-              >
-                <GraduationCap className="w-6 h-6" />
-                <span className="font-medium text-sm">Learner</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setRole('TEACHER')}
-                className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition ${
-                  role === 'TEACHER'
-                    ? 'border-primary bg-primary/10 text-primary'
-                    : 'border-border hover:border-border/80 text-muted-foreground'
-                }`}
-              >
-                <BookOpen className="w-6 h-6" />
-                <span className="font-medium text-sm">Teacher</span>
-              </button>
-            </div>
-          </div>
-
           <div>
             <label className="block text-sm font-medium text-foreground mb-1">Full name</label>
             <div className="relative">

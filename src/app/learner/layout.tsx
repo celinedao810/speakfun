@@ -3,10 +3,9 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Mic, BookOpen, BookMarked } from 'lucide-react';
+import { BookOpen, BookMarked } from 'lucide-react';
 
 const tabs = [
-  { href: '/learner', label: 'Practice', icon: Mic, exact: true },
   { href: '/learner/classes', label: 'My Classes', icon: BookOpen },
   { href: '/learner/notebook', label: 'Notebook', icon: BookMarked },
 ];

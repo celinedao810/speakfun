@@ -1,36 +1,14 @@
 "use client";
 
-import { useAppContext } from '@/context/AppContext';
-import LearnerView from '@/components/LearnerView';
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 
 export default function LearnerPracticePage() {
-  const {
-    progress,
-    handleDayComplete,
-    handleResetAssignment,
-    handleUpdatePreferences,
-    handlePlacementComplete,
-    handleSaveInterviewQA,
-    handleDeleteInterviewQA,
-    handleUpdateInterviewSession,
-    handleDeleteInterviewSession,
-    handleSaveDrillSession,
-    handleSaveLiveSession,
-  } = useAppContext();
+  const router = useRouter();
 
-  return (
-    <LearnerView
-      progress={progress}
-      onDayComplete={handleDayComplete}
-      onResetAssignment={handleResetAssignment}
-      onUpdatePreferences={handleUpdatePreferences}
-      onPlacementComplete={handlePlacementComplete}
-      onSaveInterviewQA={handleSaveInterviewQA}
-      onDeleteInterviewQA={handleDeleteInterviewQA}
-      onUpdateInterviewSession={handleUpdateInterviewSession}
-      onDeleteInterviewSession={handleDeleteInterviewSession}
-      onSaveDrillSession={handleSaveDrillSession}
-      onSaveLiveSession={handleSaveLiveSession}
-    />
-  );
+  useEffect(() => {
+    router.replace('/learner/classes');
+  }, [router]);
+
+  return null;
 }

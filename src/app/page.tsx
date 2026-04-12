@@ -15,7 +15,7 @@ export default function Home() {
       if (role === 'TEACHER') {
         router.replace('/teacher');
       } else {
-        router.replace('/learner');
+        router.replace('/learner/classes');
       }
     }
   }, [authLoading, role, router]);
