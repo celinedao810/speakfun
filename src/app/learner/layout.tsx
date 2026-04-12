@@ -14,7 +14,6 @@ export default function LearnerLayout({ children }: { children: React.ReactNode 
   const pathname = usePathname();
 
   const isActive = (tab: typeof tabs[0]) => {
-    if (tab.exact) return pathname === tab.href;
     return pathname.startsWith(tab.href);
   };
 
