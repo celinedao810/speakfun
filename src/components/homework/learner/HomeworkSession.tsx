@@ -202,6 +202,8 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
   // Exercise data
   const [vocabPool, setVocabPool] = useState<VocabExerciseItem[]>([]);
   const [structurePool, setStructurePool] = useState<StructureExerciseItem[]>([]);
+  const [ex3DurationMins, setEx3DurationMins] = useState(2);
+  const [ex3DeductedPointsPerError, setEx3DeductedPointsPerError] = useState(0.1);
 
   const learnerRole = profile?.preferences?.role || profile?.job_title || '';
 
@@ -228,6 +230,10 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
       try {
         const settingsRes = await fetch(`/api/homework/settings?classId=${classId}`);
         const settingsData: ClassHomeworkSettings | null = settingsRes.ok ? await settingsRes.json() : null;
+        if (settingsData) {
+          setEx3DurationMins(settingsData.ex3DurationMins ?? 2);
+          setEx3DeductedPointsPerError(settingsData.ex3DeductedPointsPerError ?? 0.1);
+        }
 
         const lessonIds = hw.lessonIdsInPool;
         if (lessonIds.length === 0) {
@@ -545,6 +551,8 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
         vocabWords={vocabPool}
         structures={structurePool}
         topic={freeTalkTopic || undefined}
+        durationMins={ex3DurationMins}
+        deductedPointsPerError={ex3DeductedPointsPerError}
         onComplete={(score) => handleEx3Complete(score, [])}
       />
     );

@@ -501,6 +501,8 @@ export interface ClassHomeworkSettings {
   reviewStructureCount: number;
   homeworkRestartedAt: string | null;
   homeworkEndDate: string | null;  // YYYY-MM-DD; generation stops after this date
+  ex3DurationMins: number;          // recording duration for Ex3 (minutes)
+  ex3DeductedPointsPerError: number; // points deducted per error in Ex3
 }
 
 // --- Learner vocab mastery (spaced repetition) ---

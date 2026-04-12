@@ -20,6 +20,8 @@ export default function HomeworkSettingsPanel({ classId, settings, onSaved }: Ho
     reviewWordCount: settings.reviewWordCount,
     reviewStructureCount: settings.reviewStructureCount,
     homeworkEndDate: settings.homeworkEndDate ?? '',
+    ex3DurationMins: settings.ex3DurationMins,
+    ex3DeductedPointsPerError: settings.ex3DeductedPointsPerError,
   });
 
   const handleSave = async () => {
@@ -32,12 +34,16 @@ export default function HomeworkSettingsPanel({ classId, settings, onSaved }: Ho
       structuresPerSession: settings.structuresPerSession,
       ...values,
       homeworkEndDate: values.homeworkEndDate || null,
+      ex3DurationMins: values.ex3DurationMins,
+      ex3DeductedPointsPerError: values.ex3DeductedPointsPerError,
     });
     onSaved({
       ...settings,
       classId,
       ...values,
       homeworkEndDate: values.homeworkEndDate || null,
+      ex3DurationMins: values.ex3DurationMins,
+      ex3DeductedPointsPerError: values.ex3DeductedPointsPerError,
     });
     setSaving(false);
   };
@@ -47,7 +53,8 @@ export default function HomeworkSettingsPanel({ classId, settings, onSaved }: Ho
     key: keyof Omit<typeof values, 'homeworkEndDate'>,
     min: number,
     max: number,
-    hint?: string
+    hint?: string,
+    step?: number
   ) => (
     <div>
       <label className="block text-xs font-medium text-muted-foreground mb-1">{label}</label>
@@ -55,6 +62,7 @@ export default function HomeworkSettingsPanel({ classId, settings, onSaved }: Ho
         type="number"
         min={min}
         max={max}
+        step={step ?? 1}
         value={values[key]}
         onChange={(e) => setValues(v => ({ ...v, [key]: Number(e.target.value) }))}
         className="w-full px-3 py-2 text-sm border border-border rounded-lg bg-input outline-none focus:ring-2 focus:ring-ring text-foreground"
@@ -75,6 +83,15 @@ export default function HomeworkSettingsPanel({ classId, settings, onSaved }: Ho
         {field('Structures per session', 'reviewStructureCount', 1, 10, 'Structures shown in Ex2')}
         {field('Vocab mastery threshold', 'correctGuessesToCommit', 3, 14, 'Correct guesses to commit a word')}
         {field('Structure mastery threshold', 'structureGuessesToCommit', 3, 20, 'Correct turns to commit a structure')}
+      </div>
+
+      {/* Ex3 settings */}
+      <div className="mb-4">
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Ex3 · Free Talk</p>
+        <div className="grid grid-cols-2 gap-4">
+          {field('Duration (mins)', 'ex3DurationMins', 1, 10, 'Recording time limit')}
+          {field('Deducted pts / error', 'ex3DeductedPointsPerError', 0, 2, 'Points deducted per error', 0.05)}
+        </div>
       </div>
 
       {/* End date */}

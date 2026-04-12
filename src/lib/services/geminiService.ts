@@ -1563,12 +1563,14 @@ export const scoreFreeTalk = async (
   vocabWords: string[],
   structurePatterns: string[],
   topic?: string,
+  deductedPointsPerError: number = 0.1,
 ): Promise<FreeTalkScoringResult> => {
   return safeExecute(async () => {
     const ai = new GoogleGenAI({ apiKey: getApiKey() });
     const vocabList = vocabWords.join(', ') || '(none)';
     const structureList = structurePatterns.join(' | ') || '(none)';
     const topicLine = topic ? `\nSpeaking prompt given to learner: "${topic}"\n` : '';
+    const deductPt = deductedPointsPerError;
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: {
@@ -1590,10 +1592,10 @@ Only proceed with scoring below if the learner has spoken at least 5 real conten
 
 Scoring rules:
 - Base score: 10 points
-- Pronunciation (lenient): Only deduct 0.1pt for errors that clearly impede understanding. Do NOT penalise natural accent variation, minor mispronunciation of non-key words, or imperfect but intelligible speech. A learner who speaks fluently with a slight accent is better than one who speaks haltingly with perfect pronunciation.
-- Deduct 0.1pt per grammar error (wrong tense, missing article, subject-verb agreement, etc.)
-- Deduct 0.1pt per delivery issue (unnatural pausing, very slow pace, choppy rhythm)
-- Deduct 0.1pt for EACH silent pause longer than 3 seconds detected in the recording (count them; a 7-second silence counts as one long-pause penalty, not multiple)
+- Pronunciation (lenient): Only deduct ${deductPt}pt for errors that clearly impede understanding. Do NOT penalise natural accent variation, minor mispronunciation of non-key words, or imperfect but intelligible speech. A learner who speaks fluently with a slight accent is better than one who speaks haltingly with perfect pronunciation.
+- Deduct ${deductPt}pt per grammar error (wrong tense, missing article, subject-verb agreement, etc.)
+- Deduct ${deductPt}pt per delivery issue (unnatural pausing, very slow pace, choppy rhythm)
+- Deduct ${deductPt}pt for EACH silent pause longer than 3 seconds detected in the recording (count them; a 7-second silence counts as one long-pause penalty, not multiple)
 - Minimum score: 0
 - Baseline is 7pt — the learner must reach this to pass
 
@@ -1603,7 +1605,7 @@ Steps:
 3. List each grammar error specifically — write each error description IN VIETNAMESE (e.g. "dùng 'he go' thay vì 'he goes'").
 4. Note any vocabulary from the target list the learner used correctly. The learner is only required to use AT LEAST ONE word from the list — do not penalise for not using all of them.
 5. Assess delivery: fluency, pacing, naturalness. Also count longPauses: the number of silent gaps longer than 3 seconds in the audio.
-6. Calculate final score = max(0, 10 - (pronunciation errors + grammar errors + delivery issues + longPauses) × 0.1).
+6. Calculate final score = max(0, 10 - (pronunciation errors + grammar errors + delivery issues + longPauses) × ${deductPt}).
 7. Write overall feedback IN VIETNAMESE, specifically naming errors.
 8. Write vocabularyFeedback IN VIETNAMESE: mention which target word(s) were used (praise if at least one was used), and optionally suggest 1–2 others that could have fit naturally. Do NOT criticise for not using all words.
 9. Write deliveryFeedback IN VIETNAMESE on fluency and pacing.`,

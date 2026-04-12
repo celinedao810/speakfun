@@ -70,11 +70,11 @@ export async function POST(request: NextRequest) {
     }
 
     if (type === 'free-talk') {
-      const { audioBase64, vocabWords, structurePatterns, topic } = body;
+      const { audioBase64, vocabWords, structurePatterns, topic, deductedPointsPerError } = body;
       if (!audioBase64) {
         return NextResponse.json({ error: 'audioBase64 is required' }, { status: 400 });
       }
-      const result = await scoreFreeTalk(audioBase64, vocabWords ?? [], structurePatterns ?? [], topic);
+      const result = await scoreFreeTalk(audioBase64, vocabWords ?? [], structurePatterns ?? [], topic, deductedPointsPerError ?? 0.1);
       return NextResponse.json(result);
     }
 

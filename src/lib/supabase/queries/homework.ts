@@ -72,6 +72,8 @@ interface ClassHomeworkSettingsRow {
   review_structure_count: number;
   homework_restarted_at: string | null;
   homework_end_date: string | null;
+  ex3_duration_mins: number | null;
+  ex3_deducted_points_per_error: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -204,6 +206,8 @@ function toClassHomeworkSettings(row: ClassHomeworkSettingsRow): ClassHomeworkSe
     reviewStructureCount: row.review_structure_count,
     homeworkRestartedAt: row.homework_restarted_at ?? null,
     homeworkEndDate: row.homework_end_date ?? null,
+    ex3DurationMins: row.ex3_duration_mins ?? 2,
+    ex3DeductedPointsPerError: row.ex3_deducted_points_per_error ?? 0.1,
   };
 }
 
@@ -802,6 +806,8 @@ const DEFAULT_SETTINGS: Omit<ClassHomeworkSettings, 'id' | 'classId'> = {
   reviewStructureCount: 5,
   homeworkRestartedAt: null,
   homeworkEndDate: null,
+  ex3DurationMins: 2,
+  ex3DeductedPointsPerError: 0.1,
 };
 
 export async function fetchClassHomeworkSettings(
@@ -835,6 +841,8 @@ export async function upsertClassHomeworkSettings(
       review_word_count: settings.reviewWordCount,
       review_structure_count: settings.reviewStructureCount,
       homework_end_date: settings.homeworkEndDate ?? null,
+      ex3_duration_mins: settings.ex3DurationMins,
+      ex3_deducted_points_per_error: settings.ex3DeductedPointsPerError,
     }, { onConflict: 'class_id' });
   return !error;
 }

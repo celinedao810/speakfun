@@ -6,7 +6,6 @@ import { VocabExerciseItem, StructureExerciseItem, FreeTalkScoringResult } from 
 import { scoreFreeTalk, generateAnswerGuide } from '@/lib/ai/aiClient';
 import AudioRecorder, { AudioRecorderHandle } from '@/components/AudioRecorder';
 
-const RECORD_DURATION = 120;
 const BASELINE = 7;
 const MAX_ATTEMPTS_BEFORE_SKIP = 5;
 
@@ -14,12 +13,15 @@ interface Exercise3FreeTalkProps {
   vocabWords: VocabExerciseItem[];
   structures: StructureExerciseItem[];
   topic?: string;
+  durationMins?: number;
+  deductedPointsPerError?: number;
   onComplete: (score: number) => void;
 }
 
 type Phase = 'READY' | 'SCORING' | 'FEEDBACK';
 
-export default function Exercise3FreeTalk({ vocabWords, structures, topic, onComplete }: Exercise3FreeTalkProps) {
+export default function Exercise3FreeTalk({ vocabWords, structures, topic, durationMins = 2, deductedPointsPerError = 0.1, onComplete }: Exercise3FreeTalkProps) {
+  const RECORD_DURATION = durationMins * 60;
   const [phase, setPhase] = useState<Phase>('READY');
   const [timeLeft, setTimeLeft] = useState(RECORD_DURATION);
   const [isRecording, setIsRecording] = useState(false);
@@ -80,6 +82,7 @@ export default function Exercise3FreeTalk({ vocabWords, structures, topic, onCom
         vocabWords.map(v => v.word),
         structures.map(s => s.pattern),
         topic,
+        deductedPointsPerError,
       );
       setBestScore(prev => Math.max(prev, r.score));
       setAttemptHistory(prev => [...prev, { attempt: prev.length + 1, score: r.score }]);
@@ -126,9 +129,9 @@ export default function Exercise3FreeTalk({ vocabWords, structures, topic, onCom
         {/* Header — only when not recording */}
         {!isRecording && (
           <div className="text-center">
-            <h3 className="text-lg font-bold text-foreground mb-1">Free Talk · 2 minutes</h3>
+            <h3 className="text-lg font-bold text-foreground mb-1">Free Talk · {durationMins} {durationMins === 1 ? 'minute' : 'minutes'}</h3>
             <p className="text-sm text-muted-foreground">
-              Speak freely for 2 minutes using the words and structures below.
+              Speak freely for {durationMins} {durationMins === 1 ? 'minute' : 'minutes'} using the words and structures below.
               {attemptCount > 0 && bestScore < BASELINE && (
                 <span className="block mt-1 text-amber-600 font-medium">
                   Best so far: {bestScore.toFixed(1)}/10 — you need {BASELINE}/10 to pass ({attemptCount}/{MAX_ATTEMPTS_BEFORE_SKIP} attempts used)
