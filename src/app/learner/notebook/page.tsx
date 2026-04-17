@@ -13,6 +13,8 @@ export default function NotebookPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'vocab' | 'structures'>('vocab');
+  const [vocabQuery, setVocabQuery] = useState('');
+  const [structureQuery, setStructureQuery] = useState('');
 
   useEffect(() => {
     Promise.all([
@@ -117,14 +119,60 @@ export default function NotebookPage() {
             )}
           </button>
         </div>
+
+        {/* Search input */}
+        {activeTab === 'vocab' && hasVocab && (
+          <div className="mt-3 flex items-center gap-2 bg-background border border-border rounded-lg px-3 py-2">
+            <Search className="w-3.5 h-3.5 text-muted-foreground/50 shrink-0" />
+            <input
+              type="text"
+              value={vocabQuery}
+              onChange={e => setVocabQuery(e.target.value)}
+              placeholder="Search vocab…"
+              className="flex-1 text-sm bg-transparent outline-none placeholder:text-muted-foreground/40"
+            />
+            {vocabQuery && (
+              <button onClick={() => setVocabQuery('')} className="text-muted-foreground/50 hover:text-muted-foreground transition">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+        )}
+        {activeTab === 'structures' && hasStructures && (
+          <div className="mt-3 flex items-center gap-2 bg-background border border-border rounded-lg px-3 py-2">
+            <Search className="w-3.5 h-3.5 text-muted-foreground/50 shrink-0" />
+            <input
+              type="text"
+              value={structureQuery}
+              onChange={e => setStructureQuery(e.target.value)}
+              placeholder="Search structures…"
+              className="flex-1 text-sm bg-transparent outline-none placeholder:text-muted-foreground/40"
+            />
+            {structureQuery && (
+              <button onClick={() => setStructureQuery('')} className="text-muted-foreground/50 hover:text-muted-foreground transition">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Tab content */}
       {activeTab === 'vocab' ? (
         hasVocab ? (
-          vocabData.courses.map(course => (
-            <CourseSection key={course.courseId} course={course} />
-          ))
+          <>
+            {vocabData.courses.map(course => (
+              <CourseSection key={course.courseId} course={course} searchQuery={vocabQuery} />
+            ))}
+            {vocabQuery.trim() !== '' &&
+              !vocabData.courses.some(c =>
+                c.entries.some(e => e.word.toLowerCase().includes(vocabQuery.trim().toLowerCase()))
+              ) && (
+              <div className="text-center py-12 text-sm text-muted-foreground/60">
+                No results found for &ldquo;{vocabQuery.trim()}&rdquo;
+              </div>
+            )}
+          </>
         ) : (
           <div className="text-center py-16">
             <p className="text-sm text-muted-foreground/60">No vocab yet.</p>
@@ -132,9 +180,19 @@ export default function NotebookPage() {
         )
       ) : (
         hasStructures ? (
-          structureData.courses.map(course => (
-            <StructureCourseSection key={course.courseId} course={course} />
-          ))
+          <>
+            {structureData.courses.map(course => (
+              <StructureCourseSection key={course.courseId} course={course} searchQuery={structureQuery} />
+            ))}
+            {structureQuery.trim() !== '' &&
+              !structureData.courses.some(c =>
+                c.entries.some(e => e.pattern.toLowerCase().includes(structureQuery.trim().toLowerCase()))
+              ) && (
+              <div className="text-center py-12 text-sm text-muted-foreground/60">
+                No results found for &ldquo;{structureQuery.trim()}&rdquo;
+              </div>
+            )}
+          </>
         ) : (
           <div className="text-center py-16">
             <MessageCircle className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
