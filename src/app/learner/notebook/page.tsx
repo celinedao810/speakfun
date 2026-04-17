@@ -311,8 +311,16 @@ function CourseSection({ course, searchQuery = '' }: { course: CourseNotebook; s
 
 // ─── Structure Course Section ──────────────────────────────────────────────────
 
-function StructureCourseSection({ course }: { course: CourseStructureNotebook }) {
+function StructureCourseSection({ course, searchQuery = '' }: { course: CourseStructureNotebook; searchQuery?: string }) {
   const [open, setOpen] = useState(true);
+
+  const isSearchActive = searchQuery.trim() !== '';
+  const effectiveOpen = isSearchActive ? true : open;
+
+  const matchEntry = (entry: { pattern: string }) =>
+    entry.pattern.toLowerCase().includes(searchQuery.trim().toLowerCase());
+
+  if (isSearchActive && !course.entries.some(matchEntry)) return null;
 
   const learningEntries = course.entries.filter(
     e => !e.isCommitted && (e.correctCount > 0 || e.incorrectCount > 0)
@@ -346,13 +354,13 @@ function StructureCourseSection({ course }: { course: CourseStructureNotebook })
             </span>
           )}
         </div>
-        {open
+        {effectiveOpen
           ? <ChevronUp className="w-4 h-4 text-muted-foreground/60 shrink-0" />
           : <ChevronDown className="w-4 h-4 text-muted-foreground/60 shrink-0" />
         }
       </button>
 
-      {open && (
+      {effectiveOpen && (
         <div className="border-t border-border px-5 py-4 space-y-4">
           {learningEntries.length > 0 && (
             <div>
@@ -360,13 +368,18 @@ function StructureCourseSection({ course }: { course: CourseStructureNotebook })
                 Still Learning ({learningEntries.length})
               </p>
               <div className="space-y-3">
-                {learningEntries.map(entry => (
-                  <StructureCard
-                    key={`${entry.lessonId}:${entry.structureItemId}`}
-                    entry={entry}
-                    commitThreshold={course.commitThreshold}
-                  />
-                ))}
+                {learningEntries.map(entry => {
+                  const matches = !isSearchActive || matchEntry(entry);
+                  return (
+                    <div key={`${entry.lessonId}:${entry.structureItemId}`} className={matches ? '' : 'opacity-40'}>
+                      <StructureCard
+                        entry={entry}
+                        commitThreshold={course.commitThreshold}
+                        highlight={matches && isSearchActive ? searchQuery.trim() : undefined}
+                      />
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -376,13 +389,18 @@ function StructureCourseSection({ course }: { course: CourseStructureNotebook })
               label={`Coming Up (${untouchedEntries.length})`}
               labelClass="text-muted-foreground/60"
             >
-              {untouchedEntries.map(entry => (
-                <StructureCard
-                  key={`${entry.lessonId}:${entry.structureItemId}`}
-                  entry={entry}
-                  commitThreshold={course.commitThreshold}
-                />
-              ))}
+              {untouchedEntries.map(entry => {
+                const matches = !isSearchActive || matchEntry(entry);
+                return (
+                  <div key={`${entry.lessonId}:${entry.structureItemId}`} className={matches ? '' : 'opacity-40'}>
+                    <StructureCard
+                      entry={entry}
+                      commitThreshold={course.commitThreshold}
+                      highlight={matches && isSearchActive ? searchQuery.trim() : undefined}
+                    />
+                  </div>
+                );
+              })}
             </CollapsibleGroup>
           )}
 
@@ -391,13 +409,18 @@ function StructureCourseSection({ course }: { course: CourseStructureNotebook })
               label={`Mastered (${masteredEntries.length})`}
               labelClass="text-emerald-600"
             >
-              {masteredEntries.map(entry => (
-                <StructureCard
-                  key={`${entry.lessonId}:${entry.structureItemId}`}
-                  entry={entry}
-                  commitThreshold={course.commitThreshold}
-                />
-              ))}
+              {masteredEntries.map(entry => {
+                const matches = !isSearchActive || matchEntry(entry);
+                return (
+                  <div key={`${entry.lessonId}:${entry.structureItemId}`} className={matches ? '' : 'opacity-40'}>
+                    <StructureCard
+                      entry={entry}
+                      commitThreshold={course.commitThreshold}
+                      highlight={matches && isSearchActive ? searchQuery.trim() : undefined}
+                    />
+                  </div>
+                );
+              })}
             </CollapsibleGroup>
           )}
         </div>
