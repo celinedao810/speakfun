@@ -299,67 +299,70 @@ function CourseSection({ course, searchQuery = '' }: { course: CourseNotebook; s
       </button>
 
       {effectiveOpen && (
-        <div className="border-t border-border px-5 py-4 space-y-4">
-          {learningEntries.length > 0 && (
-            <div>
-              <p className="text-xs font-semibold text-amber-600 uppercase tracking-wide mb-3">
-                Still Learning ({learningEntries.length})
-              </p>
-              <div className="space-y-3">
-                {learningEntries.map(entry => {
-                  const matches = !isSearchActive || matchEntry(entry);
-                  return (
-                    <div key={`${entry.lessonId}:${entry.vocabItemId}`} className={matches ? '' : 'opacity-40'}>
+        <div className="border-t border-border px-5 py-4 space-y-3">
+          {isSearchActive ? (
+            <>
+              {course.entries.filter(matchEntry).map(entry => (
+                <WordCard
+                  key={`${entry.lessonId}:${entry.vocabItemId}`}
+                  entry={entry}
+                  commitThreshold={course.commitThreshold}
+                  highlight={searchQuery.trim()}
+                />
+              ))}
+              {course.entries.filter(e => !matchEntry(e)).map(entry => (
+                <div key={`${entry.lessonId}:${entry.vocabItemId}`} className="opacity-40">
+                  <WordCard entry={entry} commitThreshold={course.commitThreshold} />
+                </div>
+              ))}
+            </>
+          ) : (
+            <div className="space-y-4">
+              {learningEntries.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-amber-600 uppercase tracking-wide mb-3">
+                    Still Learning ({learningEntries.length})
+                  </p>
+                  <div className="space-y-3">
+                    {learningEntries.map(entry => (
                       <WordCard
+                        key={`${entry.lessonId}:${entry.vocabItemId}`}
                         entry={entry}
                         commitThreshold={course.commitThreshold}
-                        highlight={matches && isSearchActive ? searchQuery.trim() : undefined}
                       />
-                    </div>
-                  );
-                })}
-              </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {untouchedEntries.length > 0 && (
+                <CollapsibleGroup
+                  label={`Coming Up (${untouchedEntries.length})`}
+                  labelClass="text-muted-foreground/60"
+                >
+                  {untouchedEntries.map(entry => (
+                    <WordCard
+                      key={`${entry.lessonId}:${entry.vocabItemId}`}
+                      entry={entry}
+                      commitThreshold={course.commitThreshold}
+                    />
+                  ))}
+                </CollapsibleGroup>
+              )}
+              {masteredEntries.length > 0 && (
+                <CollapsibleGroup
+                  label={`Mastered (${masteredEntries.length})`}
+                  labelClass="text-emerald-600"
+                >
+                  {masteredEntries.map(entry => (
+                    <WordCard
+                      key={`${entry.lessonId}:${entry.vocabItemId}`}
+                      entry={entry}
+                      commitThreshold={course.commitThreshold}
+                    />
+                  ))}
+                </CollapsibleGroup>
+              )}
             </div>
-          )}
-
-          {untouchedEntries.length > 0 && (
-            <CollapsibleGroup
-              label={`Coming Up (${untouchedEntries.length})`}
-              labelClass="text-muted-foreground/60"
-            >
-              {untouchedEntries.map(entry => {
-                const matches = !isSearchActive || matchEntry(entry);
-                return (
-                  <div key={`${entry.lessonId}:${entry.vocabItemId}`} className={matches ? '' : 'opacity-40'}>
-                    <WordCard
-                      entry={entry}
-                      commitThreshold={course.commitThreshold}
-                      highlight={matches && isSearchActive ? searchQuery.trim() : undefined}
-                    />
-                  </div>
-                );
-              })}
-            </CollapsibleGroup>
-          )}
-
-          {masteredEntries.length > 0 && (
-            <CollapsibleGroup
-              label={`Mastered (${masteredEntries.length})`}
-              labelClass="text-emerald-600"
-            >
-              {masteredEntries.map(entry => {
-                const matches = !isSearchActive || matchEntry(entry);
-                return (
-                  <div key={`${entry.lessonId}:${entry.vocabItemId}`} className={matches ? '' : 'opacity-40'}>
-                    <WordCard
-                      entry={entry}
-                      commitThreshold={course.commitThreshold}
-                      highlight={matches && isSearchActive ? searchQuery.trim() : undefined}
-                    />
-                  </div>
-                );
-              })}
-            </CollapsibleGroup>
           )}
         </div>
       )}
@@ -419,67 +422,70 @@ function StructureCourseSection({ course, searchQuery = '' }: { course: CourseSt
       </button>
 
       {effectiveOpen && (
-        <div className="border-t border-border px-5 py-4 space-y-4">
-          {learningEntries.length > 0 && (
-            <div>
-              <p className="text-xs font-semibold text-amber-600 uppercase tracking-wide mb-3">
-                Still Learning ({learningEntries.length})
-              </p>
-              <div className="space-y-3">
-                {learningEntries.map(entry => {
-                  const matches = !isSearchActive || matchEntry(entry);
-                  return (
-                    <div key={`${entry.lessonId}:${entry.structureItemId}`} className={matches ? '' : 'opacity-40'}>
+        <div className="border-t border-border px-5 py-4 space-y-3">
+          {isSearchActive ? (
+            <>
+              {course.entries.filter(matchEntry).map(entry => (
+                <StructureCard
+                  key={`${entry.lessonId}:${entry.structureItemId}`}
+                  entry={entry}
+                  commitThreshold={course.commitThreshold}
+                  highlight={searchQuery.trim()}
+                />
+              ))}
+              {course.entries.filter(e => !matchEntry(e)).map(entry => (
+                <div key={`${entry.lessonId}:${entry.structureItemId}`} className="opacity-40">
+                  <StructureCard entry={entry} commitThreshold={course.commitThreshold} />
+                </div>
+              ))}
+            </>
+          ) : (
+            <div className="space-y-4">
+              {learningEntries.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-amber-600 uppercase tracking-wide mb-3">
+                    Still Learning ({learningEntries.length})
+                  </p>
+                  <div className="space-y-3">
+                    {learningEntries.map(entry => (
                       <StructureCard
+                        key={`${entry.lessonId}:${entry.structureItemId}`}
                         entry={entry}
                         commitThreshold={course.commitThreshold}
-                        highlight={matches && isSearchActive ? searchQuery.trim() : undefined}
                       />
-                    </div>
-                  );
-                })}
-              </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {untouchedEntries.length > 0 && (
+                <CollapsibleGroup
+                  label={`Coming Up (${untouchedEntries.length})`}
+                  labelClass="text-muted-foreground/60"
+                >
+                  {untouchedEntries.map(entry => (
+                    <StructureCard
+                      key={`${entry.lessonId}:${entry.structureItemId}`}
+                      entry={entry}
+                      commitThreshold={course.commitThreshold}
+                    />
+                  ))}
+                </CollapsibleGroup>
+              )}
+              {masteredEntries.length > 0 && (
+                <CollapsibleGroup
+                  label={`Mastered (${masteredEntries.length})`}
+                  labelClass="text-emerald-600"
+                >
+                  {masteredEntries.map(entry => (
+                    <StructureCard
+                      key={`${entry.lessonId}:${entry.structureItemId}`}
+                      entry={entry}
+                      commitThreshold={course.commitThreshold}
+                    />
+                  ))}
+                </CollapsibleGroup>
+              )}
             </div>
-          )}
-
-          {untouchedEntries.length > 0 && (
-            <CollapsibleGroup
-              label={`Coming Up (${untouchedEntries.length})`}
-              labelClass="text-muted-foreground/60"
-            >
-              {untouchedEntries.map(entry => {
-                const matches = !isSearchActive || matchEntry(entry);
-                return (
-                  <div key={`${entry.lessonId}:${entry.structureItemId}`} className={matches ? '' : 'opacity-40'}>
-                    <StructureCard
-                      entry={entry}
-                      commitThreshold={course.commitThreshold}
-                      highlight={matches && isSearchActive ? searchQuery.trim() : undefined}
-                    />
-                  </div>
-                );
-              })}
-            </CollapsibleGroup>
-          )}
-
-          {masteredEntries.length > 0 && (
-            <CollapsibleGroup
-              label={`Mastered (${masteredEntries.length})`}
-              labelClass="text-emerald-600"
-            >
-              {masteredEntries.map(entry => {
-                const matches = !isSearchActive || matchEntry(entry);
-                return (
-                  <div key={`${entry.lessonId}:${entry.structureItemId}`} className={matches ? '' : 'opacity-40'}>
-                    <StructureCard
-                      entry={entry}
-                      commitThreshold={course.commitThreshold}
-                      highlight={matches && isSearchActive ? searchQuery.trim() : undefined}
-                    />
-                  </div>
-                );
-              })}
-            </CollapsibleGroup>
           )}
         </div>
       )}
