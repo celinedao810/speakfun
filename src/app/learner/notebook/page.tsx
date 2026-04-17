@@ -191,8 +191,16 @@ function StatChip({
 
 // ─── Vocab Course Section ──────────────────────────────────────────────────────
 
-function CourseSection({ course }: { course: CourseNotebook }) {
+function CourseSection({ course, searchQuery = '' }: { course: CourseNotebook; searchQuery?: string }) {
   const [open, setOpen] = useState(true);
+
+  const isSearchActive = searchQuery.trim() !== '';
+  const effectiveOpen = isSearchActive ? true : open;
+
+  const matchEntry = (entry: { word: string }) =>
+    entry.word.toLowerCase().includes(searchQuery.trim().toLowerCase());
+
+  if (isSearchActive && !course.entries.some(matchEntry)) return null;
 
   const learningEntries = course.entries.filter(
     e => !e.isCommitted && (e.correctCount > 0 || e.incorrectCount > 0)
@@ -226,13 +234,13 @@ function CourseSection({ course }: { course: CourseNotebook }) {
             </span>
           )}
         </div>
-        {open
+        {effectiveOpen
           ? <ChevronUp className="w-4 h-4 text-muted-foreground/60 shrink-0" />
           : <ChevronDown className="w-4 h-4 text-muted-foreground/60 shrink-0" />
         }
       </button>
 
-      {open && (
+      {effectiveOpen && (
         <div className="border-t border-border px-5 py-4 space-y-4">
           {learningEntries.length > 0 && (
             <div>
@@ -240,13 +248,18 @@ function CourseSection({ course }: { course: CourseNotebook }) {
                 Still Learning ({learningEntries.length})
               </p>
               <div className="space-y-3">
-                {learningEntries.map(entry => (
-                  <WordCard
-                    key={`${entry.lessonId}:${entry.vocabItemId}`}
-                    entry={entry}
-                    commitThreshold={course.commitThreshold}
-                  />
-                ))}
+                {learningEntries.map(entry => {
+                  const matches = !isSearchActive || matchEntry(entry);
+                  return (
+                    <div key={`${entry.lessonId}:${entry.vocabItemId}`} className={matches ? '' : 'opacity-40'}>
+                      <WordCard
+                        entry={entry}
+                        commitThreshold={course.commitThreshold}
+                        highlight={matches && isSearchActive ? searchQuery.trim() : undefined}
+                      />
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -256,13 +269,18 @@ function CourseSection({ course }: { course: CourseNotebook }) {
               label={`Coming Up (${untouchedEntries.length})`}
               labelClass="text-muted-foreground/60"
             >
-              {untouchedEntries.map(entry => (
-                <WordCard
-                  key={`${entry.lessonId}:${entry.vocabItemId}`}
-                  entry={entry}
-                  commitThreshold={course.commitThreshold}
-                />
-              ))}
+              {untouchedEntries.map(entry => {
+                const matches = !isSearchActive || matchEntry(entry);
+                return (
+                  <div key={`${entry.lessonId}:${entry.vocabItemId}`} className={matches ? '' : 'opacity-40'}>
+                    <WordCard
+                      entry={entry}
+                      commitThreshold={course.commitThreshold}
+                      highlight={matches && isSearchActive ? searchQuery.trim() : undefined}
+                    />
+                  </div>
+                );
+              })}
             </CollapsibleGroup>
           )}
 
@@ -271,13 +289,18 @@ function CourseSection({ course }: { course: CourseNotebook }) {
               label={`Mastered (${masteredEntries.length})`}
               labelClass="text-emerald-600"
             >
-              {masteredEntries.map(entry => (
-                <WordCard
-                  key={`${entry.lessonId}:${entry.vocabItemId}`}
-                  entry={entry}
-                  commitThreshold={course.commitThreshold}
-                />
-              ))}
+              {masteredEntries.map(entry => {
+                const matches = !isSearchActive || matchEntry(entry);
+                return (
+                  <div key={`${entry.lessonId}:${entry.vocabItemId}`} className={matches ? '' : 'opacity-40'}>
+                    <WordCard
+                      entry={entry}
+                      commitThreshold={course.commitThreshold}
+                      highlight={matches && isSearchActive ? searchQuery.trim() : undefined}
+                    />
+                  </div>
+                );
+              })}
             </CollapsibleGroup>
           )}
         </div>
