@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { BookMarked, MessageCircle, BookOpen, ChevronDown, ChevronUp, Loader2, CheckCircle } from 'lucide-react';
+import { BookMarked, MessageCircle, BookOpen, ChevronDown, ChevronUp, Loader2, CheckCircle, Search, X } from 'lucide-react';
 import { GlobalNotebookResponse, CourseNotebook } from '@/app/api/homework/vocab-notebook/global/route';
 import { NotebookEntry } from '@/app/api/homework/vocab-notebook/route';
 import { GlobalStructureNotebookResponse, CourseStructureNotebook } from '@/app/api/homework/structure-notebook/global/route';
@@ -145,6 +145,24 @@ export default function NotebookPage() {
         )
       )}
     </div>
+  );
+}
+
+// ─── Search helper ─────────────────────────────────────────────────────────────
+
+function highlightMatch(text: string, query: string): React.ReactNode {
+  if (!query) return text;
+  const lower = text.toLowerCase();
+  const idx = lower.indexOf(query.toLowerCase());
+  if (idx === -1) return text;
+  return (
+    <>
+      {text.slice(0, idx)}
+      <mark className="bg-amber-200 dark:bg-amber-700/50 rounded-sm not-italic">
+        {text.slice(idx, idx + query.length)}
+      </mark>
+      {text.slice(idx + query.length)}
+    </>
   );
 }
 
@@ -394,7 +412,7 @@ function CollapsibleGroup({
   );
 }
 
-function WordCard({ entry, commitThreshold }: { entry: NotebookEntry; commitThreshold: number }) {
+function WordCard({ entry, commitThreshold, highlight }: { entry: NotebookEntry; commitThreshold: number; highlight?: string }) {
   const untouched = entry.correctCount === 0 && entry.incorrectCount === 0;
   const progressPct = entry.isCommitted
     ? 100
@@ -404,7 +422,7 @@ function WordCard({ entry, commitThreshold }: { entry: NotebookEntry; commitThre
     <div className={`rounded-lg border border-border p-4 ${untouched ? 'opacity-60' : 'bg-background'}`}>
       <div className="flex items-start justify-between gap-2 mb-1.5">
         <div className="flex items-baseline gap-2 flex-wrap">
-          <span className="font-semibold text-foreground text-base">{entry.word}</span>
+          <span className="font-semibold text-foreground text-base">{highlightMatch(entry.word, highlight ?? '')}</span>
           {entry.ipa && (
             <span className="font-mono text-xs text-muted-foreground">{entry.ipa}</span>
           )}
@@ -458,7 +476,7 @@ function WordCard({ entry, commitThreshold }: { entry: NotebookEntry; commitThre
   );
 }
 
-function StructureCard({ entry, commitThreshold }: { entry: StructureNotebookEntry; commitThreshold: number }) {
+function StructureCard({ entry, commitThreshold, highlight }: { entry: StructureNotebookEntry; commitThreshold: number; highlight?: string }) {
   const untouched = entry.correctCount === 0 && entry.incorrectCount === 0;
   const progressPct = entry.isCommitted
     ? 100
@@ -467,7 +485,7 @@ function StructureCard({ entry, commitThreshold }: { entry: StructureNotebookEnt
   return (
     <div className={`rounded-lg border border-border p-4 ${untouched ? 'opacity-60' : 'bg-background'}`}>
       <div className="flex items-start justify-between gap-2 mb-1.5">
-        <span className="font-mono text-sm font-semibold text-foreground">{entry.pattern}</span>
+        <span className="font-mono text-sm font-semibold text-foreground">{highlightMatch(entry.pattern, highlight ?? '')}</span>
         {entry.isCommitted && (
           <span className="flex items-center gap-1 text-xs font-medium bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 px-2 py-0.5 rounded-full shrink-0">
             <CheckCircle className="w-3 h-3" />
