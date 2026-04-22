@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Mic, BookOpen, Users, Sparkles, MessageSquareText, AudioLines } from 'lucide-react';
+import { Mic, BookOpen, Users, Sparkles, MessageSquareText, AudioLines, Gamepad2 } from 'lucide-react';
 
 const tabs = [
   { href: '/teacher', label: 'Pronunciation', icon: Mic, exact: true },
@@ -12,6 +12,7 @@ const tabs = [
   { href: '/teacher/lesson-plans', label: 'Lesson Plans', icon: Sparkles },
   { href: '/teacher/feedback', label: 'Feedback', icon: MessageSquareText },
   { href: '/teacher/audio-generator', label: 'Audio Generator', icon: AudioLines },
+  { href: '/teacher/games', label: 'Games', icon: Gamepad2 },
 ]; // v2
 
 export default function TeacherLayout({ children }: { children: React.ReactNode }) {
