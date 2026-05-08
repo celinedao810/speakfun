@@ -46,8 +46,9 @@ export default function ReviewGame({ vocabPool, structurePool, loading }: Review
   const [translatedText, setTranslatedText] = useState<string | null>(null);
   const [translating, setTranslating] = useState(false);
 
-  // Hint
+  // Hint + translation reveal
   const [hintVisible, setHintVisible] = useState(false);
+  const [translationVisible, setTranslationVisible] = useState(false);
 
   // Timer
   const [selectedDuration, setSelectedDuration] = useState<Duration>(20);
@@ -72,9 +73,10 @@ export default function ReviewGame({ vocabPool, structurePool, loading }: Review
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode]);
 
-  // Reset hint when card changes
+  // Reset hint + translation when card changes
   useEffect(() => {
     setHintVisible(false);
+    setTranslationVisible(false);
   }, [currentIndex]);
 
   // Timer countdown
@@ -223,9 +225,9 @@ export default function ReviewGame({ vocabPool, structurePool, loading }: Review
             <p className="text-2xl font-semibold text-center text-foreground leading-snug">
               {translatedText}
             </p>
-            {hint && (
-              <div className="mt-1">
-                {hintVisible ? (
+            <div className="mt-1 flex flex-col items-center gap-1.5">
+              {hint && (
+                hintVisible ? (
                   <p className="text-sm italic text-muted-foreground text-center">
                     Hint: {hint}
                   </p>
@@ -237,9 +239,22 @@ export default function ReviewGame({ vocabPool, structurePool, loading }: Review
                     <Eye className="w-3.5 h-3.5" />
                     Show hint
                   </button>
-                )}
-              </div>
-            )}
+                )
+              )}
+              {translationVisible ? (
+                <p className="text-sm text-muted-foreground text-center">
+                  {currentStructure.exampleSentence}
+                </p>
+              ) : (
+                <button
+                  onClick={() => setTranslationVisible(true)}
+                  className="flex items-center gap-1 text-xs text-muted-foreground/60 hover:text-muted-foreground transition"
+                >
+                  <Eye className="w-3.5 h-3.5" />
+                  Show translation
+                </button>
+              )}
+            </div>
           </>
         )}
       </div>
