@@ -243,7 +243,7 @@ export default function ReviewGame({ vocabPool, structurePool, loading }: Review
               )}
               {translationVisible ? (
                 <p className="text-sm text-muted-foreground text-center">
-                  {currentStructure.exampleSentence}
+                  {currentStructure?.exampleSentence}
                 </p>
               ) : (
                 <button
