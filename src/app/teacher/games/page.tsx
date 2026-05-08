@@ -2,11 +2,11 @@
 
 import React, { useState, useEffect } from 'react';
 import { Gamepad2 } from 'lucide-react';
-import ReviewGame from '@/components/games/ReviewGame';
+import ReviewGame, { StructureCardItem } from '@/components/games/ReviewGame';
 
 export default function TeacherGamesPage() {
   const [vocabPool, setVocabPool] = useState<string[]>([]);
-  const [structurePool, setStructurePool] = useState<string[]>([]);
+  const [structurePool, setStructurePool] = useState<StructureCardItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -15,7 +15,7 @@ export default function TeacherGamesPage() {
       fetch('/api/teacher/structure-pool').then(r => r.ok ? r.json() : null),
     ]).then(([vocab, structure]) => {
       if (vocab) setVocabPool(vocab.words ?? []);
-      if (structure) setStructurePool(structure.patterns ?? []);
+      if (structure) setStructurePool(structure.items ?? []);
     }).finally(() => setLoading(false));
   }, []);
 

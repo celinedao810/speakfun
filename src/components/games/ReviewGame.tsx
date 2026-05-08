@@ -1,39 +1,81 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { BookOpen, MessageCircle, Loader2, RefreshCw, Play, Square, SkipForward } from 'lucide-react';
+import { BookOpen, MessageCircle, Loader2, RefreshCw, Play, Square, SkipForward, Eye } from 'lucide-react';
 
 const DURATIONS = [20, 30, 45, 60] as const;
 type Duration = typeof DURATIONS[number];
 
+export interface StructureCardItem {
+  pattern: string;
+  exampleSentence: string;
+}
+
 interface ReviewGameProps {
   vocabPool: string[];
-  structurePool: string[];
+  structurePool: StructureCardItem[];
   loading: boolean;
+}
+
+function extractHint(pattern: string): string {
+  const STRUCTURAL = new Set([
+    'subject', 'object', 'noun', 'pronoun', 'adjective',
+    'adverb', 'auxiliary', 'aux', 'someone', 'something',
+    'noun phrase', 'verb phrase',
+  ]);
+  return pattern
+    .split(/\s*\+\s*/)
+    .filter(p => !STRUCTURAL.has(p.trim().toLowerCase()))
+    .join(' ')
+    .replace(/\bV-ing\b/gi, 'doing')
+    .replace(/\bV\b/g, 'do')
+    .trim();
 }
 
 export default function ReviewGame({ vocabPool, structurePool, loading }: ReviewGameProps) {
   const [mode, setMode] = useState<'vocab' | 'structure'>('vocab');
-  const [currentCard, setCurrentCard] = useState<string | null>(null);
+
+  // Card state
+  const [currentVocab, setCurrentVocab] = useState<string | null>(null);
+  const [currentStructure, setCurrentStructure] = useState<StructureCardItem | null>(null);
   const [currentIndex, setCurrentIndex] = useState<number>(-1);
   const usedIndicesRef = useRef<Set<number>>(new Set());
 
+  // Translation cache: index → Vietnamese sentence
+  const translationCacheRef = useRef<Map<number, string>>(new Map());
+  const [translatedText, setTranslatedText] = useState<string | null>(null);
+  const [translating, setTranslating] = useState(false);
+
+  // Hint
+  const [hintVisible, setHintVisible] = useState(false);
+
+  // Timer
   const [selectedDuration, setSelectedDuration] = useState<Duration>(20);
   const [timerSeconds, setTimerSeconds] = useState<number>(20);
   const [timerRunning, setTimerRunning] = useState(false);
   const [timerDone, setTimerDone] = useState(false);
 
-  const activePool = mode === 'vocab' ? vocabPool : structurePool;
+  const activePoolLength = mode === 'vocab' ? vocabPool.length : structurePool.length;
 
-  // Reset everything when mode changes
+  // Reset card + timer when mode changes
   useEffect(() => {
-    setCurrentCard(null);
+    setCurrentVocab(null);
+    setCurrentStructure(null);
     setCurrentIndex(-1);
     usedIndicesRef.current = new Set();
+    translationCacheRef.current = new Map();
+    setTranslatedText(null);
+    setHintVisible(false);
     setTimerSeconds(selectedDuration);
     setTimerRunning(false);
     setTimerDone(false);
-  }, [mode, selectedDuration]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode]);
+
+  // Reset hint when card changes
+  useEffect(() => {
+    setHintVisible(false);
+  }, [currentIndex]);
 
   // Timer countdown
   useEffect(() => {
@@ -47,40 +89,68 @@ export default function ReviewGame({ vocabPool, structurePool, loading }: Review
     return () => clearTimeout(id);
   }, [timerRunning, timerSeconds]);
 
+  const resetTimer = useCallback((duration: Duration) => {
+    setTimerSeconds(duration);
+    setTimerRunning(false);
+    setTimerDone(false);
+  }, []);
+
+  const fetchTranslation = useCallback(async (idx: number, sentence: string) => {
+    const cached = translationCacheRef.current.get(idx);
+    if (cached !== undefined) {
+      setTranslatedText(cached);
+      return;
+    }
+    setTranslating(true);
+    setTranslatedText(null);
+    try {
+      const res = await fetch('/api/games/translate-structure', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ exampleSentence: sentence }),
+      });
+      const data = await res.json() as { vietnamese?: string };
+      const text = data.vietnamese ?? sentence;
+      translationCacheRef.current.set(idx, text);
+      setTranslatedText(text);
+    } catch {
+      // Fallback to English if translation fails
+      translationCacheRef.current.set(idx, sentence);
+      setTranslatedText(sentence);
+    } finally {
+      setTranslating(false);
+    }
+  }, []);
+
   const pickRandom = useCallback(() => {
-    if (activePool.length === 0) return;
-    // Cycle reset when all items have been shown
-    if (usedIndicesRef.current.size >= activePool.length) {
+    if (activePoolLength === 0) return;
+    if (usedIndicesRef.current.size >= activePoolLength) {
       usedIndicesRef.current = new Set();
     }
     let idx: number;
     do {
-      idx = Math.floor(Math.random() * activePool.length);
-    } while (usedIndicesRef.current.has(idx) || (activePool.length > 1 && idx === currentIndex));
+      idx = Math.floor(Math.random() * activePoolLength);
+    } while (usedIndicesRef.current.has(idx) || (activePoolLength > 1 && idx === currentIndex));
     usedIndicesRef.current.add(idx);
     setCurrentIndex(idx);
-    setCurrentCard(activePool[idx]);
-    setTimerSeconds(selectedDuration);
-    setTimerRunning(false);
-    setTimerDone(false);
-  }, [activePool, currentIndex, selectedDuration]);
+
+    if (mode === 'vocab') {
+      setCurrentVocab(vocabPool[idx]);
+      setCurrentStructure(null);
+      setTranslatedText(null);
+    } else {
+      const item = structurePool[idx];
+      setCurrentStructure(item);
+      setCurrentVocab(null);
+      fetchTranslation(idx, item.exampleSentence);
+    }
+
+    resetTimer(selectedDuration);
+  }, [activePoolLength, currentIndex, mode, vocabPool, structurePool, selectedDuration, resetTimer, fetchTranslation]);
 
   const handleDurationChange = (d: Duration) => {
     setSelectedDuration(d);
-    setTimerSeconds(d);
-    setTimerRunning(false);
-    setTimerDone(false);
-  };
-
-  const handleStart = () => {
-    if (timerDone) return;
-    setTimerRunning(true);
-  };
-
-  const handleReset = () => {
-    setTimerRunning(false);
-    setTimerSeconds(selectedDuration);
-    setTimerDone(false);
+    resetTimer(d);
   };
 
   const formatTime = (s: number) => {
@@ -96,6 +166,9 @@ export default function ReviewGame({ vocabPool, structurePool, loading }: Review
       </div>
     );
   }
+
+  const hasCard = currentVocab !== null || currentStructure !== null;
+  const hint = currentStructure ? extractHint(currentStructure.pattern) : '';
 
   return (
     <div className="max-w-lg mx-auto space-y-4">
@@ -132,19 +205,42 @@ export default function ReviewGame({ vocabPool, structurePool, loading }: Review
       </div>
 
       {/* Card area */}
-      <div className="bg-card border border-border rounded-xl min-h-[180px] flex items-center justify-center px-8 py-10">
-        {activePool.length === 0 ? (
+      <div className="bg-card border border-border rounded-xl min-h-[180px] flex flex-col items-center justify-center px-8 py-8 gap-3">
+        {activePoolLength === 0 ? (
           <p className="text-sm text-muted-foreground/60 text-center">
             No {mode === 'vocab' ? 'words' : 'structures'} in the pool yet.
           </p>
-        ) : currentCard === null ? (
+        ) : !hasCard ? (
           <p className="text-sm text-muted-foreground/50 text-center">
             Click Generate to draw a card
           </p>
+        ) : mode === 'vocab' ? (
+          <p className="text-3xl font-bold text-center text-foreground">{currentVocab}</p>
+        ) : translating ? (
+          <Loader2 className="w-6 h-6 text-muted-foreground/40 animate-spin" />
         ) : (
-          <p className={`font-bold text-center leading-snug break-words ${mode === 'vocab' ? 'text-3xl text-foreground' : 'text-2xl font-mono text-foreground'}`}>
-            {currentCard}
-          </p>
+          <>
+            <p className="text-2xl font-semibold text-center text-foreground leading-snug">
+              {translatedText}
+            </p>
+            {hint && (
+              <div className="mt-1">
+                {hintVisible ? (
+                  <p className="text-sm italic text-muted-foreground text-center">
+                    Hint: {hint}
+                  </p>
+                ) : (
+                  <button
+                    onClick={() => setHintVisible(true)}
+                    className="flex items-center gap-1 text-xs text-muted-foreground/60 hover:text-muted-foreground transition"
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                    Show hint
+                  </button>
+                )}
+              </div>
+            )}
+          </>
         )}
       </div>
 
@@ -175,7 +271,7 @@ export default function ReviewGame({ vocabPool, structurePool, loading }: Review
         </span>
         <div className="flex gap-2 sm:ml-auto">
           <button
-            onClick={handleStart}
+            onClick={() => setTimerRunning(true)}
             disabled={timerRunning || timerDone}
             className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold bg-primary text-primary-foreground disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-90 transition"
           >
@@ -183,7 +279,7 @@ export default function ReviewGame({ vocabPool, structurePool, loading }: Review
             Start
           </button>
           <button
-            onClick={handleReset}
+            onClick={() => resetTimer(selectedDuration)}
             className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold bg-muted text-muted-foreground hover:text-foreground transition"
           >
             <Square className="w-3.5 h-3.5" />
@@ -196,16 +292,16 @@ export default function ReviewGame({ vocabPool, structurePool, loading }: Review
       <div className="flex flex-col sm:flex-row gap-3">
         <button
           onClick={pickRandom}
-          disabled={activePool.length === 0}
+          disabled={activePoolLength === 0}
           className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold bg-primary text-primary-foreground disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-90 transition"
         >
           <RefreshCw className="w-4 h-4" />
           Generate
         </button>
-        {currentCard !== null && (
+        {hasCard && (
           <button
             onClick={pickRandom}
-            disabled={activePool.length <= 1}
+            disabled={activePoolLength <= 1}
             className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 disabled:opacity-40 disabled:cursor-not-allowed transition"
           >
             <SkipForward className="w-4 h-4" />

@@ -2,13 +2,13 @@
 
 import React, { useState, useEffect } from 'react';
 import { Gamepad2 } from 'lucide-react';
-import ReviewGame from '@/components/games/ReviewGame';
+import ReviewGame, { StructureCardItem } from '@/components/games/ReviewGame';
 import { GlobalNotebookResponse } from '@/app/api/homework/vocab-notebook/global/route';
 import { GlobalStructureNotebookResponse } from '@/app/api/homework/structure-notebook/global/route';
 
 export default function LearnerGamesPage() {
   const [vocabPool, setVocabPool] = useState<string[]>([]);
-  const [structurePool, setStructurePool] = useState<string[]>([]);
+  const [structurePool, setStructurePool] = useState<StructureCardItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -20,7 +20,10 @@ export default function LearnerGamesPage() {
         setVocabPool(vocab.courses.flatMap(c => c.entries.map(e => e.word)));
       }
       if (structure) {
-        setStructurePool(structure.courses.flatMap(c => c.entries.map(e => e.pattern)));
+        setStructurePool(structure.courses.flatMap(c => c.entries.map(e => ({
+          pattern: e.pattern,
+          exampleSentence: e.exampleSentence,
+        }))));
       }
     }).finally(() => setLoading(false));
   }, []);

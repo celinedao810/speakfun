@@ -10,6 +10,7 @@ export interface StructureNotebookEntry {
   structureItemId: string;
   pattern: string;
   explanation: string;
+  exampleSentence: string;
   lessonId: string;
   correctCount: number;
   incorrectCount: number;
@@ -82,6 +83,7 @@ export async function GET(request: NextRequest) {
           structureItemId: item.id,
           pattern: item.pattern,
           explanation: item.explanation,
+          exampleSentence: item.exampleSentence,
           lessonId: ex.lessonId,
           correctCount: mastery?.correctCount ?? 0,
           incorrectCount: mastery?.incorrectCount ?? 0,

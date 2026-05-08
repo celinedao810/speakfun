@@ -17,7 +17,7 @@ export async function GET() {
     const courseIds = (courseRows ?? []).map((r: { id: string }) => r.id);
 
     if (courseIds.length === 0) {
-      return NextResponse.json({ patterns: [], total: 0 });
+      return NextResponse.json({ items: [], total: 0 });
     }
 
     const { data: lessonRows } = await supabase
@@ -27,24 +27,24 @@ export async function GET() {
     const lessonIds = (lessonRows ?? []).map((r: { id: string }) => r.id);
 
     if (lessonIds.length === 0) {
-      return NextResponse.json({ patterns: [], total: 0 });
+      return NextResponse.json({ items: [], total: 0 });
     }
 
     const lessonExercises = await fetchLessonExercisesForLessons(supabase, lessonIds);
 
     const seen = new Set<string>();
-    const patterns: string[] = [];
+    const items: { pattern: string; exampleSentence: string }[] = [];
     for (const ex of lessonExercises) {
       for (const item of ex.structureItems) {
         const key = item.pattern.toLowerCase();
         if (!seen.has(key)) {
           seen.add(key);
-          patterns.push(item.pattern);
+          items.push({ pattern: item.pattern, exampleSentence: item.exampleSentence });
         }
       }
     }
 
-    return NextResponse.json({ patterns, total: patterns.length });
+    return NextResponse.json({ items, total: items.length });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to fetch structure pool';
     console.error('[teacher/structure-pool] Error:', message);

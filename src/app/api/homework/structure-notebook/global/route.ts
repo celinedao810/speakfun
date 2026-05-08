@@ -179,6 +179,7 @@ export async function GET() {
           structureItemId: item.id,
           pattern: item.pattern,
           explanation: item.explanation,
+          exampleSentence: item.exampleSentence,
           lessonId: ex.lessonId,
           correctCount: mastery?.correct_count ?? 0,
           incorrectCount: mastery?.incorrect_count ?? 0,
