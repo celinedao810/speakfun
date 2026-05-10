@@ -121,7 +121,7 @@ function Ex2Summary({
   totalScore: number;
   onAutoAdvance: () => void;
 }) {
-  const [countdown, setCountdown] = useState(30);
+  const [countdown, setCountdown] = useState(45);
 
   useEffect(() => {
     const interval = setInterval(() => {
