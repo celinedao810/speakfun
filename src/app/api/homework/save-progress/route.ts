@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient as createServerClient } from '@/lib/supabase/server';
-import { fetchSubmission, upsertSubmission } from '@/lib/supabase/queries/homework';
+import { fetchSubmission, upsertSubmission, batchUpdateVocabMastery, batchUpdateStructureMastery, fetchClassHomeworkSettings } from '@/lib/supabase/queries/homework';
 import { HomeworkSessionState } from '@/lib/types';
 
 /**
@@ -58,7 +58,11 @@ export async function POST(request: NextRequest) {
     const c1 = ex1Completed ?? existing?.ex1Completed ?? false;
     const c2 = ex2Completed ?? existing?.ex2Completed ?? false;
     const c3 = ex3Completed ?? existing?.ex3Completed ?? false;
-    const allDone = (existing?.allCompleted ?? false) || !!(c1 && c2 && c3);
+    const wasAlreadyCompleted = existing?.allCompleted ?? false;
+    const allDone = wasAlreadyCompleted || !!(c1 && c2 && c3);
+    const submittedAt = existing?.submittedAt ?? (allDone ? new Date().toISOString() : undefined);
+
+    const mergedSessionState: HomeworkSessionState = { ...existing?.sessionState ?? {}, ...sessionState ?? {} };
 
     await upsertSubmission(supabase, {
       learnerId: user.id,
@@ -74,11 +78,47 @@ export async function POST(request: NextRequest) {
       ex3Completed: c3,
       allCompleted: allDone,
       wrongVocabIds: wrongVocabIds ?? existing?.wrongVocabIds ?? [],
-      sessionState: sessionState ?? existing?.sessionState ?? {},
+      sessionState: mergedSessionState,
       startedAt: existing?.startedAt ?? new Date().toISOString(),
-      submittedAt: existing?.submittedAt,
+      submittedAt,
       readingMastered: existing?.readingMastered ?? false,
     });
+
+    // When all exercises complete for the first time, update mastery records
+    // so they are always committed even if the final /submit call never runs.
+    if (allDone && !wasAlreadyCompleted) {
+      const settings = await fetchClassHomeworkSettings(supabase, classId);
+      const vocabAttempts = mergedSessionState.vocabAttempts ?? [];
+      const structureAttempts = mergedSessionState.structureAttempts ?? [];
+
+      if (vocabAttempts.length > 0) {
+        await batchUpdateVocabMastery(
+          supabase,
+          user.id,
+          classId,
+          vocabAttempts.map(a => ({
+            vocabItemId: a.vocabItemId,
+            lessonId: a.lessonId,
+            correct: a.isCorrectWord,
+            commitThreshold: settings.correctGuessesToCommit,
+          }))
+        );
+      }
+
+      if (structureAttempts.length > 0) {
+        await batchUpdateStructureMastery(
+          supabase,
+          user.id,
+          classId,
+          structureAttempts.map(a => ({
+            structureItemId: a.structureItemId,
+            lessonId: a.lessonId,
+            correct: a.isCorrect,
+            commitThreshold: settings.structureGuessesToCommit,
+          }))
+        );
+      }
+    }
 
     return NextResponse.json({ success: true });
   } catch (error: unknown) {

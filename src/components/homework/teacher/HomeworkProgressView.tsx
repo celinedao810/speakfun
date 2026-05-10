@@ -130,8 +130,6 @@ export default function HomeworkProgressView({ classId }: HomeworkProgressViewPr
                       <div key={sub.id} className="flex items-center gap-3 px-5 py-3">
                         {sub.allCompleted ? (
                           <CheckCircle className="w-4 h-4 text-green-500 shrink-0" />
-                        ) : sub.submittedAt ? (
-                          <XCircle className="w-4 h-4 text-amber-400 shrink-0" />
                         ) : (
                           <Clock className="w-4 h-4 text-slate-300 shrink-0" />
                         )}
@@ -140,8 +138,8 @@ export default function HomeworkProgressView({ classId }: HomeworkProgressViewPr
                             {learnerNames[sub.learnerId] || sub.learnerId.slice(0, 8) + '...'}
                           </p>
                           <p className="text-xs text-slate-400">
-                            {sub.submittedAt
-                              ? `Submitted ${new Date(sub.submittedAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`
+                            {sub.allCompleted
+                              ? `Submitted${sub.submittedAt ? ` ${new Date(sub.submittedAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}` : ''}`
                               : 'In progress'}
                           </p>
                         </div>

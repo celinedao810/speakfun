@@ -336,8 +336,10 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
           ).then(t => { if (t) setFreeTalkTopic(t); }).catch(() => {});
         }
 
-        if (existingSubmission?.allCompleted) {
+        if (existingSubmission?.allCompleted && existingSubmission?.submittedAt) {
           setPhase('SCORECARD');
+        } else if (existingSubmission?.allCompleted && !existingSubmission?.submittedAt) {
+          setPhase('SUBMITTING');
         } else if (existingSubmission?.ex2Completed) {
           setPhase('EX3');
         } else if (existingSubmission?.ex1Completed) {
@@ -393,7 +395,7 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
     await autoSave({
       ex2Score: score,
       ex2Completed: true,
-      sessionState: { usedStructureIds: structurePool.map(s => s.id) },
+      sessionState: { usedStructureIds: structurePool.map(s => s.id), structureAttempts: attempts },
     });
     generateFreeTalkTopic(
       vocabPool.map(v => v.word),
