@@ -89,32 +89,43 @@ export default function HomeworkFeedbackTool() {
     if (f) handleFileSelect(f);
   };
 
-  const uploadVideoToGemini = async (f: File): Promise<string> => {
-    // Step 1: ask server to create a Gemini resumable upload session (API key stays on server)
-    const initRes = await fetch('/api/ai/init-upload', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mimeType: f.type, fileName: f.name, fileSize: f.size }),
-    });
-    const initData = await initRes.json();
-    if (!initRes.ok) throw new Error(initData.error || 'Failed to initiate upload');
+  // Encode a mono AudioBuffer as a WAV Blob
+  const encodeWav = (buf: AudioBuffer): Blob => {
+    const ch = buf.getChannelData(0);
+    const dataLen = ch.length * 2;
+    const ab = new ArrayBuffer(44 + dataLen);
+    const v = new DataView(ab);
+    const str = (o: number, s: string) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+    str(0, 'RIFF'); v.setUint32(4, 36 + dataLen, true);
+    str(8, 'WAVE'); str(12, 'fmt ');
+    v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+    v.setUint32(24, buf.sampleRate, true); v.setUint32(28, buf.sampleRate * 2, true);
+    v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+    str(36, 'data'); v.setUint32(40, dataLen, true);
+    for (let i = 0; i < ch.length; i++) {
+      const s = Math.max(-1, Math.min(1, ch[i]));
+      v.setInt16(44 + i * 2, s < 0 ? s * 32768 : s * 32767, true);
+    }
+    return new Blob([ab], { type: 'audio/wav' });
+  };
 
-    // Step 2: upload the raw file bytes directly to Google (bypasses Vercel body limit)
-    const uploadRes = await fetch(initData.uploadUrl, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': f.type,
-        'Content-Length': String(f.size),
-        'X-Goog-Upload-Offset': '0',
-        'X-Goog-Upload-Command': 'upload, finalize',
-      },
-      body: f,
-    });
-    if (!uploadRes.ok) throw new Error('Failed to upload video to Gemini');
-    const uploadData = await uploadRes.json();
-    const fileUri = uploadData?.file?.uri;
-    if (!fileUri) throw new Error('No file URI returned from Gemini upload');
-    return fileUri;
+  // Extract audio from a video file client-side → 16 kHz mono WAV (~1.9 MB/min of speech)
+  const extractAudioFromVideo = async (f: File): Promise<File> => {
+    const ctx = new AudioContext();
+    let decoded: AudioBuffer;
+    try {
+      decoded = await ctx.decodeAudioData(await f.arrayBuffer());
+    } finally {
+      await ctx.close();
+    }
+    const TARGET_RATE = 16000;
+    const offline = new OfflineAudioContext(1, Math.ceil(decoded.duration * TARGET_RATE), TARGET_RATE);
+    const src = offline.createBufferSource();
+    src.buffer = decoded;
+    src.connect(offline.destination);
+    src.start();
+    const rendered = await offline.startRendering();
+    return new File([encodeWav(rendered)], f.name.replace(/\.[^.]+$/, '.wav'), { type: 'audio/wav' });
   };
 
   const handleConvert = async () => {
@@ -124,18 +135,15 @@ export default function HomeworkFeedbackTool() {
     setTranscription('');
     setRefinementResult(null);
     try {
-      let body: Record<string, string>;
+      let audioFile = file;
       if (isVideoFile(file)) {
-        const fileUri = await uploadVideoToGemini(file);
-        body = { type: 'transcribe', fileUri, mimeType: file.type };
-      } else {
-        const audioBase64 = await readAsBase64(file);
-        body = { type: 'transcribe', audioBase64, mimeType: file.type };
+        audioFile = await extractAudioFromVideo(file);
       }
+      const audioBase64 = await readAsBase64(audioFile);
       const res = await fetch('/api/ai/feedback', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ type: 'transcribe', audioBase64, mimeType: audioFile.type }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Transcription failed');
