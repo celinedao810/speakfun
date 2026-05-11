@@ -89,6 +89,34 @@ export default function HomeworkFeedbackTool() {
     if (f) handleFileSelect(f);
   };
 
+  const uploadVideoToGemini = async (f: File): Promise<string> => {
+    // Step 1: ask server to create a Gemini resumable upload session (API key stays on server)
+    const initRes = await fetch('/api/ai/init-upload', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mimeType: f.type, fileName: f.name, fileSize: f.size }),
+    });
+    const initData = await initRes.json();
+    if (!initRes.ok) throw new Error(initData.error || 'Failed to initiate upload');
+
+    // Step 2: upload the raw file bytes directly to Google (bypasses Vercel body limit)
+    const uploadRes = await fetch(initData.uploadUrl, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': f.type,
+        'Content-Length': String(f.size),
+        'X-Goog-Upload-Offset': '0',
+        'X-Goog-Upload-Command': 'upload, finalize',
+      },
+      body: f,
+    });
+    if (!uploadRes.ok) throw new Error('Failed to upload video to Gemini');
+    const uploadData = await uploadRes.json();
+    const fileUri = uploadData?.file?.uri;
+    if (!fileUri) throw new Error('No file URI returned from Gemini upload');
+    return fileUri;
+  };
+
   const handleConvert = async () => {
     if (!file) return;
     setIsConverting(true);
@@ -96,11 +124,18 @@ export default function HomeworkFeedbackTool() {
     setTranscription('');
     setRefinementResult(null);
     try {
-      const audioBase64 = await readAsBase64(file);
+      let body: Record<string, string>;
+      if (isVideoFile(file)) {
+        const fileUri = await uploadVideoToGemini(file);
+        body = { type: 'transcribe', fileUri, mimeType: file.type };
+      } else {
+        const audioBase64 = await readAsBase64(file);
+        body = { type: 'transcribe', audioBase64, mimeType: file.type };
+      }
       const res = await fetch('/api/ai/feedback', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'transcribe', audioBase64, mimeType: file.type }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Transcription failed');

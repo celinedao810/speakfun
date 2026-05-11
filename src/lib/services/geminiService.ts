@@ -1971,6 +1971,49 @@ If the audio is silent or unintelligible, return an empty string.`,
   });
 };
 
+/** Poll until a Gemini file is ACTIVE (video files need processing time after upload). */
+async function waitForFileActive(fileUri: string, apiKey: string, timeoutMs = 60000): Promise<void> {
+  const fileName = fileUri.split('/').slice(-2).join('/'); // e.g. "files/abc123"
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/${fileName}?key=${apiKey}`
+    );
+    if (!res.ok) throw new Error('Failed to poll file status');
+    const data = await res.json();
+    if (data.state === 'ACTIVE') return;
+    if (data.state === 'FAILED') throw new Error('Gemini file processing failed');
+    await new Promise(r => setTimeout(r, 2000));
+  }
+  throw new Error('Timed out waiting for Gemini file to become active');
+}
+
+export const transcribeFromFileUri = async (
+  fileUri: string,
+  mimeType: string
+): Promise<TranscriptionResult> => {
+  return safeExecute(async () => {
+    const apiKey = getApiKey();
+    await waitForFileActive(fileUri, apiKey);
+    const ai = new GoogleGenAI({ apiKey });
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: {
+        parts: [
+          {
+            text: `Transcribe the spoken content in this recording as accurately as possible.
+Return ONLY the verbatim transcription — no commentary, no formatting, no labels.
+If the audio is silent or unintelligible, return an empty string.`,
+          },
+          { fileData: { mimeType, fileUri } },
+        ],
+      },
+    });
+    const transcription = (response.text || '').trim();
+    return { transcription };
+  });
+};
+
 /**
  * Assess using transcription text only — used when the audio file is no longer
  * available (e.g. after a service-worker-triggered page reload).
