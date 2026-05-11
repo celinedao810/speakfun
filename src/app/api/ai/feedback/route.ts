@@ -14,6 +14,10 @@ const ALLOWED_MIME_TYPES: Record<string, string> = {
   'audio/mp4': 'audio/mp4',
   'video/mp4': 'video/mp4',
   'video/quicktime': 'video/quicktime',
+  'video/webm': 'video/webm',
+  'video/x-msvideo': 'video/x-msvideo',
+  'video/3gpp': 'video/3gpp',
+  'video/3gpp2': 'video/3gpp2',
 };
 
 export async function POST(request: NextRequest) {

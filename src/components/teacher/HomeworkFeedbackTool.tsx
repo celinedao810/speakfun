@@ -1,18 +1,30 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Upload, FileAudio, X, Loader2, Mic2, Wand2, RefreshCw, AlertTriangle, ArrowRight } from 'lucide-react';
+import { Upload, FileAudio, FileVideo, X, Loader2, Mic2, Wand2, RefreshCw, AlertTriangle, ArrowRight } from 'lucide-react';
 import type { RefinementResult } from '@/lib/services/geminiService';
 
-const ACCEPTED_TYPES = [
+const ACCEPTED_AUDIO_TYPES = new Set([
   'audio/wav', 'audio/x-wav',
   'audio/mpeg', 'audio/mp3',
   'audio/aac', 'audio/x-aac',
-  'audio/mp4', 'video/mp4',
-  'video/quicktime',
-];
+  'audio/mp4',
+]);
 
-const ACCEPT_ATTR = '.wav,.mp3,.aac,.mp4,.mov';
+const ACCEPTED_VIDEO_TYPES = new Set([
+  'video/mp4',
+  'video/quicktime',
+  'video/webm',
+  'video/x-msvideo',
+  'video/3gpp',
+  'video/3gpp2',
+]);
+
+const ACCEPTED_TYPES = [...ACCEPTED_AUDIO_TYPES, ...ACCEPTED_VIDEO_TYPES];
+
+const ACCEPT_ATTR = '.wav,.mp3,.aac,.mp4,.mov,.webm,.avi,.3gp';
+
+const isVideoFile = (f: File) => ACCEPTED_VIDEO_TYPES.has(f.type);
 const SESSION_KEY = 'feedback_tool_state';
 
 export default function HomeworkFeedbackTool() {
@@ -58,7 +70,7 @@ export default function HomeworkFeedbackTool() {
 
   const handleFileSelect = (f: File) => {
     if (!ACCEPTED_TYPES.includes(f.type)) {
-      setError(`Unsupported file type "${f.type}". Please upload a WAV, MP3, AAC, MP4, or MOV file.`);
+      setError(`Unsupported file type "${f.type}". Please upload a WAV, MP3, AAC, MP4, MOV, WebM, or AVI file.`);
       return;
     }
     setError('');
@@ -157,7 +169,7 @@ export default function HomeworkFeedbackTool() {
         >
           <Upload className="w-10 h-10 mx-auto mb-3 text-muted-foreground" />
           <p className="text-sm font-medium text-foreground mb-1">Drop a recording here or click to upload</p>
-          <p className="text-xs text-muted-foreground">WAV, MP3, AAC, MP4, MOV</p>
+          <p className="text-xs text-muted-foreground">Audio: WAV, MP3, AAC · Video: MP4, MOV, WebM, AVI (audio extracted automatically)</p>
           <input
             ref={fileInputRef}
             type="file"
@@ -168,10 +180,15 @@ export default function HomeworkFeedbackTool() {
         </div>
       ) : (
         <div className="border border-border rounded-xl p-4 flex items-center gap-3 bg-muted/20">
-          <FileAudio className="w-8 h-8 text-primary shrink-0" />
+          {isVideoFile(file)
+            ? <FileVideo className="w-8 h-8 text-primary shrink-0" />
+            : <FileAudio className="w-8 h-8 text-primary shrink-0" />}
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium truncate">{file.name}</p>
-            <p className="text-xs text-muted-foreground">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
+            <p className="text-xs text-muted-foreground">
+              {(file.size / 1024 / 1024).toFixed(2)} MB
+              {isVideoFile(file) && <span className="ml-2 text-primary/70">· audio will be extracted</span>}
+            </p>
           </div>
           <button type="button" onClick={handleReset} className="p-1.5 hover:bg-muted rounded-lg transition" title="Remove file">
             <X className="w-4 h-4 text-muted-foreground" />
@@ -179,8 +196,12 @@ export default function HomeworkFeedbackTool() {
         </div>
       )}
 
-      {/* Audio player */}
-      {audioUrl && <audio controls src={audioUrl} className="w-full rounded-lg" />}
+      {/* Media player */}
+      {audioUrl && file && (
+        isVideoFile(file)
+          ? <video controls src={audioUrl} className="w-full rounded-lg" />
+          : <audio controls src={audioUrl} className="w-full rounded-lg" />
+      )}
 
       {/* Error */}
       {error && (
@@ -196,8 +217,8 @@ export default function HomeworkFeedbackTool() {
           className="flex items-center gap-2 px-5 py-2.5 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 disabled:opacity-60 transition"
         >
           {isConverting
-            ? <><Loader2 className="w-4 h-4 animate-spin" /> Converting…</>
-            : <><Mic2 className="w-4 h-4" /> Convert to Text</>}
+            ? <><Loader2 className="w-4 h-4 animate-spin" /> {file && isVideoFile(file) ? 'Extracting audio…' : 'Converting…'}</>
+            : <><Mic2 className="w-4 h-4" /> {file && isVideoFile(file) ? 'Extract & Convert to Text' : 'Convert to Text'}</>}
         </button>
       )}
 
