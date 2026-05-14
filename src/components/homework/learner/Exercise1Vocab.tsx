@@ -233,7 +233,7 @@ export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1Vocab
 
   // ── Render ────────────────────────────────────────────────────────────────
   const blockCardWidth = 28; // % of frame width
-  const blockHeight = 100;
+  const blockHeight = 140; // estimated avg block height in px (used for maxTravel)
   const maxTravel = Math.max(frameHeightPx - blockHeight, 0);
   const now = performance.now();
 
@@ -256,7 +256,7 @@ export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1Vocab
       {/* Game frame */}
       <div
         ref={frameRef}
-        className="relative bg-gradient-to-b from-indigo-950 to-slate-900 rounded-2xl overflow-hidden border border-indigo-800 h-[clamp(220px,42vh,340px)]"
+        className="relative bg-gradient-to-b from-indigo-950 to-slate-900 rounded-2xl overflow-hidden border border-indigo-800 h-[clamp(320px,62vh,520px)]"
       >
         {/* Match flash overlay */}
         {matchFlash && (
@@ -291,7 +291,7 @@ export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1Vocab
                   {wordType && (
                     <p className="text-[9px] text-indigo-300 text-center uppercase tracking-wide mb-1">{wordType}</p>
                   )}
-                  <p className="text-[10px] text-indigo-100 text-center leading-tight line-clamp-3">
+                  <p className="text-[11px] text-indigo-100 text-center leading-snug">
                     {definition}
                   </p>
                 </div>
