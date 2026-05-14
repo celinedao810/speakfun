@@ -12,6 +12,8 @@ const ALLOWED_MIME_TYPES: Record<string, string> = {
   'audio/aac': 'audio/aac',
   'audio/x-aac': 'audio/aac',
   'audio/mp4': 'audio/mp4',
+  'audio/x-m4a': 'audio/mp4',
+  'audio/m4a': 'audio/mp4',
   'video/mp4': 'video/mp4',
   'video/quicktime': 'video/quicktime',
   'video/webm': 'video/webm',
