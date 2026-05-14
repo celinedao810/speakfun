@@ -39,7 +39,8 @@ const SLOT_JITTER = 2;                  // ±2% random offset per block
 export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1VocabProps) {
   const N = vocabPool.length;
   const launchInterval = N > 1 ? LAUNCH_WINDOW_MS / N : LAUNCH_WINDOW_MS;
-  const FALL_DURATION_MS = Math.min(Math.max(launchInterval * 3, 8_000), 25_000);
+  // 0.5× speed = 2× fall time; clamped so blocks are never faster than 16s or slower than 50s
+  const FALL_DURATION_MS = Math.min(Math.max(launchInterval * 3, 8_000), 25_000) * 2;
 
   // ── Render state ──────────────────────────────────────────────────────────
   const [activeBlocks, setActiveBlocks] = useState<FallingBlock[]>([]);
@@ -47,6 +48,8 @@ export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1Vocab
   const [totalScore, setTotalScore] = useState(0);
   const [completedResults, setCompletedResults] = useState<WordResult[]>([]);
   const [matchFlash, setMatchFlash] = useState<{ word: string; pts: number } | null>(null);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [recorderKey, setRecorderKey] = useState(0);
 
   // ── Mutable refs (safe in async .then()) ──────────────────────────────────
   const blocksRef = useRef<FallingBlock[]>([]);
@@ -171,7 +174,11 @@ export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1Vocab
     const candidates = visibleNow.map(b => ({ uid: b.uid, word: b.vocabItem.word, ipa: b.vocabItem.ipa }));
     const timestamp = new Date().toISOString();
 
+    // Reset recorder immediately so user can record again while AI is working
+    setRecorderKey(k => k + 1);
+
     pendingCountRef.current++;
+    setPendingCount(c => c + 1);
 
     scoreVocabGuessMulti(candidates, base64, true)
       .then(({ matchedUid, result }) => {
@@ -217,6 +224,7 @@ export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1Vocab
       })
       .finally(() => {
         pendingCountRef.current--;
+        setPendingCount(c => c - 1);
         if (sessionDoneRef.current && pendingCountRef.current === 0) {
           fireOnComplete();
         }
@@ -315,12 +323,20 @@ export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1Vocab
 
       {/* Mic */}
       <div className="flex flex-col items-center gap-2">
-        <p className="text-xs text-slate-500">Say any word you see above</p>
+        <div className="flex items-center gap-2 min-h-[20px]">
+          <p className="text-xs text-slate-500">Say any word you see above</p>
+          {pendingCount > 0 && (
+            <span className="flex items-center gap-1 text-[10px] text-indigo-500 font-semibold">
+              <Loader2 className="w-3 h-3 animate-spin" />
+              Checking {pendingCount > 1 ? `${pendingCount} answers` : 'answer'}…
+            </span>
+          )}
+        </div>
         <AudioRecorder
-          key="ex1-recorder"
+          key={recorderKey}
           onRecordingComplete={handleRecordingComplete}
           isProcessing={false}
-          maxDuration={15}
+          maxDuration={10}
         />
       </div>
     </div>
