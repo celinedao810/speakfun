@@ -9,6 +9,7 @@ const ACCEPTED_AUDIO_TYPES = new Set([
   'audio/mpeg', 'audio/mp3',
   'audio/aac', 'audio/x-aac',
   'audio/mp4',
+  'audio/x-m4a', 'audio/m4a',
 ]);
 
 const ACCEPTED_VIDEO_TYPES = new Set([
@@ -22,7 +23,7 @@ const ACCEPTED_VIDEO_TYPES = new Set([
 
 const ACCEPTED_TYPES = [...ACCEPTED_AUDIO_TYPES, ...ACCEPTED_VIDEO_TYPES];
 
-const ACCEPT_ATTR = '.wav,.mp3,.aac,.mp4,.mov,.webm,.avi,.3gp';
+const ACCEPT_ATTR = '.wav,.mp3,.aac,.m4a,.mp4,.mov,.webm,.avi,.3gp';
 
 const isVideoFile = (f: File) => ACCEPTED_VIDEO_TYPES.has(f.type);
 const SESSION_KEY = 'feedback_tool_state';
@@ -70,7 +71,7 @@ export default function HomeworkFeedbackTool() {
 
   const handleFileSelect = (f: File) => {
     if (!ACCEPTED_TYPES.includes(f.type)) {
-      setError(`Unsupported file type "${f.type}". Please upload a WAV, MP3, AAC, MP4, MOV, WebM, or AVI file.`);
+      setError(`Unsupported file type "${f.type}". Please upload a WAV, MP3, AAC, M4A, MP4, MOV, WebM, or AVI file.`);
       return;
     }
     setError('');
@@ -212,7 +213,7 @@ export default function HomeworkFeedbackTool() {
         >
           <Upload className="w-10 h-10 mx-auto mb-3 text-muted-foreground" />
           <p className="text-sm font-medium text-foreground mb-1">Drop a recording here or click to upload</p>
-          <p className="text-xs text-muted-foreground">Audio: WAV, MP3, AAC · Video: MP4, MOV, WebM, AVI (audio extracted automatically)</p>
+          <p className="text-xs text-muted-foreground">Audio: WAV, MP3, AAC, M4A · Video: MP4, MOV, WebM, AVI (audio extracted automatically)</p>
           <input
             ref={fileInputRef}
             type="file"
