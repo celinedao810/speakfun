@@ -84,13 +84,20 @@ export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1Vocab
         wrongVocabIdsRef.current = [...wrongVocabIdsRef.current, b.vocabItem.id];
       }
     });
+
+    // Build full results list — every word in the pool, correct or not
+    const allWordResults: WordResult[] = vocabPool.map(item => {
+      const matched = completedResultsRef.current.find(r => r.item.id === item.id);
+      return matched ?? { item, pointsEarned: 0, isCorrect: false };
+    });
+
     onCompleteRef.current(
       totalScoreRef.current,
       wrongVocabIdsRef.current,
       attemptsRef.current,
-      completedResultsRef.current,
+      allWordResults,
     );
-  }, []);
+  }, [vocabPool]);
 
   // ── Animation loop ────────────────────────────────────────────────────────
   const tick = useCallback((now: number) => {
