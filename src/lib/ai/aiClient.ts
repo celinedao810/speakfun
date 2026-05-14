@@ -140,6 +140,19 @@ export const scoreVocabGuess = (
 ): Promise<VocabScoringResult> =>
   post('/api/ai/homework-score', { type: 'vocab-guess', targetWord, ipa, audioBase64, timerMode });
 
+export async function scoreVocabGuessMulti(
+  candidates: Array<{ uid: string; word: string; ipa: string }>,
+  audioBase64: string,
+  timerMode: boolean,
+): Promise<{ matchedUid: string | null; result: VocabScoringResult | null }> {
+  const results = await Promise.all(
+    candidates.map(c => scoreVocabGuess(c.word, c.ipa, audioBase64, timerMode).catch(() => null))
+  );
+  const idx = results.findIndex(r => r?.isCorrectWord === true);
+  if (idx === -1) return { matchedUid: null, result: null };
+  return { matchedUid: candidates[idx].uid, result: results[idx]! };
+}
+
 export const scoreStructureReading = (
   exampleSentence: string,
   audioBase64: string,
