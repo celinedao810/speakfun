@@ -124,8 +124,8 @@ export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1Vocab
       }
     }
 
-    // Remove resolved blocks from ref too
-    blocksRef.current = blocksRef.current.filter(b => b.matched || b.progress < 1);
+    // Remove resolved blocks from ref (both fallen-off and correctly matched)
+    blocksRef.current = blocksRef.current.filter(b => !b.matched && b.progress < 1);
 
     if (changed) setActiveBlocks([...updatedBlocks]);
 
@@ -187,8 +187,8 @@ export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1Vocab
         const matched = blocksRef.current.find(b => b.uid === matchedUid && !b.matched && b.progress < 1);
         if (!matched) return; // block already fell off while AI was scoring
 
-        matched.matched = true; // mark resolved
-        blocksRef.current = blocksRef.current.filter(b => b.uid !== matchedUid || b.matched);
+        matched.matched = true; // mark resolved — also removed from blocksRef on next RAF tick
+        blocksRef.current = blocksRef.current.filter(b => b.uid !== matchedUid);
         setActiveBlocks(prev => prev.filter(b => b.uid !== matchedUid));
 
         totalScoreRef.current += result.pointsEarned;
