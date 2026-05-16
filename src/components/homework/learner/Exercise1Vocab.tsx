@@ -191,18 +191,26 @@ export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1Vocab
       .then(({ matchedUid, result }) => {
         if (!matchedUid || !result) return;
 
-        const matched = blocksRef.current.find(b => b.uid === matchedUid && !b.matched && b.progress < 1);
-        if (!matched) return; // block already fell off while AI was scoring
+        // Resolve against the submission-time snapshot, NOT the live ref.
+        // This gives the user credit even if the block fell off while AI was scoring.
+        const matchedBlock = visibleNow.find(b => b.uid === matchedUid);
+        if (!matchedBlock) return;
 
-        matched.matched = true; // mark resolved — also removed from blocksRef on next RAF tick
+        // Guard against two concurrent recordings both matching the same block
+        if (completedResultsRef.current.some(r => r.item.id === matchedBlock.vocabItem.id)) return;
+
+        // Remove from active display (may already be gone if it fell off)
         blocksRef.current = blocksRef.current.filter(b => b.uid !== matchedUid);
         setActiveBlocks(prev => prev.filter(b => b.uid !== matchedUid));
+
+        // If the RAF already added this word to wrongVocabIds (block fell while AI scored), undo it
+        wrongVocabIdsRef.current = wrongVocabIdsRef.current.filter(id => id !== matchedBlock.vocabItem.id);
 
         totalScoreRef.current += result.pointsEarned;
         setTotalScore(totalScoreRef.current);
 
         const wr: WordResult = {
-          item: matched.vocabItem,
+          item: matchedBlock.vocabItem,
           pointsEarned: result.pointsEarned,
           isCorrect: true,
           recognizedWord: result.recognizedWord,
@@ -211,9 +219,9 @@ export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1Vocab
         setCompletedResults([...completedResultsRef.current]);
 
         const audit: VocabAttemptAudit = {
-          vocabItemId: matched.vocabItem.id,
-          lessonId: matched.vocabItem.lessonId,
-          targetWord: matched.vocabItem.word,
+          vocabItemId: matchedBlock.vocabItem.id,
+          lessonId: matchedBlock.vocabItem.lessonId,
+          targetWord: matchedBlock.vocabItem.word,
           recognizedWord: result.recognizedWord || '',
           isCorrectWord: true,
           pronunciationScore: result.pronunciationScore,
@@ -226,7 +234,7 @@ export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1Vocab
         };
         attemptsRef.current = [...attemptsRef.current, audit];
 
-        setMatchFlash({ word: matched.vocabItem.word, pts: result.pointsEarned });
+        setMatchFlash({ word: matchedBlock.vocabItem.word, pts: result.pointsEarned });
         setTimeout(() => setMatchFlash(null), 1400);
       })
       .finally(() => {

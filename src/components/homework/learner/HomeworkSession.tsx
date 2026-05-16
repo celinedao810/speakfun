@@ -89,7 +89,7 @@ function Ex1Summary({
               r.recognizedWord && r.recognizedWord !== r.item.word.toLowerCase()
                 ? <p className="mt-1 ml-7 text-xs text-red-500 italic">heard: "{r.recognizedWord}"</p>
                 : !r.recognizedWord
-                  ? <p className="mt-1 ml-7 text-xs text-slate-400 italic">Time&apos;s up</p>
+                  ? <p className="mt-1 ml-7 text-xs text-slate-400 italic">Missed</p>
                   : null
             )}
           </div>
