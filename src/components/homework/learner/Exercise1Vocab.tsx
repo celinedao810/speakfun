@@ -32,7 +32,7 @@ function parseWordType(clue: string): string {
   return m ? m[1].toLowerCase() : '';
 }
 
-const LAUNCH_WINDOW_MS = 45_000;
+const LAUNCH_WINDOW_MS = 60_000;
 const X_SLOTS = [4, 36, 68] as const;  // % left for left / center / right
 const SLOT_JITTER = 2;                  // ±2% random offset per block
 
