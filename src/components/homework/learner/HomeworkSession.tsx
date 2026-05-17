@@ -282,7 +282,7 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
             const v = allVocab.find(x => x.lessonId === a.lessonId && x.id === a.vocabItemId);
             if (v) reconstructed.push(v);
           }
-          pool = reconstructed;
+          pool = reconstructed.slice(0, limit);
         } else {
           const wrongIds = new Set(prevWrong);
           const wrongNotMastered = allVocab.filter(v =>
@@ -294,11 +294,8 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
           const unseenVocab = allVocab
             .filter(v => !seenKeys.has(key(v)))
             .sort(() => Math.random() - 0.5);
-          const masteredItems = allVocab
-            .filter(v => masteredKeys.has(key(v)))
-            .sort(() => Math.random() - 0.5);
-          // Priority: wrong → seen-not-mastered → brand-new → mastered (fills remaining slots)
-          pool = [...wrongNotMastered, ...freshNotMastered, ...unseenVocab, ...masteredItems]
+          // Mastered words are excluded — pool only contains active (non-mastered) words
+          pool = [...wrongNotMastered, ...freshNotMastered, ...unseenVocab]
             .slice(0, limit);
         }
 
