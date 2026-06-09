@@ -196,8 +196,11 @@ export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1Vocab
         const matchedBlock = visibleNow.find(b => b.uid === matchedUid);
         if (!matchedBlock) return;
 
-        // Guard against two concurrent recordings both matching the same block
-        if (completedResultsRef.current.some(r => r.item.id === matchedBlock.vocabItem.id)) return;
+        // Guard against two concurrent recordings matching the same word (by id or word text)
+        if (completedResultsRef.current.some(r =>
+          r.item.id === matchedBlock.vocabItem.id ||
+          r.item.word.toLowerCase() === matchedBlock.vocabItem.word.toLowerCase()
+        )) return;
 
         // Remove from active display (may already be gone if it fell off)
         blocksRef.current = blocksRef.current.filter(b => b.uid !== matchedUid);
