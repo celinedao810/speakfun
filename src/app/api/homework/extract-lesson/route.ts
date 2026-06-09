@@ -51,11 +51,16 @@ export async function POST(request: NextRequest) {
     // Call Gemini to extract content from PDF
     const extracted = await extractLessonContent(pdfBase64, lessonTitle || 'Lesson');
 
+    // Replace AI-generated sequential IDs ("v1","v2"…) with real UUIDs so vocab/structure
+    // items are globally unique across all lessons and can be safely used as keys.
+    const vocabulary = extracted.vocabulary.map(v => ({ ...v, id: crypto.randomUUID() }));
+    const structures = extracted.structures.map(s => ({ ...s, id: crypto.randomUUID() }));
+
     // Save to DB
     const now = new Date().toISOString();
     await upsertExtractedContent(supabase, lessonId, {
-      vocabulary: extracted.vocabulary,
-      structures: extracted.structures,
+      vocabulary,
+      structures,
       readingPassage: extracted.readingPassage,
       extractionStatus: 'DONE',
       extractedAt: now,
@@ -63,8 +68,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      vocabulary: extracted.vocabulary,
-      structures: extracted.structures,
+      vocabulary,
+      structures,
       readingPassage: extracted.readingPassage,
     });
   } catch (error: unknown) {
