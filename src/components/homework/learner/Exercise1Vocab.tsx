@@ -85,11 +85,19 @@ export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1Vocab
       }
     });
 
-    // Build full results list — every word in the pool, correct or not
-    const allWordResults: WordResult[] = vocabPool.map(item => {
-      const matched = completedResultsRef.current.find(r => r.item.id === item.id);
-      return matched ?? { item, pointsEarned: 0, isCorrect: false };
-    });
+    // Build full results list — one row per unique word (dedup by word text in case the
+    // pool somehow contains the same word from two different lessons)
+    const seenResultWords = new Set<string>();
+    const allWordResults: WordResult[] = [];
+    for (const item of vocabPool) {
+      const w = item.word.toLowerCase();
+      if (seenResultWords.has(w)) continue;
+      seenResultWords.add(w);
+      const matched = completedResultsRef.current.find(
+        r => r.item.id === item.id || r.item.word.toLowerCase() === w
+      );
+      allWordResults.push(matched ?? { item, pointsEarned: 0, isCorrect: false });
+    }
 
     onCompleteRef.current(
       totalScoreRef.current,
