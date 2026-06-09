@@ -295,7 +295,15 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
             .filter(v => !seenKeys.has(key(v)))
             .sort(() => Math.random() - 0.5);
           // Mastered words are excluded — pool only contains active (non-mastered) words
+          // De-duplicate by word text so the same word from different lessons doesn't appear twice
+          const seenWords = new Set<string>();
           pool = [...wrongNotMastered, ...freshNotMastered, ...unseenVocab]
+            .filter(v => {
+              const w = v.word.toLowerCase();
+              if (seenWords.has(w)) return false;
+              seenWords.add(w);
+              return true;
+            })
             .slice(0, limit);
         }
 

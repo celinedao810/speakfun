@@ -148,9 +148,20 @@ export async function scoreVocabGuessMulti(
   const results = await Promise.all(
     candidates.map(c => scoreVocabGuess(c.word, c.ipa, audioBase64, timerMode).catch(() => null))
   );
-  const idx = results.findIndex(r => r?.isCorrectWord === true);
-  if (idx === -1) return { matchedUid: null, result: null };
-  return { matchedUid: candidates[idx].uid, result: results[idx]! };
+  // Pick the correct match with the highest pronunciationScore to avoid false positives
+  // when multiple blocks are visible (a low-confidence "correct" on the wrong word loses to
+  // a high-confidence "correct" on the word the user actually said).
+  let bestIdx = -1;
+  let bestScore = -1;
+  for (let i = 0; i < results.length; i++) {
+    const r = results[i];
+    if (r?.isCorrectWord && r.pronunciationScore > bestScore) {
+      bestScore = r.pronunciationScore;
+      bestIdx = i;
+    }
+  }
+  if (bestIdx === -1) return { matchedUid: null, result: null };
+  return { matchedUid: candidates[bestIdx].uid, result: results[bestIdx]! };
 }
 
 export const scoreStructureReading = (
