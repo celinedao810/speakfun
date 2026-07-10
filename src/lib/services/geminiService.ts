@@ -2119,6 +2119,159 @@ export interface RefinementResult {
   summary: string;
 }
 
+export type AnalysisCategory = 'pronunciation' | 'wordStress' | 'grammar' | 'wordChoice';
+
+export interface AnalysisError {
+  category: AnalysisCategory;
+  text: string;          // exact word/phrase from the transcription where the error occurs
+  heard?: string;        // pronunciation only: what the AI recognized (e.g. "rushed" → "rust")
+  description: string;   // English explanation of the error
+  suggestion?: string;   // corrected form (grammar/word-choice/stress)
+}
+
+export interface SpeechAnalysisResult {
+  transcription: string; // converted text
+  summary: string;       // short English analysis summary
+  errors: AnalysisError[];
+}
+
+export interface SpeechFeedbackResult {
+  feedback: string;
+}
+
+/**
+ * Deep, criteria-based analysis of a spoken recording for the teacher Feedback tool.
+ * Reads the audio directly (independent of the quick Convert transcription) and reports
+ * errors across four criteria: pronunciation, word stress, grammar, and word choice.
+ * An optional teacher instruction can steer or refine the analysis on a re-run.
+ */
+export const analyzeSpeech = async (
+  audioBase64: string,
+  mimeType: string,
+  instruction?: string
+): Promise<SpeechAnalysisResult> => {
+  return safeExecute(async () => {
+    const ai = new GoogleGenAI({ apiKey: getApiKey() });
+    const instructionLine = instruction
+      ? `\n\nTEACHER INSTRUCTION (apply when analysing): "${instruction}"`
+      : '';
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: {
+        parts: [
+          {
+            text: `You are an expert English pronunciation and language coach analysing a student's spoken recording for their teacher.
+
+STEP 1 — TRANSCRIBE: Listen carefully and write down EXACTLY what the student said, verbatim. This is the "transcription".
+
+STEP 2 — FIND ERRORS across these FOUR criteria. For every error, "text" MUST be an exact substring copied from the transcription (so it can be highlighted in place).
+
+1. pronunciation — Trace the pronunciation of each word. Flag words that are mispronounced or where sounds are missed/added/swapped (especially ending sounds). Set "heard" to what the word actually sounded like / was recognised as (e.g. the word "rushed" was recognised as "rust", "late" as "last"). Put the explanation in "description".
+2. wordStress — Flag words pronounced with the wrong stressed syllable (e.g. "machine" should be stressed on the 2nd syllable "ma-CHINE" but was stressed on the 1st "MA-chine"). Name the correct vs. actual stress in "description".
+3. grammar — Flag grammar errors (tense, agreement, articles, prepositions, missing words, etc.). Put the fix in "suggestion" and the reason in "description" (e.g. "hosts" should be "hosted"; "we on track" should be "we were on track").
+4. wordChoice — Flag inappropriate, unnatural, or incorrect vocabulary choices. Put the better word/phrase in "suggestion" and the reason in "description".
+
+STEP 3 — SUMMARY: Write a short (2-3 sentence) English summary of the overall quality and the main issues.
+
+Rules:
+- Write all descriptions in English.
+- Only include genuine errors — do not invent problems. If the recording is clean, return an empty "errors" array.
+- Each error's "category" must be exactly one of: pronunciation, wordStress, grammar, wordChoice.
+- Category tie-break: misuse of a fixed collocation or a wrong-but-real word (e.g. "criterion" where "acceptance criteria" is the fixed term) is wordChoice; structural mistakes (tense, agreement, articles, missing words) are grammar.
+- "text" must appear verbatim in the transcription, and must be a long enough phrase to be UNIQUE within it (include a neighbouring word if a single word appears more than once).${instructionLine}`,
+          },
+          { inlineData: { mimeType, data: audioBase64 } },
+        ],
+      },
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            transcription: { type: Type.STRING },
+            summary: { type: Type.STRING },
+            errors: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  category: { type: Type.STRING, enum: ['pronunciation', 'wordStress', 'grammar', 'wordChoice'] },
+                  text: { type: Type.STRING },
+                  heard: { type: Type.STRING },
+                  description: { type: Type.STRING },
+                  suggestion: { type: Type.STRING },
+                },
+                required: ['category', 'text', 'description'],
+              },
+            },
+          },
+          required: ['transcription', 'summary', 'errors'],
+        },
+      },
+    });
+    const result = JSON.parse(response.text || '{}');
+    return {
+      transcription: result.transcription || '',
+      summary: result.summary || '',
+      errors: Array.isArray(result.errors) ? result.errors : [],
+    };
+  });
+};
+
+/**
+ * Generate a single cohesive English feedback paragraph for the teacher to give the
+ * student, grounded in the analysis result. Covers overall remark, pronunciation
+ * (incl. word stress), grammar, and word choices. Optional instruction to adjust it.
+ */
+export const generateSpeechFeedback = async (
+  analysis: SpeechAnalysisResult,
+  instruction?: string
+): Promise<SpeechFeedbackResult> => {
+  return safeExecute(async () => {
+    const ai = new GoogleGenAI({ apiKey: getApiKey() });
+    const instructionLine = instruction
+      ? `\n\nTEACHER INSTRUCTION (adjust the feedback accordingly): "${instruction}"`
+      : '';
+    const errorsJson = JSON.stringify(analysis.errors || []);
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: `You are an English language teacher writing feedback for a student on their spoken recording.
+
+WHAT THE STUDENT SAID (transcription):
+"${analysis.transcription}"
+
+ANALYSIS SUMMARY: ${analysis.summary}
+
+DETECTED ERRORS (JSON): ${errorsJson}
+
+TASK: Write ONE cohesive, encouraging feedback paragraph (in English, addressed to the student as "you") that covers, in this order:
+1. An overall remark on the response.
+2. Pronunciation — mention specific words and what they were recognised/heard as, and any word-stress errors.
+3. Grammar — name specific corrections (e.g. X should be Y).
+4. Word choices — name specific better alternatives if any.
+
+Style guide — model the tone and structure on this example:
+"Overall, your retrospective is well structured — what went well, the main impediment, the root cause, and a concrete action item — and you used the language from the lesson well. Your pronunciation needs more practice, especially ending sounds: \\"rushed\\" was recognized as \\"rust\\", \\"late\\" was recognized as \\"last\\". For grammar, \\"hosts\\" should be \\"hosted\\" since you are describing a past event, and \\"we on track\\" should be \\"we were on track\\"."
+
+For any criterion with NO errors, acknowledge it briefly and positively (e.g. "your word choices were appropriate throughout") so the student knows it was checked. Keep it constructive and specific — quote the exact words. Return JSON: { "feedback": "<the paragraph>" }.${instructionLine}`,
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            feedback: { type: Type.STRING },
+          },
+          required: ['feedback'],
+        },
+      },
+    });
+    const result = JSON.parse(response.text || '{}');
+    return { feedback: result.feedback || '' };
+  });
+};
+
 /**
  * Refine a speech transcription: correct grammar/word-choice mistakes,
  * make it sound natural for a professional native speaker,
@@ -2127,12 +2280,18 @@ export interface RefinementResult {
  */
 export const refineTranscription = async (
   transcription: string,
-  teacherComment?: string
+  teacherComment?: string,
+  errors?: AnalysisError[]
 ): Promise<RefinementResult> => {
   return safeExecute(async () => {
     const ai = new GoogleGenAI({ apiKey: getApiKey() });
     const refinementInstruction = teacherComment
       ? `\n\nTEACHER INSTRUCTION: "${teacherComment}"`
+      : '';
+    const errorsSection = errors && errors.length > 0
+      ? `\n\nANALYSED ERRORS (from a detailed review of the recording — make sure the refined version corrects ALL of these; in each change's "reason", describe the fix consistently with the error's category, e.g. a pronunciation error is a mispronunciation, not a word-choice issue):\n${errors
+          .map(e => `- [${e.category}] "${e.text}": ${e.description}${e.suggestion ? ` → suggested: "${e.suggestion}"` : ''}`)
+          .join('\n')}`
       : '';
 
     const response = await ai.models.generateContent({
@@ -2140,7 +2299,7 @@ export const refineTranscription = async (
       contents: `You are an English language coach helping students improve spoken English.
 
 ORIGINAL TRANSCRIPTION:
-"${transcription}"
+"${transcription}"${errorsSection}
 
 TASK: Produce a refined version that:
 1. Fixes ALL grammar mistakes (tense, agreement, article use, prepositions, etc.)

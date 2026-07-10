@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient as createServerClient } from '@/lib/supabase/server';
-import { transcribeAudio, refineTranscription } from '@/lib/services/geminiService';
+import { transcribeAudio, refineTranscription, analyzeSpeech, generateSpeechFeedback } from '@/lib/services/geminiService';
 
 export const maxDuration = 120;
 
@@ -31,9 +31,9 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { type, audioBase64, mimeType, transcription, teacherComment } = body;
+    const { type, audioBase64, mimeType, transcription, teacherComment, instruction, errors, analysis } = body;
 
-    if (type === 'transcribe') {
+    if (type === 'transcribe' || type === 'analyze') {
       if (!audioBase64 || !mimeType) {
         return NextResponse.json({ error: 'audioBase64 and mimeType are required' }, { status: 400 });
       }
@@ -41,7 +41,9 @@ export async function POST(request: NextRequest) {
       if (!normalizedMime) {
         return NextResponse.json({ error: `Unsupported file type: ${mimeType}` }, { status: 400 });
       }
-      const result = await transcribeAudio(audioBase64, normalizedMime);
+      const result = type === 'analyze'
+        ? await analyzeSpeech(audioBase64, normalizedMime, instruction)
+        : await transcribeAudio(audioBase64, normalizedMime);
       return NextResponse.json(result);
     }
 
@@ -49,11 +51,19 @@ export async function POST(request: NextRequest) {
       if (!transcription) {
         return NextResponse.json({ error: 'transcription is required' }, { status: 400 });
       }
-      const result = await refineTranscription(transcription, teacherComment);
+      const result = await refineTranscription(transcription, teacherComment, Array.isArray(errors) ? errors : undefined);
       return NextResponse.json(result);
     }
 
-    return NextResponse.json({ error: 'Unknown type. Use "transcribe" or "refine".' }, { status: 400 });
+    if (type === 'generate-feedback') {
+      if (!analysis?.transcription) {
+        return NextResponse.json({ error: 'analysis is required' }, { status: 400 });
+      }
+      const result = await generateSpeechFeedback(analysis, instruction);
+      return NextResponse.json(result);
+    }
+
+    return NextResponse.json({ error: 'Unknown type. Use "transcribe", "analyze", "refine", or "generate-feedback".' }, { status: 400 });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Request failed';
     console.error('[ai/feedback] Error:', message);
