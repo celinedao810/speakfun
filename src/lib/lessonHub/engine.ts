@@ -1,0 +1,75 @@
+// Pure lesson-hub logic, ported from the hub HTML script.
+
+import type { Group, Hub, Move, PlanRound, Scene, Topic } from './types';
+
+/** Speaking topics share the hub's plan. Pronunciation sessions carry their own rounds. */
+export const isPron = (t: Topic | null | undefined) => !!(t && t.rounds);
+export const planFor = (t: Topic | null | undefined, hub: Hub): PlanRound[] =>
+  (t && t.rounds) ? t.rounds : hub.plan;
+
+export const sub = (s: string, hub: Hub) => String(s).replace(/\{project\}/g, hub.project.name);
+
+/** Share of the round's minutes one learner spends talking. */
+export const share = (g: Group, hub: Hub) =>
+  g === 'whole' ? 1 / (hub.course.classSize || 6) : (hub.grouping[g] ?? 0);
+
+export const talkTime = (plan: PlanRound[], hub: Hub) =>
+  plan.filter(r => r.phase === 'class').reduce((t, r) => t + r.min * share(r.group, hub), 0);
+
+/** Start minute of each in-class round, keyed by its index in the plan. */
+export function schedule(plan: PlanRound[]): Record<number, number> {
+  let at = 0;
+  const map: Record<number, number> = {};
+  plan.forEach((r, i) => { if (r.phase === 'class') { map[i] = at; at += r.min; } });
+  return map;
+}
+
+export function sceneList(t: Topic): Scene[] | null {
+  if (t.scenes) return t.scenes;
+  if (t.moves) return [{ name: null, setting: null, moves: t.moves }];
+  return null;
+}
+
+export function allMoves(t: Topic): Move[] {
+  const sc = sceneList(t);
+  if (sc) return sc.flatMap(s => s.moves);
+  return [{ name: '', purpose: '', frames: (t.structures || []).map((_, i) => i) }];
+}
+
+/** Even split: 16 lines at 5 per slide becomes 4+4+4+4, not 5+5+5+1. */
+export function chunk<T>(a: T[], max: number): T[][] {
+  if (a.length <= max) return [a.slice()];
+  return chunkInto(a, Math.ceil(a.length / max));
+}
+
+export function chunkInto<T>(a: T[], parts: number): T[][] {
+  parts = Math.max(1, Math.min(parts, a.length));
+  const out: T[][] = [];
+  let i = 0;
+  for (let p = 0; p < parts; p++) {
+    const take = Math.ceil((a.length - i) / (parts - p));
+    out.push(a.slice(i, i + take));
+    i += take;
+  }
+  return out;
+}
+
+export function pairRows(pairs: { sounds: string; words: [string, string][] }[]) {
+  let n = 0;
+  return pairs.flatMap(p => p.words.map((w, j) => ({ n: ++n, sounds: j === 0 ? p.sounds : '', a: w[0], b: w[1] })));
+}
+
+/** Where the class timer says you should be: the latest round that has started. */
+export function dueRound(plan: PlanRound[], sec: number) {
+  const at = schedule(plan);
+  const mins = sec / 60;
+  let dueIdx: number | null = null;
+  plan.forEach((r, i) => { if (r.phase === 'class' && mins >= at[i]) dueIdx = i; });
+  if (dueIdx === null || !sec) return null;
+  const r = plan[dueIdx];
+  const over = mins - (at[dueIdx] + r.min);
+  return { index: dueIdx as number, at: at[dueIdx], over, title: r.title };
+}
+
+export const fmtClock = (s: number) =>
+  String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');

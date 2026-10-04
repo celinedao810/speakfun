@@ -663,28 +663,3 @@ export interface LeaderboardEntry {
   rank?: number;
 }
 
-// --- Lesson Plan Generator ---
-
-export interface LessonPlanSection {
-  id: string;      // "objectives" | "warmer" | "vocabulary" | "language" | "activities" | "wrap_up" | "homework"
-  heading: string;
-  content: string; // markdown text
-}
-
-export interface LessonPlanMetadata {
-  topic: string;
-  cefrLevel: 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2';
-  lessonFormat: string;
-  learnerPersonas: string;
-  otherInstructions: string;
-}
-
-export interface GeneratedLessonPlan {
-  id: string;
-  teacher_id: string;
-  title: string;
-  content: LessonPlanSection[];
-  metadata: LessonPlanMetadata | null;
-  created_at: string;
-  updated_at: string;
-}
