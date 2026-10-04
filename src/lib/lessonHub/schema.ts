@@ -156,8 +156,48 @@ export function validateTopic(topic: unknown, hub?: Pick<Hub, 'tracks'> | null):
     }));
   t.scenes?.forEach((s, i) => checkMoves(s.moves, `scenes.${i}.moves`));
   if (t.moves) checkMoves(t.moves, 'moves');
+
+  // When a topic has moves, each frame belongs to exactly one of them: the frame walkthrough
+  // and the role-play follow the moves, so a frame in two moves is taught twice and a frame
+  // in none is never taught.
+  const allMoves = [...(t.scenes ?? []).flatMap(s => s.moves), ...(t.moves ?? [])];
+  if (allMoves.length) {
+    const homes = new Map<number, string[]>();
+    allMoves.forEach(m => m.frames.forEach(ix => homes.set(ix, [...(homes.get(ix) ?? []), m.name])));
+    t.structures!.forEach((f, ix) => {
+      const h = homes.get(ix) ?? [];
+      if (h.length === 0) errors.push(`structures.${ix} ("${f.structure}"): not in any move; add it to the move where it's used`);
+      if (h.length > 1) errors.push(`structures.${ix} ("${f.structure}"): in ${h.length} moves (${h.join(', ')}); a frame belongs to exactly one move`);
+    });
+  }
+
+  const words = new Map<string, number>();
+  t.vocabulary!.forEach(v => words.set(normWord(v.word), (words.get(normWord(v.word)) ?? 0) + 1));
+  for (const [w, n] of words) if (n > 1) errors.push(`vocabulary: "${w}" is listed ${n} times in this topic`);
+
   if (!t.context && !t.reading) errors.push('context or reading: one is required (the opening round shows it)');
   return errors;
+}
+
+const normWord = (w: string) => w.toLowerCase().replace(/\s+/g, ' ').trim();
+
+/**
+ * House rule: a word is taught once per track. Tracks are separate cohorts, so the same
+ * word in another track is fine. `others` is every saved topic; the topic itself is skipped.
+ */
+export function trackDuplicates(topic: Topic, others: Topic[]): string[] {
+  if (!topic.vocabulary) return [];
+  const taughtIn = new Map<string, string>();
+  for (const o of others) {
+    if (o.id === topic.id || o.track !== topic.track) continue;
+    for (const v of o.vocabulary ?? []) taughtIn.set(normWord(v.word), o.id);
+  }
+  return topic.vocabulary.flatMap(v => {
+    const other = taughtIn.get(normWord(v.word));
+    return other
+      ? [`vocabulary: "${v.word}" is already taught in ${other} (same track, ${topic.track}). Pick a different word, or remove it from ${other} first.`]
+      : [];
+  });
 }
 
 export function validateHub(hub: unknown): string[] {

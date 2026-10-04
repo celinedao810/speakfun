@@ -9,7 +9,7 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import { z } from 'zod';
-import { validateHub, validateTopic } from '@/lib/lessonHub/schema';
+import { trackDuplicates, validateHub, validateTopic } from '@/lib/lessonHub/schema';
 import type { Hub, Topic } from '@/lib/lessonHub/types';
 import {
   fetchHub, fetchRevision, fetchRevisions, fetchTopic, fetchTopics, patchTopic, putTopic, saveHub,
@@ -37,7 +37,7 @@ How to work:
 - Talk the change through with the teacher first. Save only when they agree, unless they asked you to save directly.
 - Before editing, call get_topic and use its version as expected_version in update_topic. On a version conflict, re-read and re-apply.
 - update_topic replaces whole top-level keys (e.g. send the full "dialogue" object, not one line). Keys you don't send are untouched.
-- Every save is validated and keeps the previous version as a revision. If the teacher wants an edit undone, use list_revisions and restore_revision.
+- Every save is validated (including: no vocabulary word taught twice within a track; each frame in exactly one move) and keeps the previous version as a revision. If the teacher wants an edit undone, use list_revisions and restore_revision.
 
 Speaking topics (Developer, BA / QA tracks) all run on the hub's fixed plan (see get_hub → plan), whose rounds read these fields:
 context or reading, leadIn, vocabulary [{word,pos,definition,example}], structures [{structure with [slot] markers, intent, example, alternative, promptSlots}],
@@ -55,6 +55,10 @@ function fail(message: string) {
 }
 
 function buildServer(db: SupabaseClient, teacherId: string, origin: string) {
+  // A word is taught once per track: compare against every other saved topic.
+  const duplicatesFor = async (t: Topic) =>
+    trackDuplicates(t, (await fetchTopics(db, teacherId)).map(r => r.data));
+
   const server = new McpServer({ name: 'speakfun-lessons', version: '1.0.0' }, { instructions: INSTRUCTIONS });
   const topicUrl = (id: string) => `${origin}/teacher/lesson-plans?topic=${encodeURIComponent(id)}`;
 
@@ -109,6 +113,7 @@ function buildServer(db: SupabaseClient, teacherId: string, origin: string) {
     }
     const merged = { ...row.data, ...patch } as Topic;
     const errors = validateTopic(merged, hub);
+    if (!errors.length && ('vocabulary' in patch || 'track' in patch)) errors.push(...await duplicatesFor(merged));
     if (errors.length) return fail(`Not saved. Fix these and try again:\n- ${errors.join('\n- ')}`);
     try {
       const saved = await patchTopic(db, teacherId, id, patch as Partial<Topic>, expected_version ?? null, 'mcp', note);
@@ -129,6 +134,7 @@ function buildServer(db: SupabaseClient, teacherId: string, origin: string) {
     const t = topic as unknown as Topic;
     const hub = await fetchHub(db, teacherId);
     const errors = validateTopic(t, hub);
+    if (!errors.length) errors.push(...await duplicatesFor(t));
     if (errors.length) return fail(`Not created. Fix these and try again:\n- ${errors.join('\n- ')}`);
     if (await fetchTopic(db, teacherId, t.id)) return fail(`Topic "${t.id}" already exists. Use update_topic to change it.`);
     const saved = await putTopic(db, teacherId, t, 'mcp', note ?? 'Created');
@@ -153,7 +159,10 @@ function buildServer(db: SupabaseClient, teacherId: string, origin: string) {
     const rev = await fetchRevision(db, teacherId, revision_id);
     if (!rev || rev.topic_id !== id) return fail(`No revision ${revision_id} for topic "${id}".`);
     const saved = await putTopic(db, teacherId, rev.data, 'mcp', `Restored version ${rev.version}`);
-    return text({ restored: true, id, from_version: rev.version, version: saved.version, url: topicUrl(id) });
+    // Undo always goes through, but say so if the old version repeats a word another topic now teaches.
+    const warnings = await duplicatesFor(rev.data);
+    return text({ restored: true, id, from_version: rev.version, version: saved.version, url: topicUrl(id),
+      ...(warnings.length ? { warnings } : {}) });
   });
 
   server.registerTool('update_hub', {
