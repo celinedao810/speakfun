@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import type { Dialogue, PlanRound, PronPart, Topic } from '@/lib/lessonHub/types';
-import { isPron, pairRows, planFor, sceneList, schedule, share, sub } from '@/lib/lessonHub/engine';
+import { isPron, pairRows, phaseOrder, planFor, sceneList, schedule, share, sub } from '@/lib/lessonHub/engine';
 import { GapLine, HintRows, MarkedPassage, Slots, Toggle, openYouGlish, useHub } from './shared';
 import FlowSketch from './FlowSketch';
 
@@ -267,7 +267,7 @@ function RoundBody({ t, r }: { t: Topic; r: PlanRound }) {
 export function PlanPhases({ t }: { t: Topic }) {
   const { hub } = useHub();
   const P = planFor(t, hub);
-  return <>{Object.keys(hub.phases).map(ph => (
+  return <>{phaseOrder(P, hub).map(ph => (
     <div key={ph} className="phase">
       <h3>{hub.phases[ph].title}</h3>
       {hub.phases[ph].blurb && <p className="ph">{sub(hub.phases[ph].blurb!, hub)}</p>}
@@ -300,7 +300,7 @@ export function Rail({ t, active, dueAt, onGoto }: {
   const at = schedule(P);
   return (
     <div className="rail" id="rail">
-      {Object.keys(hub.phases).map(ph => (
+      {phaseOrder(P, hub).map(ph => (
         <React.Fragment key={ph}>
           <div className="railgroup">{hub.phases[ph].title.split(',')[0]}</div>
           {P.map((r, i) => [r, i] as const).filter(([r]) => r.phase === ph).map(([r, i]) => {

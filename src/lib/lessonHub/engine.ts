@@ -7,6 +7,18 @@ export const isPron = (t: Topic | null | undefined) => !!(t && t.rounds);
 export const planFor = (t: Topic | null | undefined, hub: Hub): PlanRound[] =>
   (t && t.rounds) ? t.rounds : hub.plan;
 
+/**
+ * Phases in teaching order. Postgres JSONB doesn't keep object key order ("after"
+ * sorts before "class"), so the order comes from the plan's rounds, which are an
+ * array; phases without rounds follow.
+ */
+export function phaseOrder(plan: PlanRound[], hub: Hub): string[] {
+  const order: string[] = [];
+  for (const r of plan) if (!order.includes(r.phase)) order.push(r.phase);
+  for (const k of Object.keys(hub.phases)) if (!order.includes(k)) order.push(k);
+  return order.filter(k => k in hub.phases);
+}
+
 export const sub = (s: string, hub: Hub) => String(s).replace(/\{project\}/g, hub.project.name);
 
 /** Share of the round's minutes one learner spends talking. */
