@@ -37,7 +37,7 @@ How to work:
 - Talk the change through with the teacher first. Save only when they agree, unless they asked you to save directly.
 - Before editing, call get_topic and use its version as expected_version in update_topic. On a version conflict, re-read and re-apply.
 - update_topic replaces whole top-level keys (e.g. send the full "dialogue" object, not one line). Keys you don't send are untouched.
-- Every save is validated (including: no vocabulary word taught twice within a track; each frame in exactly one move) and keeps the previous version as a revision. If the teacher wants an edit undone, use list_revisions and restore_revision.
+- Every save is validated (including, within a track: no vocabulary word taught twice and no frame reused word for word (paraphrases are fine); and each frame in exactly one move) and keeps the previous version as a revision. If the teacher wants an edit undone, use list_revisions and restore_revision.
 
 Speaking topics (Developer, BA / QA tracks) all run on the hub's fixed plan (see get_hub → plan), whose rounds read these fields:
 context or reading, leadIn, vocabulary [{word,pos,definition,example}], structures [{structure with [slot] markers, intent, example, alternative, promptSlots}],
@@ -55,7 +55,7 @@ function fail(message: string) {
 }
 
 function buildServer(db: SupabaseClient, teacherId: string, origin: string) {
-  // A word is taught once per track: compare against every other saved topic.
+  // Within a track a word is taught once and a frame used once: compare against every other saved topic.
   const duplicatesFor = async (t: Topic) =>
     trackDuplicates(t, (await fetchTopics(db, teacherId)).map(r => r.data));
 
@@ -113,7 +113,7 @@ function buildServer(db: SupabaseClient, teacherId: string, origin: string) {
     }
     const merged = { ...row.data, ...patch } as Topic;
     const errors = validateTopic(merged, hub);
-    if (!errors.length && ('vocabulary' in patch || 'track' in patch)) errors.push(...await duplicatesFor(merged));
+    if (!errors.length && ('vocabulary' in patch || 'structures' in patch || 'track' in patch)) errors.push(...await duplicatesFor(merged));
     if (errors.length) return fail(`Not saved. Fix these and try again:\n- ${errors.join('\n- ')}`);
     try {
       const saved = await patchTopic(db, teacherId, id, patch as Partial<Topic>, expected_version ?? null, 'mcp', note);
@@ -159,7 +159,7 @@ function buildServer(db: SupabaseClient, teacherId: string, origin: string) {
     const rev = await fetchRevision(db, teacherId, revision_id);
     if (!rev || rev.topic_id !== id) return fail(`No revision ${revision_id} for topic "${id}".`);
     const saved = await putTopic(db, teacherId, rev.data, 'mcp', `Restored version ${rev.version}`);
-    // Undo always goes through, but say so if the old version repeats a word another topic now teaches.
+    // Undo always goes through, but say so if the old version repeats a word or frame another topic now uses.
     const warnings = await duplicatesFor(rev.data);
     return text({ restored: true, id, from_version: rev.version, version: saved.version, url: topicUrl(id),
       ...(warnings.length ? { warnings } : {}) });

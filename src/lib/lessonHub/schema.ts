@@ -174,6 +174,11 @@ export function validateTopic(topic: unknown, hub?: Pick<Hub, 'tracks'> | null):
   const words = new Map<string, number>();
   t.vocabulary!.forEach(v => words.set(normWord(v.word), (words.get(normWord(v.word)) ?? 0) + 1));
   for (const [w, n] of words) if (n > 1) errors.push(`vocabulary: "${w}" is listed ${n} times in this topic`);
+  const frames = new Map<string, number[]>();
+  t.structures!.forEach((f, ix) => frames.set(normFrame(f.structure), [...(frames.get(normFrame(f.structure)) ?? []), ix]));
+  for (const ixs of frames.values()) if (ixs.length > 1) {
+    errors.push(`structures.${ixs.join(', ')}: the same frame ("${t.structures![ixs[0]].structure}") is listed ${ixs.length} times in this topic`);
+  }
 
   if (!t.context && !t.reading) errors.push('context or reading: one is required (the opening round shows it)');
   return errors;
@@ -181,23 +186,33 @@ export function validateTopic(topic: unknown, hub?: Pick<Hub, 'tracks'> | null):
 
 const normWord = (w: string) => w.toLowerCase().replace(/\s+/g, ' ').trim();
 
+/** Frames match when the wording is the same, whatever the slots are called and ignoring final punctuation. */
+const normFrame = (f: string) => f.toLowerCase().replace(/[\u2018\u2019]/g, "'").replace(/\[[^\]]*\]/g, '[]')
+  .replace(/\s+/g, ' ').trim().replace(/[.?!]+$/, '');
+
 /**
- * House rule: a word is taught once per track. Tracks are separate cohorts, so the same
- * word in another track is fine. `others` is every saved topic; the topic itself is skipped.
+ * House rules: within a track, a word is taught once and a frame is used once. Frames may be
+ * paraphrased but not repeated word for word. Tracks are separate cohorts, so repeats across
+ * tracks are fine. `others` is every saved topic; the topic itself is skipped.
  */
 export function trackDuplicates(topic: Topic, others: Topic[]): string[] {
-  if (!topic.vocabulary) return [];
-  const taughtIn = new Map<string, string>();
+  const wordIn = new Map<string, string>(), frameIn = new Map<string, string>();
   for (const o of others) {
     if (o.id === topic.id || o.track !== topic.track) continue;
-    for (const v of o.vocabulary ?? []) taughtIn.set(normWord(v.word), o.id);
+    for (const v of o.vocabulary ?? []) wordIn.set(normWord(v.word), o.id);
+    for (const f of o.structures ?? []) frameIn.set(normFrame(f.structure), o.id);
   }
-  return topic.vocabulary.flatMap(v => {
-    const other = taughtIn.get(normWord(v.word));
-    return other
-      ? [`vocabulary: "${v.word}" is already taught in ${other} (same track, ${topic.track}). Pick a different word, or remove it from ${other} first.`]
-      : [];
-  });
+  const where = `same track, ${topic.track}`;
+  return [
+    ...(topic.vocabulary ?? []).flatMap(v => {
+      const other = wordIn.get(normWord(v.word));
+      return other ? [`vocabulary: "${v.word}" is already taught in ${other} (${where}). Pick a different word, or remove it from ${other} first.`] : [];
+    }),
+    ...(topic.structures ?? []).flatMap(f => {
+      const other = frameIn.get(normFrame(f.structure));
+      return other ? [`structures: "${f.structure}" is already used in ${other} (${where}). Paraphrase it, or change it in ${other} first.`] : [];
+    }),
+  ];
 }
 
 export function validateHub(hub: unknown): string[] {
