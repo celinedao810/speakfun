@@ -164,6 +164,49 @@ export async function scoreVocabGuessMulti(
   return { matchedUid: candidates[bestIdx].uid, result: results[bestIdx]! };
 }
 
+/**
+ * One call per spoken phrase: sends the clip with every visible word attached and
+ * resolves which block it matched. Drop-in replacement for scoreVocabGuessMulti.
+ */
+export async function matchVocabFromCandidates(
+  candidates: Array<{ uid: string; word: string; ipa: string }>,
+  audioBase64: string,
+  timerMode: boolean,
+): Promise<{ matchedUid: string | null; result: VocabScoringResult | null }> {
+  const res = await post<{
+    recognizedText: string;
+    matchedWord: string;
+    pronunciationScore: number;
+    pointsEarned: number;
+    feedback: string;
+  }>('/api/ai/homework-score', {
+    type: 'vocab-match',
+    candidates: candidates.map(({ word, ipa }) => ({ word, ipa })),
+    audioBase64,
+    timerMode,
+  }).catch(() => null);
+
+  if (!res || !res.matchedWord) return { matchedUid: null, result: null };
+
+  const matched = candidates.find(
+    c => c.word.trim().toLowerCase() === res.matchedWord.trim().toLowerCase()
+  );
+  if (!matched) return { matchedUid: null, result: null };
+
+  return {
+    matchedUid: matched.uid,
+    result: {
+      vocabItemId: '',  // Set by caller
+      recognizedWord: res.recognizedText,
+      isCorrectWord: true,
+      pronunciationScore: res.pronunciationScore,
+      pointsEarned: res.pointsEarned,
+      feedback: res.feedback,
+      highlights: [],
+    },
+  };
+}
+
 export const scoreStructureReading = (
   exampleSentence: string,
   audioBase64: string,

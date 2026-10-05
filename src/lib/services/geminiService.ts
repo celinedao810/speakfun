@@ -1352,6 +1352,74 @@ Step 4: Give brief feedback in Vietnamese (1 sentence).`
 };
 
 /**
+ * Given one short clip and every word currently on screen, decides which word
+ * (if any) the learner said and scores that word's pronunciation.
+ *
+ * One call replaces the per-candidate fan-out in scoreVocabGuessMulti: the model
+ * compares the candidates against each other instead of voting separately, and
+ * continuous listening would otherwise multiply that fan-out by every phrase.
+ * Returns matchedWord === '' when nothing matched (background noise, a wrong guess).
+ */
+export const matchVocabFromCandidates = async (
+  candidates: Array<{ word: string; ipa: string }>,
+  audioBase64: string,
+  timerMode: boolean
+): Promise<{ recognizedText: string; matchedWord: string; pronunciationScore: number; pointsEarned: number; feedback: string }> => {
+  return safeExecute(async () => {
+    const ai = new GoogleGenAI({ apiKey: getApiKey() });
+    const maxPoints = timerMode ? 1 : 0.5;
+    const list = candidates.map(c => `- "${c.word}" (IPA: ${c.ipa})`).join('\n');
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: {
+        parts: [
+          {
+            text: `A learner is playing a vocabulary game. They just spoke a short phrase, trying to say ONE of the words below.
+
+Candidate words:
+${list}
+
+Step 1: Transcribe exactly what the learner said (recognizedText).
+Step 2: Decide which candidate word they attempted (matchedWord). Match a word if the learner clearly attempted it, even with a non-native accent, slight mispronunciation, or minor stress error. Set matchedWord to the empty string "" if they said a completely different word, stayed silent, produced unintelligible sounds, or the audio is just background noise.
+Step 3: If matched, score pronunciation 0-100 based on how closely vowels, consonants, and stress match that word's IPA. Be lenient with natural non-native accents. If not matched, use 0.
+Step 4: Give brief feedback in Vietnamese (1 sentence).
+
+matchedWord must be copied exactly from the candidate list, or be "".`
+          },
+          { inlineData: { mimeType: 'audio/webm', data: audioBase64 } }
+        ]
+      },
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            recognizedText: { type: Type.STRING },
+            matchedWord: { type: Type.STRING },
+            pronunciationScore: { type: Type.NUMBER },
+            feedback: { type: Type.STRING },
+          },
+          required: ['recognizedText', 'matchedWord', 'pronunciationScore', 'feedback'],
+        },
+      },
+    });
+    const result = JSON.parse(response.text || '{}');
+
+    // Only trust a matchedWord that actually appears in the candidate list.
+    const raw = (result.matchedWord || '').trim().toLowerCase();
+    const hit = raw ? candidates.find(c => c.word.trim().toLowerCase() === raw) : undefined;
+
+    return {
+      recognizedText: result.recognizedText || '',
+      matchedWord: hit?.word || '',
+      pronunciationScore: hit ? (result.pronunciationScore || 0) : 0,
+      pointsEarned: hit ? maxPoints : 0,  // deterministic — never trust AI for this
+      feedback: result.feedback || '',
+    };
+  });
+};
+
+/**
  * Scores a learner reading an example sentence aloud.
  * Base points: 5pt (no timer) or 7pt (timer), minus 0.5pt per error.
  */

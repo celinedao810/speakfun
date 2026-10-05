@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { CheckCircle, Loader2 } from 'lucide-react';
+import { CheckCircle, Loader2, Mic, Square } from 'lucide-react';
 import { VocabAttemptAudit, VocabExerciseItem } from '@/lib/types';
-import { scoreVocabGuessMulti } from '@/lib/ai/aiClient';
-import AudioRecorder from '@/components/AudioRecorder';
+import { matchVocabFromCandidates } from '@/lib/ai/aiClient';
+import { useContinuousSpeech } from '@/lib/audio/useContinuousSpeech';
 
 interface Exercise1VocabProps {
   vocabPool: VocabExerciseItem[];
@@ -49,7 +49,7 @@ export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1Vocab
   const [completedResults, setCompletedResults] = useState<WordResult[]>([]);
   const [matchFlash, setMatchFlash] = useState<{ word: string; pts: number } | null>(null);
   const [pendingCount, setPendingCount] = useState(0);
-  const [recorderKey, setRecorderKey] = useState(0);
+  const [hasStarted, setHasStarted] = useState(false);
 
   // ── Mutable refs (safe in async .then()) ──────────────────────────────────
   const blocksRef = useRef<FallingBlock[]>([]);
@@ -60,6 +60,11 @@ export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1Vocab
   const wrongVocabIdsRef = useRef<string[]>([]);
   const completedResultsRef = useRef<WordResult[]>([]);
   const sessionDoneRef = useRef(false);
+  const completeFiredRef = useRef(false);
+  /** Set once the speech hook exists — fireOnComplete and tick are defined before it. */
+  const stopMicRef = useRef<() => void>(() => {});
+  /** Reads the hook's busyRef; 0 when no clip is mid-capture. */
+  const getMicBusy = useRef<() => number>(() => 0);
   const animFrameRef = useRef<number | null>(null);
   const frameRef = useRef<HTMLDivElement>(null);
   const [frameHeightPx, setFrameHeightPx] = useState(280);
@@ -78,6 +83,14 @@ export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1Vocab
   }, []);
 
   const fireOnComplete = useCallback(() => {
+    // Both the RAF path and the late .finally() path can reach here
+    if (completeFiredRef.current) return;
+    completeFiredRef.current = true;
+    sessionDoneRef.current = true;
+
+    // Release the mic — the exercise is over
+    stopMicRef.current();
+
     // Any blocks still in blocksRef that weren't matched → wrong
     blocksRef.current.forEach(b => {
       if (!b.matched && !wrongVocabIdsRef.current.includes(b.vocabItem.id)) {
@@ -144,8 +157,11 @@ export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1Vocab
 
     if (changed) setActiveBlocks([...updatedBlocks]);
 
+    // Don't finish while a clip is still being captured or decoded — a word spoken
+    // just as the last block resolves must still count (micBusyRef), and neither
+    // may an AI call still be in flight (pendingCountRef).
     const allResolved = blocksRef.current.length === 0;
-    if (allResolved && pendingCountRef.current === 0) {
+    if (allResolved && pendingCountRef.current === 0 && getMicBusy.current() === 0) {
       sessionDoneRef.current = true;
       fireOnComplete();
       return;
@@ -155,47 +171,38 @@ export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1Vocab
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [FALL_DURATION_MS, fireOnComplete]);
 
-  // ── Mount: schedule all blocks and start loop ─────────────────────────────
+  // Blocks don't fall until the learner taps the mic, so nothing is lost while
+  // they're still reading the screen.
   useEffect(() => {
-    const now = performance.now();
-    sessionStartRef.current = now;
-
-    blocksRef.current = vocabPool.map((item, i) => {
-      const slotBase = X_SLOTS[i % 3];
-      const jitter = (Math.random() * 2 - 1) * SLOT_JITTER;
-      return {
-        uid: `${item.id}-${i}`,
-        vocabItem: item,
-        xPercent: slotBase + jitter,
-        launchTime: now + i * launchInterval,
-        progress: 0,
-        matched: false,
-      };
-    });
-
-    animFrameRef.current = requestAnimationFrame(tick);
-
     return () => {
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Recording handler ─────────────────────────────────────────────────────
-  const handleRecordingComplete = useCallback((base64: string) => {
-    const visibleNow = blocksRef.current.filter(b => !b.matched && b.progress > 0 && b.progress < 1);
+  // ── Utterance handler ─────────────────────────────────────────────────────
+  const visibleBlocks = useCallback(
+    () => blocksRef.current.filter(b => !b.matched && b.progress > 0 && b.progress < 1),
+    [],
+  );
+
+  const handleUtterance = useCallback((base64: string, visibleAtStart: FallingBlock[]) => {
+    // Blocks on screen when the learner started speaking, plus any that appeared
+    // since — a block that fell off mid-word was still the one they were aiming at.
+    const visibleNow = visibleAtStart.filter(
+      b => !completedResultsRef.current.some(r => r.item.id === b.vocabItem.id)
+    );
+    for (const b of visibleBlocks()) {
+      if (!visibleNow.some(v => v.uid === b.uid)) visibleNow.push(b);
+    }
     if (visibleNow.length === 0) return;
 
     const candidates = visibleNow.map(b => ({ uid: b.uid, word: b.vocabItem.word, ipa: b.vocabItem.ipa }));
     const timestamp = new Date().toISOString();
 
-    // Reset recorder immediately so user can record again while AI is working
-    setRecorderKey(k => k + 1);
-
     pendingCountRef.current++;
     setPendingCount(c => c + 1);
 
-    scoreVocabGuessMulti(candidates, base64, true)
+    matchVocabFromCandidates(candidates, base64, true)
       .then(({ matchedUid, result }) => {
         if (!matchedUid || !result) return;
 
@@ -255,7 +262,46 @@ export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1Vocab
           fireOnComplete();
         }
       });
-  }, [fireOnComplete]);
+  }, [fireOnComplete, visibleBlocks]);
+
+  // ── Continuous mic ────────────────────────────────────────────────────────
+  const { isListening, isSpeaking, level, error, start, stop, busyRef } = useContinuousSpeech({
+    onSpeechStart: visibleBlocks,
+    onUtterance: handleUtterance,
+  });
+  stopMicRef.current = stop;
+  getMicBusy.current = () => busyRef.current;
+
+  /** One tap: opens the mic for the whole game and releases the falling blocks. */
+  const handleStart = useCallback(async () => {
+    // Resuming after a manual Stop — the blocks are already in flight
+    if (hasStarted) {
+      await start();
+      return;
+    }
+    // Don't drop the blocks if the mic was refused — the learner couldn't answer
+    const ok = await start();
+    if (!ok) return;
+    setHasStarted(true);
+
+    const now = performance.now();
+    sessionStartRef.current = now;
+
+    blocksRef.current = vocabPool.map((item, i) => {
+      const slotBase = X_SLOTS[i % 3];
+      const jitter = (Math.random() * 2 - 1) * SLOT_JITTER;
+      return {
+        uid: `${item.id}-${i}`,
+        vocabItem: item,
+        xPercent: slotBase + jitter,
+        launchTime: now + i * launchInterval,
+        progress: 0,
+        matched: false,
+      };
+    });
+
+    animFrameRef.current = requestAnimationFrame(tick);
+  }, [hasStarted, start, vocabPool, launchInterval, tick]);
 
   // ── Render ────────────────────────────────────────────────────────────────
   const blockCardWidth = 28; // % of frame width
@@ -284,6 +330,17 @@ export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1Vocab
         ref={frameRef}
         className="relative bg-gradient-to-b from-indigo-950 to-slate-900 rounded-2xl overflow-hidden border border-indigo-800 h-[clamp(320px,62vh,520px)]"
       >
+        {/* Idle overlay — blocks don't fall until the mic is on */}
+        {!hasStarted && (
+          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 bg-slate-900/60 backdrop-blur-sm px-6 text-center">
+            <Mic className="w-8 h-8 text-indigo-300" />
+            <p className="text-sm font-semibold text-white">Tap the mic once to begin</p>
+            <p className="text-xs text-indigo-200 leading-snug">
+              Then just keep speaking — every word you say is checked automatically.
+            </p>
+          </div>
+        )}
+
         {/* Match flash overlay */}
         {matchFlash && (
           <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1.5 bg-green-500 text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-lg animate-bounce">
@@ -348,9 +405,11 @@ export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1Vocab
       )}
 
       {/* Mic */}
-      <div className="flex flex-col items-center gap-2">
+      <div className="flex flex-col items-center gap-2 py-2">
         <div className="flex items-center gap-2 min-h-[20px]">
-          <p className="text-xs text-slate-500">Say any word you see above</p>
+          <p className="text-xs text-slate-500">
+            {isListening ? 'Listening — say any word you see above' : 'Tap once, then just speak'}
+          </p>
           {pendingCount > 0 && (
             <span className="flex items-center gap-1 text-[10px] text-indigo-500 font-semibold">
               <Loader2 className="w-3 h-3 animate-spin" />
@@ -358,12 +417,39 @@ export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1Vocab
             </span>
           )}
         </div>
-        <AudioRecorder
-          key={recorderKey}
-          onRecordingComplete={handleRecordingComplete}
-          isProcessing={false}
-          maxDuration={10}
-        />
+
+        {!isListening ? (
+          <div className="flex flex-col items-center gap-2">
+            <button
+              onClick={handleStart}
+              className="w-16 h-16 bg-indigo-600 text-white rounded-full flex items-center justify-center hover:bg-indigo-700 transition-all hover:scale-110"
+            >
+              <Mic className="w-8 h-8" />
+            </button>
+            {error && (
+              <p className="text-[11px] text-rose-600 font-semibold text-center max-w-[260px]">{error}</p>
+            )}
+          </div>
+        ) : (
+          <div className="flex items-center gap-4">
+            <div className="relative w-16 h-16 flex items-center justify-center">
+              {/* Live level ring — shows the mic is alive between words */}
+              <div
+                className={`absolute rounded-full transition-transform duration-75 ${isSpeaking ? 'bg-rose-400/40' : 'bg-indigo-400/30'}`}
+                style={{ width: 64, height: 64, transform: `scale(${1 + level * 0.5})` }}
+              />
+              <div className={`relative w-14 h-14 rounded-full flex items-center justify-center text-white ${isSpeaking ? 'bg-rose-500' : 'bg-indigo-500'}`}>
+                <Mic className="w-7 h-7" />
+              </div>
+            </div>
+            <button
+              onClick={stop}
+              className="flex items-center gap-1.5 px-3 py-2 bg-white border-2 border-slate-200 text-slate-500 font-bold rounded-xl text-xs"
+            >
+              <Square className="w-3.5 h-3.5" /> Stop
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import {
   scoreVocabGuess,
+  matchVocabFromCandidates,
   scoreStructureReading,
   scoreOwnSentence,
   scoreReadingPassage,
@@ -30,6 +31,15 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'targetWord, ipa, and audioBase64 are required' }, { status: 400 });
       }
       const result = await scoreVocabGuess(targetWord, ipa, audioBase64, timerMode ?? false);
+      return NextResponse.json(result);
+    }
+
+    if (type === 'vocab-match') {
+      const { candidates, audioBase64, timerMode } = body;
+      if (!Array.isArray(candidates) || candidates.length === 0 || !audioBase64) {
+        return NextResponse.json({ error: 'a non-empty candidates array and audioBase64 are required' }, { status: 400 });
+      }
+      const result = await matchVocabFromCandidates(candidates, audioBase64, timerMode ?? false);
       return NextResponse.json(result);
     }
 
