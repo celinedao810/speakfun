@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import type { Dialogue, PlanRound, PronPart, Topic } from '@/lib/lessonHub/types';
 import { isPron, pairRows, phaseOrder, planFor, sceneList, schedule, share, sub } from '@/lib/lessonHub/engine';
-import { GapLine, HintRows, MarkedPassage, Slots, Toggle, openYouGlish, useHub } from './shared';
+import { ExampleLines, GapLine, HintRows, MarkedPassage, Slots, Toggle, openYouGlish, useHub } from './shared';
 import FlowSketch from './FlowSketch';
 
 const Bank = ({ items, className }: { items: string[]; className?: string }) => (
@@ -26,14 +26,14 @@ export function FramesByMove({ t }: { t: Topic }) {
   const sc = sceneList(t);
   if (!sc) return <>{structures.map((f, i) => (
     <div key={i} className="sframe"><div className="s"><Slots text={f.structure} /></div>
-      <div className="r"><b>{f.intent}.</b> {f.example}</div></div>
+      <div className="r">{f.intent}</div><div className="exs"><ExampleLines example={f.example} /></div></div>
   ))}</>;
   return <>{sc.flatMap((s, si) => s.moves.map((m, mi) => (
     <div key={`${si}-${mi}`} className="move">
       <div className="movehd"><span className="movename">{m.name}</span><span className="movewhy">{m.purpose}</span></div>
       {m.frames.map(ix => structures[ix]).filter(Boolean).map((f, k) => (
         <div key={k} className="sframe"><div className="s"><Slots text={f.structure} /></div>
-          <div className="r"><b>{f.intent}.</b> {f.example}</div></div>
+          <div className="r">{f.intent}</div><div className="exs"><ExampleLines example={f.example} /></div></div>
       ))}
     </div>
   )))}</>;
@@ -104,7 +104,7 @@ function Prompts({ t }: { t: Topic }) {
           <div key={i} className="prompt">
             <span className="pnum">{i + 1}</span>
             <span className="pslots">{f.promptSlots || ''}</span>
-            {dlg.answers && <span className="pans">{f.example}</span>}
+            {dlg.answers && <div className="pans"><ExampleLines example={f.example} className="pansl" /></div>}
           </div>
         ))}</div>
         {dlg.hint && <aside className="hintpanel"><div className="hinthd">Frames from this lesson</div>

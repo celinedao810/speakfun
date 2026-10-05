@@ -2,8 +2,8 @@
 
 import React, { useEffect } from 'react';
 import type { Hub, Topic } from '@/lib/lessonHub/types';
-import { allMoves, chunk, chunkInto, isPron, pairRows, sub } from '@/lib/lessonHub/engine';
-import { GapLine, HintRows, MarkedPassage, Slots, Toggle, useHub } from './shared';
+import { allMoves, chunk, dialoguePages, isPron, pairRows, sub } from '@/lib/lessonHub/engine';
+import { ExampleLines, GapLine, HintRows, MarkedPassage, Slots, Toggle, useHub } from './shared';
 import { VoicedLegend, YouGlishLink } from './rounds';
 import FlowSketch from './FlowSketch';
 
@@ -22,7 +22,7 @@ interface Slide {
   answers?: boolean;
 }
 
-const CHUNK = { vocab: 6, chips: 12, dialogue: 8, dialogueSlides: 2 };
+const CHUNK = { vocab: 6, chips: 12 };
 const partOf = (i: number, a: unknown[]): [number, number] | undefined => a.length > 1 ? [i + 1, a.length] : undefined;
 
 function speakingSlides(t: Topic, hub: Hub): Slide[] {
@@ -53,27 +53,29 @@ function speakingSlides(t: Topic, hub: Hub): Slide[] {
           <div className="sl-chips">{g.map((v, k) => <span key={k}>{v.word}</span>)}</div> }));
         break;
       case 'structures':
-        // one slide, every frame in move order — the sequence is the thing being taught
+        // one slide, every frame in move order — the sequence is the thing being taught.
+        // Each frame carries its example; past four frames the moves flow into two columns.
         add({ title: 'The moves, in order', body:
-          <div className="sl-frames all">{allMoves(t).map((m, n) => (
+          <div className={`sl-frames all${structures.length > 4 ? ' cols' : ''}`}>{allMoves(t).map((m, n) => (
             <div key={n} className="sl-move">
               {m.name && <div className="sl-movehd"><span className="mn">{n + 1}</span>{m.name}</div>}
               {m.frames.map(ix => structures[ix]).filter(Boolean).map((f, k) => (
-                <div key={k} className="sl-frame"><div className="s"><Slots text={f.structure} /></div></div>
+                <div key={k} className="sl-frame"><div className="s"><Slots text={f.structure} /></div>
+                  <ExampleLines example={f.example} className="sl-ex" /></div>
               ))}
             </div>
           ))}</div> });
         break;
       case 'prompts':
-        add({ title: 'Which frame?', hint: true, body:
-          <div className="sl-prompts">{structures.map((f, k) => <div key={k}>{f.promptSlots || ''}</div>)}</div> });
+        add({ title: 'Which frame?', hint: true, answers: true, body: <PromptRows structures={structures} /> });
         break;
       case 'dialogue': {
         const d = t.dialogue;
         if (!d) break;
-        chunkInto(d.lines, Math.min(CHUNK.dialogueSlides, Math.ceil(d.lines.length / CHUNK.dialogue))).forEach((g, i, a) => {
-          const lines = <div className="sl-dlg">{g.map((l, k) => (
-            <div key={k} className="sl-line">
+        // see dialoguePages for when a dialogue is split across slides
+        dialoguePages(d.lines).forEach((g, i, a) => {
+          const lines = <div className={`sl-dlg${g.length > 8 ? ' dense' : ''}`}>{g.map((l, k) => (
+            <div key={k} className={`sl-line${k > 0 && l.scene !== g[k - 1].scene ? ' newscene' : ''}`}>
               {l.part ? <div className="sl-part">{l.part}</div> : <div className="who">{l.role}</div>}
               <div className="say"><GapLine line={l} /></div>
             </div>
@@ -170,6 +172,17 @@ function pronSlides(t: Topic): Slide[] {
     });
   });
   return S;
+}
+
+/** "Which frame?": slot content only; the answer key (the full example) shows when answers are on. */
+function PromptRows({ structures }: { structures: { promptSlots?: string; example: string }[] }) {
+  const { dlg } = useHub();
+  return <div className={`sl-prompts${dlg.answers ? ' answered' : ''}`}>{structures.map((f, k) => (
+    <div key={k}>
+      <span className="pn">{k + 1}</span>{f.promptSlots || ''}
+      {dlg.answers && <ExampleLines example={f.example} className="sl-ans" />}
+    </div>
+  ))}</div>;
 }
 
 function RevealRows({ items, start, promptIpa, answerIpa }: {

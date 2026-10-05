@@ -477,3 +477,38 @@
   .e4it .bar .proj{margin-left:auto}
   .e4it .bar .proj+.proj{margin-left:1rem}
 }
+
+/* Frame examples: one line per example, labelled variants ("On track: …") on their own lines */
+.e4it .sframe .r{margin-top:.3rem}
+.e4it .sframe .exs{margin-top:.35rem;display:flex;flex-direction:column;gap:.15rem}
+.e4it .exl{font-family:var(--serif);font-style:italic;color:var(--muted);font-size:1rem;line-height:1.4}
+.e4it .exlabel{font-family:var(--mono);font-style:normal;font-size:.68rem;text-transform:uppercase;
+  letter-spacing:.06em;color:var(--teal);margin-right:.55rem;white-space:nowrap}
+.e4it .pans .pansl{line-height:1.4}
+.e4it .pans .pansl+.pansl{margin-top:.15rem}
+
+/* Present mode: frame slide with examples, in two columns when long */
+.e4it .sl-frames.all.cols{display:block;column-count:2;column-gap:4vw}
+.e4it .sl-frames.all.cols .sl-move{break-inside:avoid;margin-bottom:1.4vh}
+.e4it .sl-frames.all .sl-frame{padding:.5vh 0}
+.e4it .sl-ex{font-family:var(--serif);font-style:italic;color:var(--muted);
+  font-size:clamp(.78rem,1.85vh,1.15rem);line-height:1.35;margin-top:.2vh}
+.e4it .sl-ex .exlabel{font-size:.72em}
+
+/* Present mode: "Which frame?" numbered, with the answer key under each prompt */
+.e4it .sl-prompts .pn{font-size:.6em;color:var(--muted);display:inline-block;width:2.2em}
+/* the base rule targets every div in .sl-prompts, so the answer lines need div.sl-ans to win */
+.e4it .sl-prompts.answered>div{padding:.6vh 0}
+.e4it .sl-prompts div.sl-ans{font-family:var(--serif);color:var(--teal);font-size:clamp(.8rem,2vh,1.2rem);
+  line-height:1.35;padding:0 0 0 2.2em;border-top:0}
+
+/* Present mode: long dialogues stay on one slide with tighter spacing */
+.e4it .sl-dlg.dense .sl-line{padding:.45vh 0}
+.e4it .sl-dlg.dense .sl-line .say{font-size:clamp(.82rem,2.05vh,1.3rem);line-height:1.35}
+.e4it .sl-dlg.dense .sl-line .who{font-size:clamp(.65rem,1.6vh,.95rem)}
+/* a labelled example wraps under its text, not under the label */
+.e4it :is(.exl,.pansl,.sl-ex,.sl-ans):has(>.exlabel){display:grid;grid-template-columns:max-content 1fr;column-gap:.55rem;align-items:baseline}
+.e4it :is(.exl,.pansl,.sl-ex,.sl-ans)>.exlabel{margin-right:0}
+.e4it .sl-ex{font-size:clamp(.85rem,2.15vh,1.3rem)}
+/* two scenes on one slide: a heavier rule where the second scene starts */
+.e4it .sl-line.newscene{border-top:2px solid var(--ink)}

@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext } from 'react';
 import type { DialogueLine, Hub, Structure, Topic } from '@/lib/lessonHub/types';
+import { splitExample } from '@/lib/lessonHub/engine';
 
 // Display toggles shared by the plan page and present mode.
 export interface DlgState {
@@ -68,6 +69,13 @@ export function MarkedPassage({ text, marks }: { text: string; marks?: { word: s
     <>{segs.map((s, i) => typeof s === 'string' ? s
       : <mark key={i} className="endmark">{s.word}<span className="es">{s.sound}</span></mark>)}</>
   );
+}
+
+/** A frame's example, one line per labelled variant. */
+export function ExampleLines({ example, className = 'exl' }: { example: string; className?: string }) {
+  return <>{splitExample(example).map((e, i) => (
+    <div key={i} className={className}>{e.label && <span className="exlabel">{e.label}</span>}{e.text}</div>
+  ))}</>;
 }
 
 export function HintRows({ structures }: { structures: Structure[] }) {
