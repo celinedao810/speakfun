@@ -146,6 +146,8 @@ export function useContinuousSpeech<T = void>({
     try {
       if (emit && utt.voicedMs >= minVoicedMs) {
         onUtteranceRef.current(encodeWavBase64(utt.frames, sampleRateRef.current), utt.atStart);
+      } else if (emit && process.env.NODE_ENV === 'development') {
+        console.log(`[speech] dropped clip — only ${Math.round(utt.voicedMs)}ms of voice (min ${minVoicedMs}ms)`);
       }
     } finally {
       busyRef.current = 0;

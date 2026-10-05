@@ -33,6 +33,17 @@ function similarity(a: string, b: string): number {
 }
 
 /**
+ * A plural is a fair attempt at the word ("user stories" for "user story"), but
+ * "-ies" is three letters off "-y", so compare the singular form as well.
+ */
+function spokenSimilarity(spoken: string, target: string): number {
+  let singular = spoken;
+  if (spoken.endsWith('ies')) singular = spoken.slice(0, -3) + 'y';
+  else if (spoken.endsWith('s') && !target.endsWith('s')) singular = spoken.slice(0, -1);
+  return Math.max(similarity(spoken, target), similarity(singular, target));
+}
+
+/**
  * At most a quarter of the letters may differ. That makes 3-letter words exact (one
  * letter off "bug" is "but", which learners say all the time), lets "back lock" count
  * for "backlog" (a devoiced final /g/ is still a fair attempt), but turns away
@@ -72,7 +83,7 @@ export function matchSpokenWords(
     let best: SpokenMatch | null = null;
     for (let len = Math.max(1, n - 1); len <= n + 1; len++) {
       for (let i = 0; i + len <= tokens.length; i++) {
-        const s = similarity(tokens.slice(i, i + len).join(''), target);
+        const s = spokenSimilarity(tokens.slice(i, i + len).join(''), target);
         if (s >= MIN_SIMILARITY && (!best || s > best.similarity)) {
           best = { word, similarity: s, start: i, end: i + len };
         }
