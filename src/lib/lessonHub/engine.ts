@@ -137,3 +137,34 @@ export function dialoguePages<T extends { text: string; scene?: number }>(lines:
   if (cur.length) pages.push(cur);
   return pages.flatMap(p => fits(p) ? [p] : evenly(p));
 }
+
+/**
+ * Order for the "Which frame?" prompts: shuffled so the slots don't line up with the frames,
+ * and no prompt keeps its own frame's position. Seeded by the topic id, so a lesson always
+ * shows the same order (plan page and slides agree, and it doesn't change mid-class).
+ * Returns structure indices in display order.
+ */
+export function promptOrder(topicId: string, n: number): number[] {
+  const order = Array.from({ length: n }, (_, i) => i);
+  if (n < 2) return order;
+  // mulberry32, seeded from a simple string hash of the topic id
+  let seed = 0;
+  for (const c of topicId) seed = (Math.imul(seed, 31) + c.charCodeAt(0)) | 0;
+  const rand = () => {
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  for (let i = n - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [order[i], order[j]] = [order[j], order[i]];
+  }
+  // move any frame still in its own position by swapping with its neighbour
+  for (let p = 0; p < n; p++) {
+    if (order[p] !== p) continue;
+    const q = p === n - 1 ? p - 1 : p + 1;
+    [order[p], order[q]] = [order[q], order[p]];
+  }
+  return order;
+}

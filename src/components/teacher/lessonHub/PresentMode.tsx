@@ -2,7 +2,7 @@
 
 import React, { useEffect } from 'react';
 import type { Hub, Topic } from '@/lib/lessonHub/types';
-import { allMoves, chunk, dialoguePages, isPron, pairRows, sub } from '@/lib/lessonHub/engine';
+import { allMoves, chunk, dialoguePages, isPron, pairRows, promptOrder, sub } from '@/lib/lessonHub/engine';
 import { ExampleLines, GapLine, HintRows, MarkedPassage, Slots, Toggle, useHub } from './shared';
 import { VoicedLegend, YouGlishLink, toggleReveal } from './rounds';
 import FlowSketch from './FlowSketch';
@@ -68,7 +68,7 @@ function speakingSlides(t: Topic, hub: Hub): Slide[] {
           ))}</div> });
         break;
       case 'prompts':
-        add({ title: 'Which frame?', hint: true, answers: true, revealCount: structures.length, body: <PromptRows structures={structures} /> });
+        add({ title: 'Which frame?', hint: true, answers: true, revealCount: structures.length, body: <PromptRows structures={promptOrder(t.id, structures.length).map(ix => structures[ix])} /> });
         break;
       case 'dialogue': {
         const d = t.dialogue;
@@ -175,7 +175,7 @@ function pronSlides(t: Topic): Slide[] {
   return S;
 }
 
-/** "Which frame?": slot content only. Answers (the full example) reveal one at a time, or all at once. */
+/** "Which frame?": slot content only, already shuffled. Answers (the full example) reveal one at a time, or all at once. */
 function PromptRows({ structures }: { structures: { promptSlots?: string; example: string }[] }) {
   const { dlg, setDlg } = useHub();
   const shown = (k: number) => dlg.answers || dlg.revealed.includes(k);

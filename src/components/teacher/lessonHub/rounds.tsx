@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import type { Dialogue, PlanRound, PronPart, Topic } from '@/lib/lessonHub/types';
-import { isPron, pairRows, phaseOrder, planFor, sceneList, schedule, share, sub } from '@/lib/lessonHub/engine';
+import { isPron, pairRows, phaseOrder, planFor, promptOrder, sceneList, schedule, share, sub } from '@/lib/lessonHub/engine';
 import { ExampleLines, GapLine, HintRows, MarkedPassage, Slots, Toggle, openYouGlish, useHub } from './shared';
 import FlowSketch from './FlowSketch';
 
@@ -100,7 +100,8 @@ function Prompts({ t }: { t: Topic }) {
         <Toggle className="hintbtn" on={dlg.hint} onClick={() => setDlg({ hint: !dlg.hint })}>{dlg.hint ? 'Hide hint' : 'Hint'}</Toggle>
       </div>
       <div className={`dlgwrap${dlg.hint ? ' hinted' : ''}`}>
-        <div>{structures.map((f, i) => (
+        {/* prompts in shuffled order (see promptOrder); i is the display position */}
+        <div>{promptOrder(t.id, structures.length).map(ix => structures[ix]).map((f, i) => (
           <div key={i} className="prompt reveal1" title="Click to show or hide this answer"
             onClick={() => setDlg({ revealed: toggleReveal(dlg.revealed, i) })}>
             <span className="pnum">{i + 1}</span>
