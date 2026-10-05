@@ -95,16 +95,17 @@ function Prompts({ t }: { t: Topic }) {
   return (
     <>
       <div className="dlgctl"><span className="dlgl">Answers</span>
-        <Toggle on={!dlg.answers} onClick={() => setDlg({ answers: false })}>hidden</Toggle>
+        <Toggle on={!dlg.answers && !dlg.revealed.length} onClick={() => setDlg({ answers: false, revealed: [] })}>hidden</Toggle>
         <Toggle on={dlg.answers} onClick={() => setDlg({ answers: true })}>shown</Toggle>
         <Toggle className="hintbtn" on={dlg.hint} onClick={() => setDlg({ hint: !dlg.hint })}>{dlg.hint ? 'Hide hint' : 'Hint'}</Toggle>
       </div>
       <div className={`dlgwrap${dlg.hint ? ' hinted' : ''}`}>
         <div>{structures.map((f, i) => (
-          <div key={i} className="prompt">
+          <div key={i} className="prompt reveal1" title="Click to show or hide this answer"
+            onClick={() => setDlg({ revealed: toggleReveal(dlg.revealed, i) })}>
             <span className="pnum">{i + 1}</span>
             <span className="pslots">{f.promptSlots || ''}</span>
-            {dlg.answers && <div className="pans"><ExampleLines example={f.example} className="pansl" /></div>}
+            {(dlg.answers || dlg.revealed.includes(i)) && <div className="pans"><ExampleLines example={f.example} className="pansl" /></div>}
           </div>
         ))}</div>
         {dlg.hint && <aside className="hintpanel"><div className="hinthd">Frames from this lesson</div>
@@ -114,11 +115,14 @@ function Prompts({ t }: { t: Topic }) {
   );
 }
 
+export const toggleReveal = (revealed: number[], i: number) =>
+  revealed.includes(i) ? revealed.filter(x => x !== i) : [...revealed, i];
+
 function VocabTable({ t, style }: { t: Topic; style?: React.CSSProperties }) {
   return (
     <table className="vocab" style={style}><tbody>
       {(t.vocabulary || []).map((v, i) => (
-        <tr key={i}><td className="w">{v.word}</td><td className="pos">{v.pos}</td>
+        <tr key={i}><td className="w">{v.word}{v.ipa && <div className="wipa ipa">{v.ipa}</div>}</td><td className="pos">{v.pos}</td>
           <td className="d">{v.definition}</td><td className="ex">{v.example}</td></tr>
       ))}
     </tbody></table>
@@ -149,7 +153,7 @@ function AnswersCtl() {
   const { dlg, setDlg } = useHub();
   return (
     <div className="dlgctl"><span className="dlgl">Answers</span>
-      <Toggle on={!dlg.answers} onClick={() => setDlg({ answers: false })}>hidden</Toggle>
+      <Toggle on={!dlg.answers} onClick={() => setDlg({ answers: false, revealed: [] })}>hidden</Toggle>
       <Toggle on={dlg.answers} onClick={() => setDlg({ answers: true })}>shown</Toggle>
     </div>
   );

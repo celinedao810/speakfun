@@ -80,7 +80,7 @@ export interface Hub {
   rules: ClassRules;
 }
 
-export interface VocabItem { word: string; pos: string; definition: string; example: string }
+export interface VocabItem { word: string; pos: string; definition: string; example: string; ipa?: string | null }
 export interface Structure { structure: string; intent: string; example: string; alternative?: string; promptSlots?: string }
 export interface Move { name: string; purpose: string; frames: number[] }
 export interface Scene { name: string | null; setting: string | null; moves: Move[] }

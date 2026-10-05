@@ -9,7 +9,7 @@ import type { Hub, Topic } from './types';
 const str = z.string();
 const nonEmpty = z.string().trim().min(1);
 
-const vocab = z.looseObject({ word: nonEmpty, pos: str, definition: nonEmpty, example: str });
+const vocab = z.looseObject({ word: nonEmpty, pos: str, definition: nonEmpty, example: str, ipa: str.nullable().optional() });
 const structure = z.looseObject({
   structure: nonEmpty, intent: nonEmpty, example: nonEmpty,
   alternative: str.optional(), promptSlots: str.optional(),

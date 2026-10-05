@@ -512,3 +512,13 @@
 .e4it .sl-ex{font-size:clamp(.85rem,2.15vh,1.3rem)}
 /* two scenes on one slide: a heavier rule where the second scene starts */
 .e4it .sl-line.newscene{border-top:2px solid var(--ink)}
+
+/* Vocabulary: IPA under the word */
+.e4it table.vocab .wipa{font-weight:400;font-size:.82rem;color:var(--teal);margin-top:.1rem;white-space:nowrap}
+.e4it .sl-vocab .wipa{font-weight:400;font-size:clamp(.8rem,2vh,1.25rem);color:var(--teal);margin-top:.3vh;white-space:nowrap}
+
+/* "Which frame?": click a prompt to reveal or hide its answer */
+.e4it .reveal1{cursor:pointer}
+.e4it .prompt.reveal1:hover .pslots,.e4it .sl-prompts .reveal1:hover{text-decoration:underline;text-decoration-color:var(--mark);
+  text-decoration-thickness:3px;text-underline-offset:4px}
+.e4it .slchrome button[disabled]{opacity:.35;cursor:default}

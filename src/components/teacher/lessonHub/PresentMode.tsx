@@ -4,7 +4,7 @@ import React, { useEffect } from 'react';
 import type { Hub, Topic } from '@/lib/lessonHub/types';
 import { allMoves, chunk, dialoguePages, isPron, pairRows, sub } from '@/lib/lessonHub/engine';
 import { ExampleLines, GapLine, HintRows, MarkedPassage, Slots, Toggle, useHub } from './shared';
-import { VoicedLegend, YouGlishLink } from './rounds';
+import { VoicedLegend, YouGlishLink, toggleReveal } from './rounds';
 import FlowSketch from './FlowSketch';
 
 /* One round becomes one or more slides. Nothing scrolls: anything too long for a
@@ -20,6 +20,7 @@ interface Slide {
   hint?: boolean;
   dlgControls?: boolean;
   answers?: boolean;
+  revealCount?: number;      // answers can be revealed one at a time (Next answer / ↓ / click)
 }
 
 const CHUNK = { vocab: 6, chips: 12 };
@@ -44,7 +45,7 @@ function speakingSlides(t: Topic, hub: Hub): Slide[] {
       case 'vocabTable':
         chunk(vocab, CHUNK.vocab).forEach((g, i, a) => add({ title: "Today's words", part: partOf(i, a), body:
           <table className="sl-vocab"><tbody>{g.map((v, k) => (
-            <tr key={k}><td className="w">{v.word}<div className="pos">{v.pos}</div></td>
+            <tr key={k}><td className="w">{v.word}{v.ipa && <div className="wipa ipa">{v.ipa}</div>}<div className="pos">{v.pos}</div></td>
               <td className="d">{v.definition}<div className="ex">{v.example}</div></td></tr>
           ))}</tbody></table> }));
         break;
@@ -67,7 +68,7 @@ function speakingSlides(t: Topic, hub: Hub): Slide[] {
           ))}</div> });
         break;
       case 'prompts':
-        add({ title: 'Which frame?', hint: true, answers: true, body: <PromptRows structures={structures} /> });
+        add({ title: 'Which frame?', hint: true, answers: true, revealCount: structures.length, body: <PromptRows structures={structures} /> });
         break;
       case 'dialogue': {
         const d = t.dialogue;
@@ -174,13 +175,14 @@ function pronSlides(t: Topic): Slide[] {
   return S;
 }
 
-/** "Which frame?": slot content only; the answer key (the full example) shows when answers are on. */
+/** "Which frame?": slot content only. Answers (the full example) reveal one at a time, or all at once. */
 function PromptRows({ structures }: { structures: { promptSlots?: string; example: string }[] }) {
-  const { dlg } = useHub();
-  return <div className={`sl-prompts${dlg.answers ? ' answered' : ''}`}>{structures.map((f, k) => (
-    <div key={k}>
+  const { dlg, setDlg } = useHub();
+  const shown = (k: number) => dlg.answers || dlg.revealed.includes(k);
+  return <div className={`sl-prompts${dlg.answers || dlg.revealed.length ? ' answered' : ''}`}>{structures.map((f, k) => (
+    <div key={k} className="reveal1" onClick={() => setDlg({ revealed: toggleReveal(dlg.revealed, k) })}>
       <span className="pn">{k + 1}</span>{f.promptSlots || ''}
-      {dlg.answers && <ExampleLines example={f.example} className="sl-ans" />}
+      {shown(k) && <ExampleLines example={f.example} className="sl-ans" />}
     </div>
   ))}</div>;
 }
@@ -226,13 +228,19 @@ export default function PresentMode({ t, slide, setSlide, onExit }: {
   const s = S[i];
   const showHint = s.hint && dlg.hint;
 
-  const goTo = (n: number) => { setSlide(Math.max(0, Math.min(n, S.length - 1))); setDlg({ answers: false }); };
+  const goTo = (n: number) => { setSlide(Math.max(0, Math.min(n, S.length - 1))); setDlg({ answers: false, revealed: [] }); };
+  // the first answer not yet revealed, in order; null when all are showing
+  const nextHidden = s.revealCount && !dlg.answers
+    ? Array.from({ length: s.revealCount }, (_, k) => k).find(k => !dlg.revealed.includes(k)) ?? null
+    : null;
+  const revealNext = () => { if (nextHidden !== null) setDlg({ revealed: [...dlg.revealed, nextHidden] }); };
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.target as HTMLElement)?.tagName === 'TEXTAREA') return;
       if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') { e.preventDefault(); goTo(i + 1); }
       else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); goTo(i - 1); }
+      else if (e.key === 'ArrowDown' && s.revealCount) { e.preventDefault(); revealNext(); }
       else if (e.key === 'Escape') onExit();
     };
     document.addEventListener('keydown', onKey);
@@ -254,8 +262,13 @@ export default function PresentMode({ t, slide, setSlide, onExit }: {
         {s.answers && <>
           <span className="slctlsep"></span>
           <span className="slctllabel">Answers</span>
-          <Toggle on={!dlg.answers} onClick={() => setDlg({ answers: false })}>hidden</Toggle>
+          <Toggle on={!dlg.answers && !dlg.revealed.length} onClick={() => setDlg({ answers: false, revealed: [] })}>hidden</Toggle>
           <Toggle on={dlg.answers} onClick={() => setDlg({ answers: true })}>shown</Toggle>
+          {!!s.revealCount && (
+            <button type="button" disabled={nextHidden === null} onClick={revealNext} title="Reveal the next answer (↓ key)">
+              Next answer {'\u2193'}
+            </button>
+          )}
         </>}
         <button type="button" onClick={onExit}>Exit</button>
       </div>

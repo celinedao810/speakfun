@@ -36,7 +36,7 @@ export default function LessonHub({ hub, topics, initialTopicId, onNavigate }: {
   const [topicId, setTopicId] = useState<string | null>(initial?.id ?? null);
   const [present, setPresent] = useState(false);
   const [slide, setSlide] = useState(0);
-  const [dlg, setDlgState] = useState<DlgState>({ hide: null, frames: true, hint: false, answers: false });
+  const [dlg, setDlgState] = useState<DlgState>({ hide: null, frames: true, hint: false, answers: false, revealed: [] });
   const setDlg = useCallback((p: Partial<DlgState>) => setDlgState(d => ({ ...d, ...p })), []);
 
   const topic = useMemo(() => topics.find(t => t.id === topicId) || null, [topics, topicId]);

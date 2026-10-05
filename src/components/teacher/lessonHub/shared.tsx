@@ -10,6 +10,7 @@ export interface DlgState {
   frames: boolean;       // true = frame spans blanked in the dialogue
   hint: boolean;         // frames panel beside dialogue/prompts
   answers: boolean;      // reveal answers in prompts and pronunciation parts
+  revealed: number[];    // "Which frame?" answers revealed one at a time (all shown when answers is on)
 }
 
 interface HubCtx {
