@@ -522,3 +522,16 @@
 .e4it .prompt.reveal1:hover .pslots,.e4it .sl-prompts .reveal1:hover{text-decoration:underline;text-decoration-color:var(--mark);
   text-decoration-thickness:3px;text-underline-offset:4px}
 .e4it .slchrome button[disabled]{opacity:.35;cursor:default}
+
+/* Conversation slides fill the slide: sizes are multiplied by --fit, which PresentMode sets
+   to the largest value that still fits without scrolling (0.75 to 2). */
+.e4it .sl-dlg.fit .sl-line{padding:calc(.9vh * var(--fit,1)) 0}
+.e4it .sl-dlg.fit .sl-line .say{font-size:calc(clamp(.88rem,2.25vh,1.4rem) * var(--fit,1))}
+.e4it .sl-dlg.fit .sl-line .who{font-size:calc(clamp(.7rem,1.8vh,1.05rem) * var(--fit,1));
+  flex-basis:calc(clamp(6rem,11vw,11rem) * min(var(--fit,1), 1.4))}
+.e4it .sl-dlg.fit.dense .sl-line{padding:calc(.45vh * var(--fit,1)) 0}
+.e4it .sl-dlg.fit.dense .sl-line .say{font-size:calc(clamp(.82rem,2.05vh,1.3rem) * var(--fit,1))}
+.e4it .sl-dlg.fit.dense .sl-line .who{font-size:calc(clamp(.65rem,1.6vh,.95rem) * var(--fit,1))}
+.e4it .sl-flowwrap .sl-dlg.fit .sl-line{padding:0 0 calc(1.1vh * var(--fit,1))}
+.e4it .sl-flowwrap .sl-dlg.fit .sl-line .say{font-size:calc(clamp(.8rem,1.95vh,1.2rem) * var(--fit,1))}
+.e4it .sl-dlg.fit .sl-part{font-size:calc(clamp(.6rem,1.45vh,.85rem) * var(--fit,1))}

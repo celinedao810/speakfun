@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useLayoutEffect, useRef } from 'react';
 import type { Hub, Topic } from '@/lib/lessonHub/types';
 import { allMoves, chunk, dialoguePages, isPron, pairRows, promptOrder, sub } from '@/lib/lessonHub/engine';
 import { ExampleLines, GapLine, HintRows, MarkedPassage, Slots, Toggle, useHub } from './shared';
@@ -19,6 +19,7 @@ interface Slide {
   body: React.ReactNode;
   hint?: boolean;
   dlgControls?: boolean;
+  fit?: boolean;             // scale the text to fill the slide (see useFitText)
   answers?: boolean;
   revealCount?: number;      // answers can be revealed one at a time (Next answer / ↓ / click)
 }
@@ -75,13 +76,13 @@ function speakingSlides(t: Topic, hub: Hub): Slide[] {
         if (!d) break;
         // see dialoguePages for when a dialogue is split across slides
         dialoguePages(d.lines).forEach((g, i, a) => {
-          const lines = <div className={`sl-dlg${g.length > 8 ? ' dense' : ''}`}>{g.map((l, k) => (
+          const lines = <div className={`sl-dlg fit${g.length > 8 ? ' dense' : ''}`}>{g.map((l, k) => (
             <div key={k} className={`sl-line${k > 0 && l.scene !== g[k - 1].scene ? ' newscene' : ''}`}>
               {l.part ? <div className="sl-part">{l.part}</div> : <div className="who">{l.role}</div>}
               <div className="say"><GapLine line={l} /></div>
             </div>
           ))}</div>;
-          add({ title: 'The conversation', part: partOf(i, a), hint: true, dlgControls: true,
+          add({ title: 'The conversation', part: partOf(i, a), hint: true, dlgControls: true, fit: true,
             body: t.flow
               ? <div className="sl-flowwrap"><FlowSketch flow={t.flow} projectName={hub.project.name} /><div>{lines}</div></div>
               : lines });
@@ -215,6 +216,37 @@ function ChoiceRows({ items, offset }: {
   ))}</div>;
 }
 
+/*
+ * Fit a slide's text to its space: find the largest --fit multiplier (FIT.min to FIT.max)
+ * at which .slmain doesn't need to scroll. Refits when the slide's box changes size (window,
+ * projector, Hint panel) and when the given deps change (blanks shown or hidden).
+ */
+const FIT = { min: 0.75, max: 2 };
+
+function useFitText(main: React.RefObject<HTMLDivElement | null>, on: boolean, deps: unknown[]) {
+  useLayoutEffect(() => {
+    const box = main.current;
+    const el = box?.querySelector<HTMLElement>('.fit');
+    if (!on || !box || !el) return;
+    const fits = () => box.scrollHeight <= box.clientHeight;
+    const fit = () => {
+      let lo = FIT.min, hi = FIT.max;
+      for (let k = 0; k < 9; k++) {
+        const mid = (lo + hi) / 2;
+        el.style.setProperty('--fit', String(mid));
+        if (fits()) lo = mid; else hi = mid;
+      }
+      el.style.setProperty('--fit', String(lo));
+    };
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(box);
+    document.fonts?.ready.then(fit);   // web fonts can change line wrapping once loaded
+    return () => ro.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [on, ...deps]);
+}
+
 export function slidesFor(t: Topic, hub: Hub): Slide[] {
   return isPron(t) ? pronSlides(t) : speakingSlides(t, hub);
 }
@@ -227,6 +259,8 @@ export default function PresentMode({ t, slide, setSlide, onExit }: {
   const i = Math.max(0, Math.min(slide, S.length - 1));
   const s = S[i];
   const showHint = s.hint && dlg.hint;
+  const mainRef = useRef<HTMLDivElement>(null);
+  useFitText(mainRef, !!s.fit, [i, t.id, showHint, dlg.frames, dlg.hide]);
 
   const goTo = (n: number) => { setSlide(Math.max(0, Math.min(n, S.length - 1))); setDlg({ answers: false, revealed: [] }); };
   // the first answer not yet revealed, in order; null when all are showing
@@ -273,7 +307,7 @@ export default function PresentMode({ t, slide, setSlide, onExit }: {
         <button type="button" onClick={onExit}>Exit</button>
       </div>
       <div className={`slbody${showHint ? ' hinted' : ''}`}>
-        <div className="slmain">
+        <div className="slmain" ref={mainRef}>
           <h2 className="sltitle">{s.title}{s.part && <> <span className="slof">{s.part[0]}/{s.part[1]}</span></>}</h2>
           {s.tell && <p className="sltell">{sub(s.tell, hub)}</p>}
           {s.body}
