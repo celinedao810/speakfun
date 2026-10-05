@@ -7,7 +7,7 @@ import type {
   FreeTalkScoringResult,
 } from '@/lib/types';
 import type {
-  PronunciationResult, LiveEvaluationResult, AISuggestion,
+  PronunciationResult, LiveEvaluationResult, AISuggestion, VocabClipMatch,
 } from '@/lib/services/geminiService';
 
 async function post<T>(url: string, body: Record<string, unknown>): Promise<T> {
@@ -165,46 +165,42 @@ export async function scoreVocabGuessMulti(
 }
 
 /**
- * One call per spoken phrase: sends the clip with every visible word attached and
- * resolves which block it matched. Drop-in replacement for scoreVocabGuessMulti.
+ * One request per spoken phrase: sends the clip with every visible word attached and
+ * resolves which blocks it matched — a phrase can name several words at once.
  */
 export async function matchVocabFromCandidates(
   candidates: Array<{ uid: string; word: string; ipa: string }>,
   audioBase64: string,
   timerMode: boolean,
-): Promise<{ matchedUid: string | null; result: VocabScoringResult | null }> {
-  const res = await post<{
-    recognizedText: string;
-    matchedWord: string;
-    pronunciationScore: number;
-    pointsEarned: number;
-    feedback: string;
-  }>('/api/ai/homework-score', {
+): Promise<Array<{ matchedUid: string; result: VocabScoringResult }>> {
+  const res = await post<{ recognizedText: string; matches: VocabClipMatch[] }>('/api/ai/homework-score', {
     type: 'vocab-match',
     candidates: candidates.map(({ word, ipa }) => ({ word, ipa })),
     audioBase64,
     timerMode,
   }).catch(() => null);
+  if (!res) return [];
 
-  if (!res || !res.matchedWord) return { matchedUid: null, result: null };
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[vocab-match] heard:', JSON.stringify(res.recognizedText), '→', res.matches.map(m => m.word));
+  }
 
-  const matched = candidates.find(
-    c => c.word.trim().toLowerCase() === res.matchedWord.trim().toLowerCase()
-  );
-  if (!matched) return { matchedUid: null, result: null };
-
-  return {
-    matchedUid: matched.uid,
-    result: {
-      vocabItemId: '',  // Set by caller
-      recognizedWord: res.recognizedText,
-      isCorrectWord: true,
-      pronunciationScore: res.pronunciationScore,
-      pointsEarned: res.pointsEarned,
-      feedback: res.feedback,
-      highlights: [],
-    },
-  };
+  return res.matches.flatMap(m => {
+    const matched = candidates.find(c => c.word === m.word);
+    if (!matched) return [];
+    return [{
+      matchedUid: matched.uid,
+      result: {
+        vocabItemId: '',  // Set by caller
+        recognizedWord: res.recognizedText,
+        isCorrectWord: true,
+        pronunciationScore: m.pronunciationScore,
+        pointsEarned: m.pointsEarned,
+        feedback: m.feedback,
+        highlights: [],
+      },
+    }];
+  });
 }
 
 export const scoreStructureReading = (

@@ -203,9 +203,8 @@ export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1Vocab
     setPendingCount(c => c + 1);
 
     matchVocabFromCandidates(candidates, base64, true)
-      .then(({ matchedUid, result }) => {
-        if (!matchedUid || !result) return;
-
+      // One phrase can name several words ("database priority backlog") — credit each
+      .then(matches => matches.forEach(({ matchedUid, result }) => {
         // Resolve against the submission-time snapshot, NOT the live ref.
         // This gives the user credit even if the block fell off while AI was scoring.
         const matchedBlock = visibleNow.find(b => b.uid === matchedUid);
@@ -254,7 +253,7 @@ export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1Vocab
 
         setMatchFlash({ word: matchedBlock.vocabItem.word, pts: result.pointsEarned });
         setTimeout(() => setMatchFlash(null), 1400);
-      })
+      }))
       .finally(() => {
         pendingCountRef.current--;
         setPendingCount(c => c - 1);

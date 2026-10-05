@@ -4,44 +4,105 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 interface UseContinuousSpeechOptions<T> {
   /**
-   * Called with a base64 webm clip each time the learner finishes a phrase, plus
+   * Called with a base64 WAV clip each time the learner finishes a phrase, plus
    * whatever onSpeechStart returned when that phrase began.
    */
-  onUtterance: (base64: string, atStart: T) => void;
+  onUtterance: (base64Wav: string, atStart: T) => void;
   /**
    * Called the moment a phrase begins. Its return value travels with that clip, so
    * callers can snapshot what was on screen when the learner started speaking.
    */
   onSpeechStart?: () => T;
-  /** Clips shorter than this are discarded as noise. */
-  minSpeechMs?: number;
+  /** Clips with less voiced audio than this are discarded as noise. */
+  minVoicedMs?: number;
   /** Pause length that ends an utterance. */
   silenceMs?: number;
   /** Hard cut so one long ramble can't hold up scoring. */
   maxUtteranceMs?: number;
 }
 
-const POLL_MS = 50;
+/** ~43ms per frame at 48kHz. */
+const FRAME_SIZE = 2048;
 const CALIBRATION_MS = 400;
 /** Absolute floor so a dead-silent room can't drive the threshold to ~0. */
 const FLOOR_MIN = 0.012;
 const NOISE_MULTIPLIER = 2.5;
-/** Consecutive over-threshold polls needed to open an utterance. */
-const ONSET_POLLS = 2;
+/** Consecutive over-threshold frames needed to open an utterance. */
+const ONSET_FRAMES = 2;
+/**
+ * Audio kept from before the onset is detected. Without it a clip starts ~100ms
+ * into the word, and a short word like "bug" arrives as "-ug".
+ */
+const PRE_ROLL_MS = 400;
+/** Plenty for speech, and keeps a few-second clip well under 200KB. */
+const TARGET_SAMPLE_RATE = 16_000;
+
+interface Utterance<T> {
+  frames: Float32Array[];
+  durationMs: number;
+  voicedMs: number;
+  silenceMs: number;
+  atStart: T;
+}
+
+/** Downsamples mono float frames to 16kHz and packs them as a base64 16-bit PCM WAV. */
+function encodeWavBase64(frames: Float32Array[], inputRate: number): string {
+  const total = frames.reduce((n, f) => n + f.length, 0);
+  const input = new Float32Array(total);
+  let offset = 0;
+  for (const f of frames) { input.set(f, offset); offset += f.length; }
+
+  const outRate = Math.min(inputRate, TARGET_SAMPLE_RATE);
+  const step = inputRate / outRate;
+  const outLen = Math.floor(total / step);
+  const view = new DataView(new ArrayBuffer(44 + outLen * 2));
+
+  const writeStr = (at: number, s: string) => { for (let i = 0; i < s.length; i++) view.setUint8(at + i, s.charCodeAt(i)); };
+  writeStr(0, 'RIFF');
+  view.setUint32(4, 36 + outLen * 2, true);
+  writeStr(8, 'WAVE');
+  writeStr(12, 'fmt ');
+  view.setUint32(16, 16, true);         // fmt chunk size
+  view.setUint16(20, 1, true);          // PCM
+  view.setUint16(22, 1, true);          // mono
+  view.setUint32(24, outRate, true);
+  view.setUint32(28, outRate * 2, true); // byte rate
+  view.setUint16(32, 2, true);          // block align
+  view.setUint16(34, 16, true);         // bits per sample
+  writeStr(36, 'data');
+  view.setUint32(40, outLen * 2, true);
+
+  // Average each window of input samples — a cheap low-pass that avoids aliasing.
+  for (let i = 0; i < outLen; i++) {
+    const start = Math.floor(i * step);
+    const end = Math.min(Math.floor((i + 1) * step), total);
+    let sum = 0;
+    for (let j = start; j < end; j++) sum += input[j];
+    const v = Math.max(-1, Math.min(1, sum / Math.max(1, end - start)));
+    view.setInt16(44 + i * 2, v < 0 ? v * 0x8000 : v * 0x7fff, true);
+  }
+
+  const bytes = new Uint8Array(view.buffer);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  }
+  return btoa(binary);
+}
 
 /**
- * Keeps one mic stream open and emits a separate clip per spoken phrase.
+ * Keeps one mic stream open and emits a separate WAV clip per spoken phrase.
  *
- * A fresh MediaRecorder is created per utterance on the *same* MediaStream rather
- * than slicing one long recording: webm only carries its header in the first chunk,
- * so mid-stream slices aren't independently decodable. Stopping a MediaRecorder
- * doesn't kill the stream (only track.stop() does), so this costs no re-prompt and
- * no stream-acquisition latency between phrases.
+ * Raw samples are read straight off the stream (ScriptProcessorNode) instead of
+ * starting a MediaRecorder at each onset: a recorder only starts once speech is
+ * detected, so it always clipped the start of the word. Here the last PRE_ROLL_MS
+ * of audio is always buffered and becomes the head of each clip. WAV also sidesteps
+ * Safari, whose MediaRecorder produces mp4 rather than webm.
  */
 export function useContinuousSpeech<T = void>({
   onUtterance,
   onSpeechStart,
-  minSpeechMs = 300,
+  minVoicedMs = 120,
   silenceMs = 700,
   maxUtteranceMs = 6_000,
 }: UseContinuousSpeechOptions<T>) {
@@ -52,25 +113,22 @@ export function useContinuousSpeech<T = void>({
 
   const streamRef = useRef<MediaStream | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
-  const analyserRef = useRef<AnalyserNode | null>(null);
-  const dataRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
-  const pollRef = useRef<number | null>(null);
+  const nodesRef = useRef<AudioNode[]>([]);
+  const sampleRateRef = useRef(48_000);
 
-  const recorderRef = useRef<MediaRecorder | null>(null);
-  const speechStartRef = useRef(0);
-  const silenceStartRef = useRef<number | null>(null);
+  const utteranceRef = useRef<Utterance<T> | null>(null);
+  const preRollRef = useRef<{ frames: Float32Array[]; ms: number }>({ frames: [], ms: 0 });
   const onsetCountRef = useRef(0);
 
   /**
-   * >0 while a clip is being recorded or decoded but hasn't reached onUtterance yet.
-   * Callers poll this before declaring an exercise over, so a phrase spoken just as
-   * the last block resolves still gets counted.
+   * 1 while a phrase is being captured. Clips are encoded and handed to onUtterance
+   * synchronously when the phrase ends, so callers polling this before declaring an
+   * exercise over can't miss a phrase spoken just as the last block resolves.
    */
   const busyRef = useRef(0);
 
   const thresholdRef = useRef(FLOOR_MIN);
-  const calibrationSamplesRef = useRef<number[]>([]);
-  const calibratingRef = useRef(true);
+  const calibrationRef = useRef<{ samples: number[]; ms: number } | null>(null);
   const levelRef = useRef(0);
 
   const onUtteranceRef = useRef(onUtterance);
@@ -78,162 +136,111 @@ export function useContinuousSpeech<T = void>({
   const onSpeechStartRef = useRef(onSpeechStart);
   onSpeechStartRef.current = onSpeechStart;
 
-  /** Reads the analyser once and returns RMS in 0–1. */
-  const readRms = useCallback(() => {
-    const analyser = analyserRef.current;
-    const data = dataRef.current;
-    if (!analyser || !data) return 0;
-    analyser.getByteTimeDomainData(data);
-    let sum = 0;
-    for (let i = 0; i < data.length; i++) {
-      const v = (data[i] - 128) / 128;
-      sum += v * v;
-    }
-    return Math.sqrt(sum / data.length);
-  }, []);
-
-  /** Ends the current utterance; its onstop handler decides whether to emit it. */
-  const closeUtterance = useCallback(() => {
-    const rec = recorderRef.current;
-    recorderRef.current = null;
-    silenceStartRef.current = null;
+  /** Ends the current phrase, emitting it unless it's too little speech to be a word. */
+  const closeUtterance = useCallback((emit: boolean) => {
+    const utt = utteranceRef.current;
+    utteranceRef.current = null;
     onsetCountRef.current = 0;
     setIsSpeaking(false);
-    if (rec && rec.state !== 'inactive') rec.stop();
-  }, []);
-
-  const openUtterance = useCallback(() => {
-    const stream = streamRef.current;
-    if (!stream || recorderRef.current) return;
-
-    let rec: MediaRecorder;
+    if (!utt) return;
     try {
-      rec = new MediaRecorder(stream);
-    } catch (err) {
-      console.error('[useContinuousSpeech] MediaRecorder failed:', err);
-      return;
-    }
-
-    // Chunks live in the closure, not a ref — each utterance owns its own buffer
-    // so a clip that's still decoding can't be clobbered by the next one.
-    const localChunks: Blob[] = [];
-    const startedAt = performance.now();
-    const atStart = onSpeechStartRef.current?.() as T;
-
-    rec.ondataavailable = e => { if (e.data.size > 0) localChunks.push(e.data); };
-    rec.onstop = () => {
-      const durationMs = performance.now() - startedAt;
-      if (localChunks.length === 0 || durationMs < minSpeechMs) {
-        busyRef.current--;
-        return;
+      if (emit && utt.voicedMs >= minVoicedMs) {
+        onUtteranceRef.current(encodeWavBase64(utt.frames, sampleRateRef.current), utt.atStart);
       }
-      const blob = new Blob(localChunks, { type: 'audio/webm' });
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const base64 = (reader.result as string).split(',')[1];
-        try {
-          if (base64) onUtteranceRef.current(base64, atStart);
-        } finally {
-          busyRef.current--;  // only after the consumer has taken it
-        }
-      };
-      reader.onerror = () => { busyRef.current--; };
-      reader.readAsDataURL(blob);
-    };
-
-    try {
-      rec.start();
-    } catch (err) {
-      console.error('[useContinuousSpeech] MediaRecorder.start failed:', err);
-      onsetCountRef.current = 0;  // wait for a fresh onset rather than retrying every poll
-      return;
+    } finally {
+      busyRef.current = 0;
     }
-    // Count the clip only once it's really recording — onstop is what decrements,
-    // and it never fires for a recorder that failed to start.
-    busyRef.current++;
-    speechStartRef.current = startedAt;
-    silenceStartRef.current = null;
-    recorderRef.current = rec;
-    setIsSpeaking(true);
-  }, [minSpeechMs]);
+  }, [minVoicedMs]);
 
-  const poll = useCallback(() => {
-    const rms = readRms();
+  const onFrame = useCallback((input: Float32Array) => {
+    // The browser reuses the input buffer between callbacks, so keep a copy.
+    const frame = new Float32Array(input);
+    const frameMs = (frame.length / sampleRateRef.current) * 1000;
+
+    let sum = 0;
+    for (let i = 0; i < frame.length; i++) sum += frame[i] * frame[i];
+    const rms = Math.sqrt(sum / frame.length);
 
     // Smooth for display only — gating uses the raw value.
     levelRef.current = levelRef.current * 0.7 + Math.min(rms * 4, 1) * 0.3;
     setLevel(levelRef.current);
 
-    // Calibrate the noise floor from the room's first moments.
-    if (calibratingRef.current) {
-      calibrationSamplesRef.current.push(rms);
-      if (calibrationSamplesRef.current.length * POLL_MS >= CALIBRATION_MS) {
-        const samples = calibrationSamplesRef.current;
-        const floor = samples.reduce((a, b) => a + b, 0) / samples.length;
-        thresholdRef.current = Math.max(floor * NOISE_MULTIPLIER, FLOOR_MIN);
-        calibratingRef.current = false;
+    const utt = utteranceRef.current;
+    if (!utt) {
+      const preRoll = preRollRef.current;
+      preRoll.frames.push(frame);
+      preRoll.ms += frameMs;
+      while (preRoll.frames.length > 1 && preRoll.ms - frameMs >= PRE_ROLL_MS) {
+        preRoll.frames.shift();
+        preRoll.ms -= frameMs;
+      }
+
+      // Calibrate the noise floor from the room's first moments.
+      const cal = calibrationRef.current;
+      if (cal) {
+        cal.samples.push(rms);
+        cal.ms += frameMs;
+        if (cal.ms >= CALIBRATION_MS) {
+          const floor = cal.samples.reduce((a, b) => a + b, 0) / cal.samples.length;
+          thresholdRef.current = Math.max(floor * NOISE_MULTIPLIER, FLOOR_MIN);
+          calibrationRef.current = null;
+        }
+        return;
+      }
+
+      // Wait for a sustained onset so a single click doesn't open a clip.
+      onsetCountRef.current = rms > thresholdRef.current ? onsetCountRef.current + 1 : 0;
+      if (onsetCountRef.current >= ONSET_FRAMES) {
+        utteranceRef.current = {
+          frames: preRoll.frames,  // already ends with the onset frames
+          durationMs: 0,
+          voicedMs: onsetCountRef.current * frameMs,
+          silenceMs: 0,
+          atStart: onSpeechStartRef.current?.() as T,
+        };
+        preRollRef.current = { frames: [], ms: 0 };
+        busyRef.current = 1;
+        setIsSpeaking(true);
       }
       return;
     }
 
-    const now = performance.now();
-    const speaking = rms > thresholdRef.current;
-
-    if (!recorderRef.current) {
-      // Idle: wait for a sustained onset so a single click doesn't open a clip.
-      onsetCountRef.current = speaking ? onsetCountRef.current + 1 : 0;
-      if (onsetCountRef.current >= ONSET_POLLS) openUtterance();
-      return;
-    }
-
-    if (now - speechStartRef.current >= maxUtteranceMs) {
-      closeUtterance();
-      return;
-    }
-
-    if (speaking) {
-      silenceStartRef.current = null;
+    utt.frames.push(frame);
+    utt.durationMs += frameMs;
+    if (rms > thresholdRef.current) {
+      utt.voicedMs += frameMs;
+      utt.silenceMs = 0;
     } else {
-      if (silenceStartRef.current === null) silenceStartRef.current = now;
-      else if (now - silenceStartRef.current >= silenceMs) closeUtterance();
+      utt.silenceMs += frameMs;
     }
-  }, [readRms, openUtterance, closeUtterance, maxUtteranceMs, silenceMs]);
+    if (utt.silenceMs >= silenceMs || utt.durationMs >= maxUtteranceMs) closeUtterance(true);
+  }, [closeUtterance, silenceMs, maxUtteranceMs]);
 
-  // The interval captures poll once; go through a ref so a re-created poll
-  // (changed options) can't leave a stale gate running.
-  const pollFnRef = useRef(poll);
-  pollFnRef.current = poll;
+  // The audio callback is wired once per start(); go through a ref so a re-created
+  // onFrame (changed options) can't leave a stale gate running.
+  const onFrameRef = useRef(onFrame);
+  onFrameRef.current = onFrame;
 
-  const stop = useCallback(() => {
-    if (pollRef.current !== null) {
-      clearInterval(pollRef.current);
-      pollRef.current = null;
-    }
-    // Let any in-flight clip through — the learner may have just spoken.
-    const hadRecorder = !!recorderRef.current;
-    closeUtterance();
+  /** Closes the mic. flush: emit a phrase that was mid-capture rather than drop it. */
+  const release = useCallback((flush: boolean) => {
+    closeUtterance(flush);
 
-    const stream = streamRef.current;
-    const ctx = audioCtxRef.current;
+    nodesRef.current.forEach(n => n.disconnect());
+    nodesRef.current = [];
+    streamRef.current?.getTracks().forEach(t => t.stop());
     streamRef.current = null;
+    const ctx = audioCtxRef.current;
     audioCtxRef.current = null;
-    analyserRef.current = null;
-    dataRef.current = null;
+    if (ctx && ctx.state !== 'closed') ctx.close().catch(() => {});
 
-    const teardown = () => {
-      stream?.getTracks().forEach(t => t.stop());
-      if (ctx && ctx.state !== 'closed') ctx.close().catch(() => {});
-    };
-    // MediaRecorder.stop() flushes asynchronously; killing the tracks in the same
-    // turn can truncate the learner's last word. Give onstop a moment to fire.
-    if (hadRecorder) window.setTimeout(teardown, 250);
-    else teardown();
-
+    preRollRef.current = { frames: [], ms: 0 };
     levelRef.current = 0;
     setLevel(0);
-    setIsSpeaking(false);
     setIsListening(false);
   }, [closeUtterance]);
+
+  /** Stop button: the learner may have just spoken, so their last phrase still counts. */
+  const stop = useCallback(() => release(true), [release]);
 
   /** Returns false if the mic could not be opened, so callers can hold off. */
   const start = useCallback(async (): Promise<boolean> => {
@@ -247,41 +254,44 @@ export function useContinuousSpeech<T = void>({
 
       const Ctor = window.AudioContext || (window as any).webkitAudioContext;
       const ctx: AudioContext = new Ctor();
+      audioCtxRef.current = ctx;
       // iOS starts the context suspended; the tap that called start() unlocks it.
       if (ctx.state === 'suspended') await ctx.resume();
+      sampleRateRef.current = ctx.sampleRate;
+
       const source = ctx.createMediaStreamSource(stream);
-      const analyser = ctx.createAnalyser();
-      analyser.fftSize = 512;
-      source.connect(analyser);
+      // ScriptProcessorNode is deprecated but runs everywhere without a separate
+      // worklet module, and unlike rAF/setInterval it isn't throttled in a
+      // background tab. It only fires while connected to the destination, so route
+      // it through a muted gain to avoid playing the mic back.
+      const processor = ctx.createScriptProcessor(FRAME_SIZE, 1, 1);
+      const mute = ctx.createGain();
+      mute.gain.value = 0;
+      processor.onaudioprocess = e => onFrameRef.current(e.inputBuffer.getChannelData(0));
+      source.connect(processor);
+      processor.connect(mute);
+      mute.connect(ctx.destination);
+      nodesRef.current = [source, processor, mute];
 
-      audioCtxRef.current = ctx;
-      analyserRef.current = analyser;
-      dataRef.current = new Uint8Array(new ArrayBuffer(analyser.fftSize));
-
-      calibrationSamplesRef.current = [];
-      calibratingRef.current = true;
+      calibrationRef.current = { samples: [], ms: 0 };
       thresholdRef.current = FLOOR_MIN;
       onsetCountRef.current = 0;
-      silenceStartRef.current = null;
+      preRollRef.current = { frames: [], ms: 0 };
 
       setIsListening(true);
-      // setInterval, not rAF: rAF throttles in a backgrounded tab, which would
-      // silently stop the gate mid-exercise.
-      pollRef.current = window.setInterval(() => pollFnRef.current(), POLL_MS);
       return true;
     } catch (err) {
       console.error('[useContinuousSpeech] Mic unavailable:', err);
       setError('Không thể truy cập micro. Hãy cho phép quyền micro rồi thử lại.');
-      streamRef.current?.getTracks().forEach(t => t.stop());
-      streamRef.current = null;
+      release(false);
       return false;
     }
-  }, []);
+  }, [release]);
 
-  // Release the mic if the learner navigates away mid-exercise.
-  const stopRef = useRef(stop);
-  stopRef.current = stop;
-  useEffect(() => () => stopRef.current(), []);
+  // Release the mic if the learner navigates away mid-exercise — nothing left to score.
+  const releaseRef = useRef(release);
+  releaseRef.current = release;
+  useEffect(() => () => releaseRef.current(false), []);
 
   return { isListening, isSpeaking, level, error, start, stop, busyRef };
 }

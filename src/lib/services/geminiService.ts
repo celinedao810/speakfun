@@ -5,6 +5,7 @@ import {
   VocabScoringResult, StructureScoringResult, ConversationScoringResult, ReadingScoringResult,
   ConversationExercise, ConversationTurnScoringResult, FreeTalkScoringResult,
 } from "@/lib/types";
+import { matchSpokenWords } from "@/lib/homework/matchSpokenWord";
 
 /**
  * Robust execution wrapper with exponential backoff for API calls.
@@ -1300,7 +1301,8 @@ export const scoreVocabGuess = async (
   targetWord: string,
   ipa: string,
   audioBase64: string,
-  timerMode: boolean
+  timerMode: boolean,
+  mimeType = 'audio/webm'
 ): Promise<VocabScoringResult> => {
   return safeExecute(async () => {
     const ai = new GoogleGenAI({ apiKey: getApiKey() });
@@ -1320,7 +1322,7 @@ Step 2: Determine isCorrectWord — set true if the learner clearly attempted th
 Step 3: Score pronunciation 0-100 based on how closely vowels, consonants, and stress match the IPA. Be lenient with natural non-native accents.
 Step 4: Give brief feedback in Vietnamese (1 sentence).`
           },
-          { inlineData: { mimeType: 'audio/webm', data: audioBase64 } }
+          { inlineData: { mimeType, data: audioBase64 } }
         ]
       },
       config: {
@@ -1351,72 +1353,72 @@ Step 4: Give brief feedback in Vietnamese (1 sentence).`
   });
 };
 
+export interface VocabClipMatch {
+  word: string;
+  pronunciationScore: number;
+  pointsEarned: number;
+  feedback: string;
+}
+
 /**
- * Given one short clip and every word currently on screen, decides which word
- * (if any) the learner said and scores that word's pronunciation.
+ * Given one short WAV clip and every word currently on screen, decides which words
+ * (if any) the learner said and scores each one's pronunciation.
  *
- * One call replaces the per-candidate fan-out in scoreVocabGuessMulti: the model
- * compares the candidates against each other instead of voting separately, and
- * continuous listening would otherwise multiply that fan-out by every phrase.
- * Returns matchedWord === '' when nothing matched (background noise, a wrong guess).
+ * The clip is transcribed WITHOUT showing the model the candidate words: given the
+ * list, Gemini "hears" one of them in breathing, mumbling or background noise. The
+ * blind transcript is matched against the candidates in code (matchSpokenWords),
+ * and only real matches cost a further call each to score pronunciation.
+ * Returns an empty matches array when nothing matched (background noise, a wrong guess).
  */
 export const matchVocabFromCandidates = async (
   candidates: Array<{ word: string; ipa: string }>,
   audioBase64: string,
   timerMode: boolean
-): Promise<{ recognizedText: string; matchedWord: string; pronunciationScore: number; pointsEarned: number; feedback: string }> => {
-  return safeExecute(async () => {
+): Promise<{ recognizedText: string; matches: VocabClipMatch[] }> => {
+  const recognizedText = await safeExecute(async () => {
     const ai = new GoogleGenAI({ apiKey: getApiKey() });
-    const maxPoints = timerMode ? 1 : 0.5;
-    const list = candidates.map(c => `- "${c.word}" (IPA: ${c.ipa})`).join('\n');
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: {
         parts: [
           {
-            text: `A learner is playing a vocabulary game. They just spoke a short phrase, trying to say ONE of the words below.
+            text: `Transcribe exactly the English words spoken in this short recording of a non-native English learner.
 
-Candidate words:
-${list}
-
-Step 1: Transcribe exactly what the learner said (recognizedText).
-Step 2: Decide which candidate word they attempted (matchedWord). Match a word if the learner clearly attempted it, even with a non-native accent, slight mispronunciation, or minor stress error. Set matchedWord to the empty string "" if they said a completely different word, stayed silent, produced unintelligible sounds, or the audio is just background noise.
-Step 3: If matched, score pronunciation 0-100 based on how closely vowels, consonants, and stress match that word's IPA. Be lenient with natural non-native accents. If not matched, use 0.
-Step 4: Give brief feedback in Vietnamese (1 sentence).
-
-matchedWord must be copied exactly from the candidate list, or be "".`
+Write only what is actually said, word for word. Do not guess, complete or correct anything.
+If there is no clear speech — silence, breathing, coughing, typing, background noise or unintelligible sounds — return an empty string.`
           },
-          { inlineData: { mimeType: 'audio/webm', data: audioBase64 } }
+          { inlineData: { mimeType: 'audio/wav', data: audioBase64 } }
         ]
       },
       config: {
+        temperature: 0,
         responseMimeType: 'application/json',
         responseSchema: {
           type: Type.OBJECT,
-          properties: {
-            recognizedText: { type: Type.STRING },
-            matchedWord: { type: Type.STRING },
-            pronunciationScore: { type: Type.NUMBER },
-            feedback: { type: Type.STRING },
-          },
-          required: ['recognizedText', 'matchedWord', 'pronunciationScore', 'feedback'],
+          properties: { text: { type: Type.STRING } },
+          required: ['text'],
         },
       },
     });
-    const result = JSON.parse(response.text || '{}');
-
-    // Only trust a matchedWord that actually appears in the candidate list.
-    const raw = (result.matchedWord || '').trim().toLowerCase();
-    const hit = raw ? candidates.find(c => c.word.trim().toLowerCase() === raw) : undefined;
-
-    return {
-      recognizedText: result.recognizedText || '',
-      matchedWord: hit?.word || '',
-      pronunciationScore: hit ? (result.pronunciationScore || 0) : 0,
-      pointsEarned: hit ? maxPoints : 0,  // deterministic — never trust AI for this
-      feedback: result.feedback || '',
-    };
+    return (JSON.parse(response.text || '{}').text || '') as string;
   });
+
+  const hits = matchSpokenWords(recognizedText, candidates.map(c => c.word))
+    .map(m => candidates.find(c => c.word === m.word)!)
+    .filter(Boolean);
+
+  // The words are already confirmed from the blind transcript, so only the score and
+  // feedback are taken from here — a scoring failure mustn't cost the learner the word.
+  const matches = await Promise.all(hits.map(async hit => {
+    const scored = await scoreVocabGuess(hit.word, hit.ipa, audioBase64, timerMode, 'audio/wav').catch(() => null);
+    return {
+      word: hit.word,
+      pronunciationScore: scored?.pronunciationScore ?? 0,
+      pointsEarned: timerMode ? 1 : 0.5,  // deterministic — never trust AI for this
+      feedback: scored?.feedback ?? '',
+    };
+  }));
+  return { recognizedText, matches };
 };
 
 /**
