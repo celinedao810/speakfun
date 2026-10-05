@@ -124,7 +124,13 @@ function HubView({ hub, topics, track, setTrack, open }: {
   hub: Hub; topics: Topic[]; track: string; setTrack: (t: string) => void; open: (id: string) => void;
 }) {
   const inTrack = topics.filter(t => t.track === track).sort((a, b) => a.order - b.order);
-  const soon = hub.soon[track] || [];
+  // A placeholder drops out once a lesson with its number is saved, whatever the final title.
+  const built = new Set(inTrack.map(t => t.order));
+  const soon = (hub.soon[track] || []).filter(([n]) => !built.has(n));
+  const rows = [
+    ...inTrack.map(t => ({ n: t.order, topic: t as Topic | null, title: t.title })),
+    ...soon.map(([n, title]) => ({ n, topic: null as Topic | null, title })),
+  ].sort((a, b) => a.n - b.n);
   const pron = inTrack.some(isPron) || track === 'Pronunciation';
   const words = inTrack.reduce((n, t) => n + (t.vocabulary?.length ?? 0), 0);
   const frames = inTrack.reduce((n, t) => n + (t.structures?.length ?? 0), 0);
@@ -151,7 +157,7 @@ function HubView({ hub, topics, track, setTrack, open }: {
       </div>
 
       <table className="topics"><tbody>
-        {inTrack.map(t => (
+        {rows.map(({ n, topic: t, title }) => t ? (
           <tr key={t.id} className="open" onClick={() => open(t.id)}>
             <td className="tnum">{t.order}</td>
             <td><div className="tt">{t.title}</div><div className="tmeet">{t.meeting}</div><div className="tanchor">{t.anchor}</div></td>
@@ -159,8 +165,7 @@ function HubView({ hub, topics, track, setTrack, open }: {
               ? `${t.rounds!.filter(r => r.phase === 'class').length} rounds`
               : <>{t.vocabulary?.length ?? 0} words<br />{t.structures?.length ?? 0} frames</>}</td>
           </tr>
-        ))}
-        {soon.map(([n, title]) => (
+        ) : (
           <tr key={`soon-${n}-${title}`} className="soon"><td className="tnum">{n}</td>
             <td><div className="tt">{title}</div></td><td className="tsoon">being written</td></tr>
         ))}
