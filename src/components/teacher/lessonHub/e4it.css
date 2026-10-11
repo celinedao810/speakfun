@@ -535,3 +535,105 @@
 .e4it .sl-flowwrap .sl-dlg.fit .sl-line{padding:0 0 calc(1.1vh * var(--fit,1))}
 .e4it .sl-flowwrap .sl-dlg.fit .sl-line .say{font-size:calc(clamp(.8rem,1.95vh,1.2rem) * var(--fit,1))}
 .e4it .sl-dlg.fit .sl-part{font-size:calc(clamp(.6rem,1.45vh,.85rem) * var(--fit,1))}
+
+/* ---------- pronunciation: one-by-one answers on reveal and choice slides ---------- */
+.e4it button.n{font:inherit;font-family:var(--mono);color:var(--muted);background:none;border:1px solid transparent;
+  cursor:pointer;border-radius:8px;text-align:left;padding:0 .3vw}
+.e4it button.n:hover{border-color:var(--rule);background:var(--card)}
+.e4it button.n.done{color:var(--teal);font-weight:700}
+
+/* ---------- word stress: explain / rhythm / demo / word list ---------- */
+.e4it .expl{margin-top:.3rem}
+.e4it .expl .ei{padding:.7rem 0;border-top:1px solid var(--rule)}
+.e4it .expl .eh{font-weight:600}
+.e4it .expl .et{font-family:var(--serif);max-width:60ch;margin-top:.2rem}
+.e4it .expl .eexs{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,var(--ew)),1fr));gap:.3rem 1.2rem;
+  margin-top:.4rem;font-family:var(--mono);font-size:.82rem}
+.e4it .expl .eex{white-space:nowrap;color:var(--teal);margin:0}
+.e4it .cols2{display:grid;grid-template-columns:repeat(auto-fit,minmax(16rem,1fr));gap:1.4rem;margin-top:.5rem}
+.e4it .cols2 h5{margin:0;font-size:.95rem;border-bottom:2px solid var(--ink);padding-bottom:.35rem}
+.e4it .cols2 .cn2{font-family:var(--serif);color:var(--muted);font-size:.95rem;margin:.45rem 0 .5rem}
+.e4it .cols2 .cl,.e4it .sl-cols .scl{font-family:var(--mono);padding:.6rem 0;border-top:1px solid var(--rule);font-size:.95rem}
+.e4it .cols2 .cl b,.e4it .sl-cols .scl b{background:var(--mark);font-weight:500;padding:0 .12em}
+/* Noto Sans: the mono face has no Vietnamese letters (tơ) */
+.e4it .syl{font-family:var(--e4it-font-ipa),"Noto Sans",sans-serif;display:inline-block;min-width:3.1em;text-align:center;border:1px solid var(--ink);margin:0 .2rem .3rem 0;padding:.05em .3em}
+.e4it .demoitem{padding:.8rem 0;border-top:1px solid var(--rule)}
+.e4it .demohd{display:flex;flex-wrap:wrap;align-items:baseline;gap:.4rem .8rem}
+.e4it .demohd .pnum{font-family:var(--mono);font-size:.75rem;color:var(--muted)}
+.e4it .demoword{font-weight:600}
+.e4it .demoipa{color:var(--muted);font-size:.9rem}
+.e4it .tries{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.5rem}
+.e4it .try{font-family:var(--mono);border:1px solid var(--rule);padding:.3rem .8rem;border-radius:6px}
+.e4it .try b{background:var(--mark);font-weight:500;padding:0 .1em}
+.e4it .try.ok{border-color:var(--teal);color:var(--teal);font-weight:600}
+.e4it table.wb{width:100%;border-collapse:collapse;margin-top:.4rem}
+.e4it table.wb th{font-family:var(--mono);font-size:.7rem;font-weight:400;color:var(--muted);text-align:left;padding:0 1rem .3rem 0}
+.e4it table.wb td{padding:.55rem 1rem .55rem 0;border-top:1px solid var(--rule);vertical-align:top}
+.e4it table.wb .wbw{font-weight:600}
+.e4it table.wb .wbs{font-family:var(--mono);font-size:.92rem}
+.e4it table.wb .wbs b{background:var(--mark);font-weight:500;padding:0 .1em}
+.e4it table.wb .wbi{color:var(--muted);font-size:.85rem}
+.e4it table.wb .wbg{font-family:var(--serif);color:var(--muted);font-size:.9rem}
+.e4it .ylink{font-family:var(--mono);font-size:.8rem;color:var(--teal);text-decoration:none;border:1px solid var(--teal);
+  border-radius:6px;padding:.2rem .6rem;white-space:nowrap;display:inline-block}
+.e4it .ylink:hover{background:var(--teal);color:#fff}
+
+.e4it .sl-expl .sei{padding:2vh 0;border-top:1px solid var(--rule)}
+.e4it .sl-expl .seh{font-weight:600;font-size:clamp(1.1rem,3.3vh,2rem);line-height:1.3}
+.e4it .sl-expl .set{font-family:var(--serif);font-size:clamp(1rem,2.8vh,1.7rem);margin-top:.6vh;line-height:1.4}
+.e4it .sl-expl .seexs{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,var(--ew)),1fr));gap:.8vh 2vw;
+  margin-top:1vh;font-family:var(--mono);font-size:clamp(.9rem,2.5vh,1.5rem)}
+.e4it .sl-expl .seex{white-space:nowrap;color:var(--teal);margin:0}
+@media (max-width:600px){.e4it .expl .eex,.e4it .sl-expl .seex{white-space:normal}}
+.e4it .sl-cols{display:flex;gap:3vw}
+.e4it .sl-cols>div{flex:1 1 0;min-width:0}
+.e4it .sl-cols h3{font-size:clamp(1.1rem,3.4vh,2rem);margin:0 0 1vh;border-bottom:2px solid var(--ink);padding-bottom:.6vh}
+.e4it .sl-cols .scn{font-family:var(--serif);color:var(--muted);font-size:clamp(.95rem,2.6vh,1.6rem);margin-bottom:1.4vh}
+.e4it .sl-cols .scl{font-size:clamp(1rem,3vh,1.9rem);padding:1.6vh 0}
+.e4it .sl-cols .syl{font-size:.95em}
+.e4it .sl-guide{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:3vw;align-items:start}
+.e4it .sl-guide .sl-expl .sei{padding:1.3vh 0}
+.e4it .sl-guide .sl-expl .seh{font-size:clamp(1rem,2.7vh,1.7rem)}
+.e4it .sl-guide .sl-expl .set{font-size:clamp(.9rem,2.3vh,1.45rem)}
+.e4it .sl-guide .sl-expl .seex{font-size:clamp(.8rem,2.2vh,1.3rem)}
+.e4it .sgcard{border:1px solid var(--rule);border-radius:10px;padding:1.3vh 1.2vw;margin-top:1.2vh}
+.e4it .sgh{display:flex;flex-wrap:wrap;align-items:baseline;gap:.3rem .8rem}
+.e4it .sgword{font-weight:600;font-size:clamp(1.1rem,3.3vh,2rem)}
+.e4it .sgipa{color:var(--muted);font-size:clamp(.8rem,2.2vh,1.3rem)}
+.e4it .sgtries{display:flex;flex-wrap:wrap;gap:.8vh .6vw;margin-top:1vh}
+.e4it .sgtry{font-family:var(--mono);font-size:clamp(.8rem,2.2vh,1.3rem);border:1px solid var(--rule);border-radius:8px;padding:.5vh .8vw;white-space:nowrap}
+.e4it .sgtry b{background:var(--mark);font-weight:500;padding:0 .1em}
+.e4it .sgtry.ok{border-color:var(--teal);color:var(--teal);font-weight:600}
+.e4it .sgnote{font-family:var(--serif);color:var(--muted);font-size:clamp(.8rem,2vh,1.2rem);margin-top:.8vh}
+.e4it .sl-guide .ylink{font-size:clamp(.65rem,1.7vh,.95rem)}
+@media (max-width:700px){.e4it .sl-guide{grid-template-columns:1fr}}
+.e4it .sl-demo .sdword{font-weight:600;font-size:clamp(1.8rem,7vh,4.4rem);margin-bottom:3vh}
+.e4it .sl-demo .sdipa{font-weight:400;color:var(--muted);font-size:.5em;margin-left:.6em}
+.e4it .sl-demo .sdtries{display:flex;flex-direction:column;gap:1.6vh;align-items:flex-start}
+.e4it .sl-demo .sdtry{font-family:var(--mono);font-size:clamp(1.3rem,5vh,3rem);border:1px solid var(--rule);
+  border-radius:10px;padding:.8vh 1.6vw}
+.e4it .sl-demo .sdtry b{background:var(--mark);font-weight:500;padding:0 .1em}
+.e4it .sl-demo .sdtry.ok{border-color:var(--teal);color:var(--teal);font-weight:600}
+.e4it .sl-demo .sdnote{font-family:var(--serif);color:var(--muted);font-size:clamp(.9rem,2.4vh,1.4rem);margin-top:3vh}
+.e4it .sl-demo .ylink,.e4it .slmain>p .ylink{font-size:clamp(.7rem,1.8vh,1rem)}
+
+/* choice with the word on screen (syllable count, stress) */
+.e4it .copt{white-space:nowrap}
+.e4it .choice-row.hw{grid-template-columns:2rem 6rem 8.5rem minmax(0,1fr)}
+.e4it .cwordcell{display:flex;flex-direction:column;min-width:0}
+.e4it .cwordb{font-family:var(--serif);font-weight:600;font-size:1.05rem}
+.e4it .cctx{font-style:normal;font-family:var(--serif);color:var(--muted);font-size:.82rem}
+/* options wrap at their own width, so 4-option stress rows fit the plan column instead of overflowing */
+.e4it .copts.grid{display:flex;flex-wrap:wrap;gap:.5rem;min-width:0}
+.e4it .copts.grid .cnote{flex-basis:100%}
+@media (max-width:820px){
+  .e4it .choice-row.hw{grid-template-columns:2rem 6rem 1fr}
+  .e4it .choice-row.hw .copts.grid{grid-column:1/-1}
+}
+.e4it .sl-choice.hw .cr{grid-template-columns:2.6rem auto clamp(9rem,17vw,17rem) 1fr}
+.e4it .sl-choice .cwordb{font-size:clamp(1rem,2.8vh,1.8rem)}
+.e4it .sl-choice .cctx{font-size:clamp(.75rem,1.9vh,1.15rem)}
+.e4it .sl-copts.grid{display:grid;grid-template-columns:repeat(var(--n),minmax(0,calc(var(--w)*1ch)));gap:.8vh 1vw;
+  font-size:clamp(.85rem,2.3vh,1.45rem)}
+.e4it .sl-copts.grid .sl-copt{font-size:1em;white-space:nowrap}
+.e4it .sl-copts.grid .sl-cword{grid-column:1/-1}

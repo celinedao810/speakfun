@@ -45,7 +45,9 @@ scenes [{name, setting, moves:[{name, purpose, frames:[structure indices]}]}], d
 speaking {scenario, roles:[{name, tasks}]}, homework, comprehension, optional flow (animated user-flow sketch).
 Rules: every gap text must appear verbatim in its line and is blanked when learners read aloud; frame indices point into structures;
 dialogue roles must be listed in dialogue.roles; moves list frames in the order they're used.
-Pronunciation topics carry their own "rounds" (with parts of kind reveal, pairs, rules, passage, text, choice, twisters, dictation, or a game) and soundNotes.`;
+Pronunciation topics carry their own "rounds" (with parts of kind reveal, pairs, rules, passage, text, choice, twisters, dictation,
+explain, columns, stressguide, stressdemo, wordbank, or a game) and soundNotes. Copy the shape of an existing part of the same kind
+from a saved pronunciation topic (pron-03 has the word-stress kinds); stressguide/stressdemo words need natural < syllables.length.`;
 
 function text(value: unknown) {
   return { content: [{ type: 'text' as const, text: typeof value === 'string' ? value : JSON.stringify(value, null, 2) }] };

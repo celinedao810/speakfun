@@ -45,9 +45,22 @@ export type PronPart =
   | { kind: 'rules'; label?: string; tell?: string; sounds?: { unvoiced: string[]; voiced: string[] }; rules: { ending: string; rows: { sound: string; after: string; ex: string }[] }[] }
   | { kind: 'passage'; label?: string; tell?: string; text: string; marks?: { word: string; sound: string }[] }
   | { kind: 'text'; label?: string; tell?: string; text: string }
-  | { kind: 'choice'; label?: string; tell?: string; items: { word: string; note?: string; link: string; options: string[]; correct: number }[] }
+  // showWord: the word is on screen and the options are about it (syllable count, stress) rather than its sound
+  | { kind: 'choice'; label?: string; tell?: string; showWord?: boolean; items: { word: string; ctx?: string; note?: string; link: string; options: string[]; correct: number }[] }
   | { kind: 'twisters'; label?: string; tell?: string; items: { text: string; ipa: string }[] }
-  | { kind: 'dictation'; label?: string; tell?: string; chips: string[]; perSlide?: number; items: { prompt: string; answer: string }[] };
+  | { kind: 'dictation'; label?: string; tell?: string; chips: string[]; perSlide?: number; items: { prompt: string; answer: string }[] }
+  | { kind: 'explain'; label?: string; tell?: string; items: ExplainItem[] }
+  | { kind: 'columns'; label?: string; tell?: string; link?: string; linkLabel?: string; foot?: string; cols: { h: string; note: string; lines: string[] }[] }
+  | { kind: 'stressguide'; label?: string; tell?: string; items: ExplainItem[]; words: StressWord[] }
+  | { kind: 'stressdemo'; label?: string; tell?: string; words: StressWord[] }
+  | { kind: 'wordbank'; label?: string; tell?: string; example?: string; items: { word: string; noun: WordForm; verb: WordForm }[] };
+
+/** A heading, a line of explanation and optional examples (one string or several). */
+export interface ExplainItem { h: string; t?: string; ex?: string | string[] }
+/** A word to try with the stress on each syllable in turn; natural is the right one. */
+export interface StressWord { word: string; syllables: string[]; natural: number; ipa: string; link?: string; note?: string }
+/** s marks the stressed syllable in capitals, e.g. "re-CORD". */
+export interface WordForm { s: string; ipa: string; g: string }
 
 export type RoundUses =
   | 'context' | 'vocabTable' | 'vocabulary' | 'structures' | 'prompts' | 'dialogue'

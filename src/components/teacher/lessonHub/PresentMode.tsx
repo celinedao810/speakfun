@@ -1,10 +1,10 @@
 "use client";
 
 import React, { useEffect, useLayoutEffect, useRef } from 'react';
-import type { Hub, Topic } from '@/lib/lessonHub/types';
+import type { ExplainItem, Hub, StressWord, Topic } from '@/lib/lessonHub/types';
 import { allMoves, chunk, dialoguePages, isPron, pairRows, promptOrder, sub } from '@/lib/lessonHub/engine';
 import { ExampleLines, GapLine, HintRows, MarkedPassage, Slots, Toggle, useHub } from './shared';
-import { VoicedLegend, YouGlishLink, toggleReveal } from './rounds';
+import { ExplainExamples, RhythmLine, StressTry, VoicedLegend, YouGlishLink, choiceDims, toggleReveal } from './rounds';
 import FlowSketch from './FlowSketch';
 
 /* One round becomes one or more slides. Nothing scrolls: anything too long for a
@@ -130,7 +130,7 @@ function pronSlides(t: Topic): Slide[] {
       switch (p.kind) {
         case 'reveal': {
           let n = 0;
-          chunk(p.items, p.perSlide || 6).forEach((g, i, a) => add({ title: T, part: partOf(i, a), answers: true, body: <>
+          chunk(p.items, p.perSlide || 6).forEach((g, i, a) => add({ title: T, part: partOf(i, a), answers: true, revealCount: g.length, body: <>
             {p.chips && <div className="sl-cats">{p.chips.map((c, k) => <span key={k} className="ipa">{c}</span>)}</div>}
             <RevealRows items={g} start={(n += g.length) - g.length} promptIpa={p.promptIpa} answerIpa={p.answerIpa} /></> }));
           break;
@@ -157,8 +157,39 @@ function pronSlides(t: Topic): Slide[] {
           add({ title: r.phase === 'after' ? 'Homework' : T, body: <p className="sl-prose">{p.text}</p> });
           break;
         case 'choice':
-          chunk(p.items, 12).forEach((g, i, a) => add({ title: T, part: partOf(i, a), answers: true, body:
-            <ChoiceRows items={g} offset={p.items.indexOf(g[0])} /> }));
+          chunk(p.items, 12).forEach((g, i, a) => add({ title: T, part: partOf(i, a), answers: true, revealCount: g.length, body:
+            <ChoiceRows items={g} offset={p.items.indexOf(g[0])} showWord={p.showWord} dims={choiceDims(p.items)} /> }));
+          break;
+        case 'explain':
+          chunk(p.items, 4).forEach((g, i, a) => add({ title: T, part: partOf(i, a), body: <SlideExplain items={g} /> }));
+          break;
+        case 'columns':
+          add({ title: T, body: <>
+            {p.link && <p style={{ margin: '0 0 2vh' }}><YouGlishLink link={p.link} className="ylink">Listen ▸ {p.linkLabel || 'YouGlish'}</YouGlishLink></p>}
+            <div className="sl-cols">{p.cols.map((c, k) => (
+              <div key={k}><h3>{c.h}</h3><div className="scn">{c.note}</div>
+                {c.lines.map((l, j) => <div key={j} className="scl"><RhythmLine s={l} /></div>)}</div>
+            ))}</div>
+            {p.foot && <p className="sl-why" style={{ marginTop: '3vh' }}>{p.foot}</p>}</> });
+          break;
+        case 'stressguide':
+          // the four steps beside the practice words, so the habit and the words share one screen
+          add({ title: T, answers: true, body:
+            <div className="sl-guide"><SlideExplain items={p.items} />
+              <div>{p.words.map((w, k) => <GuideCard key={k} w={w} />)}</div></div> });
+          break;
+        case 'stressdemo':
+          p.words.forEach((w, i) => add({ title: T, part: partOf(i, p.words), answers: true, body: <StressDemoSlide w={w} /> }));
+          break;
+        case 'wordbank':
+          chunk(p.items, 5).forEach((g, i, a) => add({ title: T, part: partOf(i, a), body:
+            <table className="sl-wb"><tbody><tr><th>Word</th><th>Noun</th><th>Verb</th></tr>
+              {g.map((x, k) => (
+                <tr key={k}><td className="w">{x.word}</td>
+                  {[x.noun, x.verb].map((f, j) => (
+                    <td key={j}><div className="s"><RhythmLine s={f.s} /></div><div className="i ipa">{f.ipa}</div><div className="g">{f.g}</div></td>
+                  ))}</tr>
+              ))}</tbody></table> }));
           break;
         case 'twisters':
           add({ title: T, body: <ol className="sl-twisters">{p.items.map((x, k) => (
@@ -188,32 +219,74 @@ function PromptRows({ structures }: { structures: { promptSlots?: string; exampl
   ))}</div>;
 }
 
+/** Reveal and choice slides: click an item's number (or Next answer / ↓) to show that one answer. */
+function useItemReveal() {
+  const { dlg, setDlg } = useHub();
+  return {
+    shown: (k: number) => dlg.answers || dlg.revealed.includes(k),
+    toggle: (k: number) => setDlg({ revealed: toggleReveal(dlg.revealed, k) }),
+  };
+}
+
 function RevealRows({ items, start, promptIpa, answerIpa }: {
   items: { prompt: string; answer: string }[]; start: number; promptIpa?: boolean; answerIpa?: boolean;
 }) {
-  const { dlg } = useHub();
+  const { shown, toggle } = useItemReveal();
   return <div className="sl-reveal">{items.map((x, k) => (
-    <div key={k} className="rv"><span className="n">{start + k + 1}</span>
+    <div key={k} className="rv"><button type="button" className={`n${shown(k) ? ' done' : ''}`} onClick={() => toggle(k)}>{start + k + 1}</button>
       <span className={`p${promptIpa ? ' ipa' : ''}`}>{x.prompt}</span>
-      {dlg.answers && <span className={`a${answerIpa ? ' ipa' : ''}`}>{x.answer}</span>}</div>
+      {shown(k) && <span className={`a${answerIpa ? ' ipa' : ''}`}>{x.answer}</span>}</div>
   ))}</div>;
 }
 
-function ChoiceRows({ items, offset }: {
-  items: { word: string; link: string; options: string[]; correct: number }[]; offset: number;
+function ChoiceRows({ items, offset, showWord, dims }: {
+  items: { word: string; ctx?: string; note?: string; link: string; options: string[]; correct: number }[];
+  offset: number; showWord?: boolean; dims?: React.CSSProperties;
 }) {
-  const { dlg } = useHub();
-  return <div className="sl-choice">{items.map((x, k) => (
-    <div key={k} className="cr"><span className="n">{offset + k + 1}</span>
+  const { shown, toggle } = useItemReveal();
+  return <div className={`sl-choice${showWord ? ' hw' : ''}`} style={showWord ? dims : undefined}>{items.map((x, k) => (
+    <div key={k} className="cr"><button type="button" className={`n${shown(k) ? ' done' : ''}`} onClick={() => toggle(k)}>{offset + k + 1}</button>
       <YouGlishLink link={x.link}>Listen {'▸'}</YouGlishLink>
-      <div className="sl-copts">
+      {showWord && <div className="cwordcell"><b className="cwordb">{x.word}</b>{x.ctx && <i className="cctx">{x.ctx}</i>}</div>}
+      <div className={`sl-copts${showWord ? ' grid' : ''}`}>
         {x.options.map((o, oi) => (
-          <span key={oi} className={`sl-copt${dlg.answers && oi === x.correct ? ' right' : ''}`}><b className="sl-coptlet">{String.fromCharCode(65 + oi)}</b>{o}</span>
+          <span key={oi} className={`sl-copt${shown(k) && oi === x.correct ? ' right' : ''}`}><b className="sl-coptlet">{String.fromCharCode(65 + oi)}</b>{o}</span>
         ))}
-        {dlg.answers && <span className="sl-cword">{x.word}</span>}
+        {shown(k) && (showWord ? x.note && <span className="sl-cword">{x.note}</span> : <span className="sl-cword">{x.word}</span>)}
       </div>
     </div>
   ))}</div>;
+}
+
+function SlideExplain({ items }: { items: ExplainItem[] }) {
+  return <div className="sl-expl">{items.map((x, k) => (
+    <div key={k} className="sei"><div className="seh">{x.h}</div>{x.t && <div className="set">{x.t}</div>}
+      <ExplainExamples ex={x.ex} cls="seex" /></div>
+  ))}</div>;
+}
+
+function GuideCard({ w }: { w: StressWord }) {
+  const { dlg } = useHub();
+  return <div className="sgcard">
+    <div className="sgh"><span className="sgword">{w.word}</span><span className="sgipa ipa">{w.ipa}</span>
+      {w.link && <YouGlishLink link={w.link} className="ylink">Listen ▸</YouGlishLink>}</div>
+    <div className="sgtries">{w.syllables.map((_, j) => (
+      <span key={j} className={`sgtry${dlg.answers && j === w.natural ? ' ok' : ''}`}><StressTry syllables={w.syllables} at={j} /></span>
+    ))}</div>
+    {dlg.answers && w.note && <div className="sgnote">{w.note}</div>}
+  </div>;
+}
+
+function StressDemoSlide({ w }: { w: StressWord }) {
+  const { dlg } = useHub();
+  return <div className="sl-demo">
+    <div className="sdword">{w.word}{dlg.answers && <> <span className="sdipa ipa">{w.ipa}</span></>}</div>
+    {w.link && <p style={{ margin: '-1.5vh 0 3vh' }}><YouGlishLink link={w.link} className="ylink">Listen ▸ YouGlish</YouGlishLink></p>}
+    <div className="sdtries">{w.syllables.map((_, j) => (
+      <span key={j} className={`sdtry${dlg.answers && j === w.natural ? ' ok' : ''}`}><StressTry syllables={w.syllables} at={j} /></span>
+    ))}</div>
+    {dlg.answers && w.note && <div className="sdnote">{w.note}</div>}
+  </div>;
 }
 
 /*

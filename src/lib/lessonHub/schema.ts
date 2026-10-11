@@ -42,6 +42,10 @@ const flow = z.looseObject({
   })).min(1),
 });
 
+const explainItem = z.looseObject({ h: str, t: str.optional(), ex: z.union([str, z.array(str)]).optional() });
+const stressWord = z.looseObject({ word: str, syllables: z.array(str).min(1), natural: z.number().int().min(0), ipa: str });
+const wordForm = z.looseObject({ s: str, ipa: str, g: str });
+
 const pronPart = z.discriminatedUnion('kind', [
   z.looseObject({ kind: z.literal('reveal'), items: z.array(z.looseObject({ prompt: str, answer: str })).min(1) }),
   z.looseObject({ kind: z.literal('pairs'), pairs: z.array(z.looseObject({ sounds: str, words: z.array(z.tuple([str, str])) })).min(1) }),
@@ -51,6 +55,11 @@ const pronPart = z.discriminatedUnion('kind', [
   z.looseObject({ kind: z.literal('choice'), items: z.array(z.looseObject({ word: str, link: str, options: z.array(str).min(2), correct: z.number().int().min(0) })).min(1) }),
   z.looseObject({ kind: z.literal('twisters'), items: z.array(z.looseObject({ text: str, ipa: str })).min(1) }),
   z.looseObject({ kind: z.literal('dictation'), chips: z.array(str), items: z.array(z.looseObject({ prompt: str, answer: str })).min(1) }),
+  z.looseObject({ kind: z.literal('explain'), items: z.array(explainItem).min(1) }),
+  z.looseObject({ kind: z.literal('columns'), cols: z.array(z.looseObject({ h: str, note: str, lines: z.array(str) })).min(1) }),
+  z.looseObject({ kind: z.literal('stressguide'), items: z.array(explainItem).min(1), words: z.array(stressWord).min(1) }),
+  z.looseObject({ kind: z.literal('stressdemo'), words: z.array(stressWord).min(1) }),
+  z.looseObject({ kind: z.literal('wordbank'), items: z.array(z.looseObject({ word: str, noun: wordForm, verb: wordForm })).min(1) }),
 ]);
 
 const USES = ['context', 'vocabTable', 'vocabulary', 'structures', 'prompts', 'dialogue',
@@ -134,6 +143,9 @@ export function validateTopic(topic: unknown, hub?: Pick<Hub, 'tracks'> | null):
       r.parts?.forEach((p, j) => {
         if (p.kind === 'choice') p.items.forEach((x, k) => {
           if (x.correct >= x.options.length) errors.push(`rounds.${i}.parts.${j}.items.${k}: correct=${x.correct} but only ${x.options.length} options`);
+        });
+        if (p.kind === 'stressguide' || p.kind === 'stressdemo') p.words.forEach((w, k) => {
+          if (w.natural >= w.syllables.length) errors.push(`rounds.${i}.parts.${j}.words.${k}: natural=${w.natural} but "${w.word}" has only ${w.syllables.length} syllables`);
         });
       });
     });

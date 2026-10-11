@@ -12,7 +12,7 @@ import './e4it.css';
 const sans = Bricolage_Grotesque({ subsets: ['latin', 'vietnamese'], weight: ['400', '500', '600', '800'], variable: '--e4it-font-sans' });
 const serif = Newsreader({ subsets: ['latin'], weight: ['300', '400', '600'], style: ['normal', 'italic'], variable: '--e4it-font-serif' });
 const mono = DM_Mono({ subsets: ['latin'], weight: ['400', '500'], variable: '--e4it-font-mono' });
-const ipa = Noto_Sans({ subsets: ['latin', 'latin-ext', 'greek'], weight: ['400', '500'], variable: '--e4it-font-ipa' });
+const ipa = Noto_Sans({ subsets: ['latin', 'latin-ext', 'greek', 'vietnamese'], weight: ['400', '500'], variable: '--e4it-font-ipa' });
 
 type View = 'hub' | 'topic' | 'project' | 'rules';
 

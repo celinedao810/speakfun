@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from 'react';
-import type { Dialogue, PlanRound, PronPart, Topic } from '@/lib/lessonHub/types';
+import type { Dialogue, ExplainItem, PlanRound, PronPart, StressWord, Topic } from '@/lib/lessonHub/types';
 import { isPron, pairRows, phaseOrder, planFor, promptOrder, sceneList, schedule, share, sub } from '@/lib/lessonHub/engine';
 import { ExampleLines, GapLine, HintRows, MarkedPassage, Slots, Toggle, openYouGlish, useHub } from './shared';
 import FlowSketch from './FlowSketch';
@@ -146,9 +146,42 @@ function RoleCards({ t }: { t: Topic }) {
 /* ---------------- pronunciation rounds ----------------
    A round is a list of parts. Kinds: reveal (prompt, answer shown on demand), pairs
    (numbered minimal pairs), rules, passage (optionally with endings marked), text,
-   choice (listen and pick), twisters, dictation. */
+   choice (listen and pick), twisters, dictation, and for word stress: explain, columns
+   (syllable-timed vs stress-timed), stressguide, stressdemo, wordbank. */
 export const hasAnswers = (p: PronPart) =>
-  p.kind === 'reveal' || p.kind === 'choice' || p.kind === 'dictation' || (p.kind === 'passage' && !!p.marks);
+  p.kind === 'reveal' || p.kind === 'choice' || p.kind === 'dictation' || p.kind === 'stressdemo'
+  || p.kind === 'stressguide' || (p.kind === 'passage' && !!p.marks);
+
+/* ---------- word-stress helpers ---------- */
+
+/** "In|tơ|nét" → equal syllable boxes; otherwise CAPITAL runs are the stressed syllable. */
+export function RhythmLine({ s }: { s: string }) {
+  if (s.includes('|')) return <>{s.split('|').map((x, i) => <span key={i} className="syl">{x}</span>)}</>;
+  const parts = s.split(/([A-Z]{2,})/);
+  return <>{parts.map((x, i) => i % 2 ? <b key={i}>{x}</b> : x)}</>;
+}
+
+/** One stress attempt: the syllable at `at` in capitals and highlighted, e.g. com-PU-ter. */
+export function StressTry({ syllables, at }: { syllables: string[]; at: number }) {
+  return <>{syllables.map((s, j) => (
+    <React.Fragment key={j}>{j > 0 && '-'}{j === at ? <b>{s.toUpperCase()}</b> : s.toLowerCase()}</React.Fragment>
+  ))}</>;
+}
+
+/** Examples under an explain item, in a grid sized to the longest one. */
+export function ExplainExamples({ ex, cls }: { ex?: string | string[]; cls: string }) {
+  if (!ex || !ex.length) return null;
+  const a = Array.isArray(ex) ? ex : [ex];
+  const w = Math.max(...a.map(x => x.length)) + 4;
+  return <div className={`${cls}s`} style={{ '--ew': `${w}ch` } as React.CSSProperties}>
+    {a.map((x, i) => <span key={i} className={cls}>{x}</span>)}</div>;
+}
+
+/** Grid sizing for showWord choices: as many columns as the longest option list, as wide as the longest option. */
+export const choiceDims = (items: { options: string[] }[]) => ({
+  '--n': Math.max(...items.map(x => x.options.length)),
+  '--w': Math.max(...items.flatMap(x => x.options.map(o => o.length))) + 5,
+}) as React.CSSProperties;
 
 function AnswersCtl() {
   const { dlg, setDlg } = useHub();
@@ -170,8 +203,8 @@ export function VoicedLegend({ sounds, slide }: { sounds: { unvoiced: string[]; 
   );
 }
 
-export function YouGlishLink({ link, children }: { link: string; children: React.ReactNode }) {
-  return <a className="clisten" href={link} onClick={e => { e.preventDefault(); openYouGlish(link); }}>{children}</a>;
+export function YouGlishLink({ link, className = 'clisten', children }: { link: string; className?: string; children: React.ReactNode }) {
+  return <a className={className} href={link} onClick={e => { e.preventDefault(); openYouGlish(link); }}>{children}</a>;
 }
 
 function PronPartView({ p }: { p: PronPart }) {
@@ -199,7 +232,20 @@ function PronPartView({ p }: { p: PronPart }) {
       ))}</div></>;
     case 'passage': return <>{label}<div className="prose" style={{ marginTop: '.4rem' }}><p><MarkedPassage text={p.text} marks={p.marks} /></p></div></>;
     case 'text': return <>{label}<p className="how" style={{ marginTop: '.2rem' }}>{p.text}</p></>;
-    case 'choice': return <>{label}{p.items.map((x, i) => (
+    case 'choice': if (p.showWord) return <>{label}{p.items.map((x, i) => (
+      <div key={i} className="choice-row hw" style={choiceDims(p.items)}>
+        <span className="cn">{i + 1}</span>
+        <YouGlishLink link={x.link}>Listen ▸</YouGlishLink>
+        <div className="cwordcell"><b className="cwordb">{x.word}</b>{x.ctx && <i className="cctx">{x.ctx}</i>}</div>
+        <div className="copts grid">
+          {x.options.map((o, oi) => (
+            <span key={oi} className={`copt${dlg.answers && oi === x.correct ? ' right' : ''}`}><b className="coptlet">{String.fromCharCode(65 + oi)}</b>{o}</span>
+          ))}
+          {dlg.answers && x.note && <span className="cnote">{x.note}</span>}
+        </div>
+      </div>
+    ))}</>;
+    return <>{label}{p.items.map((x, i) => (
       <div key={i} className="choice-row">
         <span className="cn">{i + 1}</span>
         <YouGlishLink link={x.link}>Listen ▸</YouGlishLink>
@@ -221,7 +267,49 @@ function PronPartView({ p }: { p: PronPart }) {
         <div key={i} className="rv"><span className="pnum">{i + 1}</span><span className="rvp">{x.prompt}</span>
           {dlg.answers && <span className="rva ipa">{x.answer}</span>}</div>
       ))}</div></>;
+    case 'explain': return <>{label}<ExplainList items={p.items} /></>;
+    case 'columns': return <>{label}
+      {p.link && <p style={{ margin: '.2rem 0 .6rem' }}><YouGlishLink link={p.link} className="ylink">Listen ▸ {p.linkLabel || 'YouGlish'}</YouGlishLink></p>}
+      <div className="cols2">{p.cols.map((c, i) => (
+        <div key={i}><h5>{c.h}</h5><div className="cn2">{c.note}</div>
+          {c.lines.map((l, j) => <div key={j} className="cl"><RhythmLine s={l} /></div>)}</div>
+      ))}</div>
+      {p.foot && <p className="how" style={{ marginTop: '1rem' }}>{p.foot}</p>}</>;
+    case 'stressguide': return <>{label}<ExplainList items={p.items} /><StressDemo words={p.words} ipaAlways /></>;
+    case 'stressdemo': return <>{label}<StressDemo words={p.words} /></>;
+    case 'wordbank': return <>{label}
+      <table className="wb"><tbody><tr><th>Word</th><th>Noun</th><th>Verb</th></tr>
+        {p.items.map((x, i) => (
+          <tr key={i}><td className="wbw">{x.word}</td>
+            {[x.noun, x.verb].map((f, j) => (
+              <td key={j}><div className="wbs"><RhythmLine s={f.s} /></div><div className="wbi ipa">{f.ipa}</div><div className="wbg">{f.g}</div></td>
+            ))}</tr>
+        ))}</tbody></table>
+      {p.example && <p className="how" style={{ marginTop: '.9rem' }}><b>Example:</b> {p.example}</p>}</>;
   }
+}
+
+function ExplainList({ items }: { items: ExplainItem[] }) {
+  return <div className="expl">{items.map((x, i) => (
+    <div key={i} className="ei"><div className="eh">{x.h}</div>{x.t && <div className="et">{x.t}</div>}
+      <ExplainExamples ex={x.ex} cls="eex" /></div>
+  ))}</div>;
+}
+
+/** Each word tried with the stress on every syllable; Answers marks the natural one. */
+function StressDemo({ words, ipaAlways }: { words: StressWord[]; ipaAlways?: boolean }) {
+  const { dlg } = useHub();
+  return <div className="demo">{words.map((w, i) => (
+    <div key={i} className="demoitem">
+      <div className="demohd"><span className="pnum">{i + 1}</span><span className="demoword">{w.word}</span>
+        {(ipaAlways || dlg.answers) && <span className="demoipa ipa">{w.ipa}</span>}
+        {w.link && <YouGlishLink link={w.link} className="ylink">Listen ▸</YouGlishLink>}</div>
+      <div className="tries">{w.syllables.map((_, j) => (
+        <span key={j} className={`try${dlg.answers && j === w.natural ? ' ok' : ''}`}><StressTry syllables={w.syllables} at={j} /></span>
+      ))}</div>
+      {dlg.answers && w.note && <div className="cnote" style={{ marginTop: '.3rem' }}>{w.note}</div>}
+    </div>
+  ))}</div>;
 }
 
 function PronBody({ r }: { r: PlanRound }) {
