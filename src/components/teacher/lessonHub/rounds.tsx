@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import type { Dialogue, ExplainItem, PlanRound, PronPart, StressWord, Topic } from '@/lib/lessonHub/types';
-import { isPron, pairRows, phaseOrder, planFor, promptOrder, sceneList, schedule, share, sub } from '@/lib/lessonHub/engine';
+import { isPron, pairRows, phaseOrder, planFor, promptAnswer, promptOrder, sceneList, schedule, share, sub } from '@/lib/lessonHub/engine';
 import { ExampleLines, GapLine, HintRows, MarkedPassage, Slots, Toggle, openYouGlish, useHub } from './shared';
 import FlowSketch from './FlowSketch';
 
@@ -106,7 +106,7 @@ function Prompts({ t }: { t: Topic }) {
             onClick={() => setDlg({ revealed: toggleReveal(dlg.revealed, i) })}>
             <span className="pnum">{i + 1}</span>
             <span className="pslots">{f.promptSlots || ''}</span>
-            {(dlg.answers || dlg.revealed.includes(i)) && <div className="pans"><ExampleLines example={f.example} className="pansl" /></div>}
+            {(dlg.answers || dlg.revealed.includes(i)) && <div className="pans"><ExampleLines example={promptAnswer(f)} className="pansl" /></div>}
           </div>
         ))}</div>
         {dlg.hint && <aside className="hintpanel"><div className="hinthd">Frames from this lesson</div>

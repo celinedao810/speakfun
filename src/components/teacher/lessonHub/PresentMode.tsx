@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useEffect, useLayoutEffect, useRef } from 'react';
-import type { ExplainItem, Hub, StressWord, Topic } from '@/lib/lessonHub/types';
-import { allMoves, chunk, dialoguePages, isPron, pairRows, promptOrder, sub } from '@/lib/lessonHub/engine';
+import type { ExplainItem, Hub, StressWord, Structure, Topic } from '@/lib/lessonHub/types';
+import { allMoves, chunk, dialoguePages, isPron, pairRows, promptAnswer, promptOrder, sub } from '@/lib/lessonHub/engine';
 import { ExampleLines, GapLine, HintRows, MarkedPassage, Slots, Toggle, useHub } from './shared';
 import { ExplainExamples, RhythmLine, StressTry, VoicedLegend, YouGlishLink, choiceDims, toggleReveal } from './rounds';
 import FlowSketch from './FlowSketch';
@@ -207,14 +207,14 @@ function pronSlides(t: Topic): Slide[] {
   return S;
 }
 
-/** "Which frame?": slot content only, already shuffled. Answers (the full example) reveal one at a time, or all at once. */
-function PromptRows({ structures }: { structures: { promptSlots?: string; example: string }[] }) {
+/** "Which frame?": slot content only, already shuffled. Answers (the frame filled with the slots) reveal one at a time, or all at once. */
+function PromptRows({ structures }: { structures: Structure[] }) {
   const { dlg, setDlg } = useHub();
   const shown = (k: number) => dlg.answers || dlg.revealed.includes(k);
   return <div className={`sl-prompts${dlg.answers || dlg.revealed.length ? ' answered' : ''}`}>{structures.map((f, k) => (
     <div key={k} className="reveal1" onClick={() => setDlg({ revealed: toggleReveal(dlg.revealed, k) })}>
       <span className="pn">{k + 1}</span>{f.promptSlots || ''}
-      {shown(k) && <ExampleLines example={f.example} className="sl-ans" />}
+      {shown(k) && <ExampleLines example={promptAnswer(f)} className="sl-ans" />}
     </div>
   ))}</div>;
 }

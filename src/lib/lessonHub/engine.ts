@@ -1,6 +1,6 @@
 // Pure lesson-hub logic, ported from the hub HTML script.
 
-import type { Group, Hub, Move, PlanRound, Scene, Topic } from './types';
+import type { Group, Hub, Move, PlanRound, Scene, Structure, Topic } from './types';
 
 /** Speaking topics share the hub's plan. Pronunciation sessions carry their own rounds. */
 export const isPron = (t: Topic | null | undefined) => !!(t && t.rounds);
@@ -167,4 +167,20 @@ export function promptOrder(topicId: string, n: number): number[] {
     [order[p], order[q]] = [order[q], order[p]];
   }
   return order;
+}
+
+/**
+ * The answer for a "Which frame?" prompt: the frame with its [slots] filled from promptSlots
+ * ("a / b", in order). Prompt slots often differ from the example sentence on purpose, so the
+ * example is only the fallback, for frames whose slot count doesn't match the prompt.
+ */
+export function promptAnswer(f: Pick<Structure, 'structure' | 'promptSlots' | 'example'>): string {
+  const fills = (f.promptSlots || '').split(' / ').map(s => s.trim()).filter(Boolean);
+  const slots = f.structure.match(/\[[^\]]+\]/g) || [];
+  if (!fills.length || fills.length !== slots.length) return f.example;
+  let k = 0;
+  return f.structure.replace(/\[[^\]]+\]/g, (_, at: number) => {
+    const s = fills[k++];
+    return at === 0 ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+  });
 }
