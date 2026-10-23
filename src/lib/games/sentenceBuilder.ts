@@ -1,5 +1,6 @@
 // Sentence Builder: learners make one sentence per turn from the vocabulary and structures
-// on the board; accepted sentences score 1 point per item used and lock those items.
+// on the board (1 vocab item + 1 structure, or 2 vocab items); accepted sentences score 1 point
+// per item used and lock those items.
 // Pure state + helpers here; the screens live in components/games/sentenceBuilder.
 
 export interface PoolVocab {
@@ -117,8 +118,12 @@ export const available = (r: Round) => ({
   structures: r.board.structures.filter(k => !(k in r.used)),
 });
 
+/** A valid sentence uses at least 1 vocab item and 1 structure, or at least 2 vocab items. */
+const validCombo = (vocab: number, structures: number) => (vocab >= 1 && structures >= 1) || vocab >= 2;
+
 export function canAccept(r: Round): boolean {
-  return r.selected.some(isVocabKey) && r.selected.some(k => !isVocabKey(k));
+  const vocab = r.selected.filter(isVocabKey).length;
+  return validCombo(vocab, r.selected.length - vocab);
 }
 
 export type RoundAction =
@@ -134,8 +139,8 @@ function nextTurn(r: Round, patch: Partial<Round>): Round {
   const next = { ...r, ...patch, history: [...r.history, snap(r)], selected: [],
     turn: (r.turn + 1) % r.learners.length, turnStartedAt: Date.now() };
   const left = available(next);
-  // nothing left to build with: the round is over
-  if (!left.vocab.length || !left.structures.length) next.ended = true;
+  // no valid sentence can be made from what's left: the round is over
+  if (!validCombo(left.vocab.length, left.structures.length)) next.ended = true;
   return next;
 }
 

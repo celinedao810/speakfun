@@ -259,11 +259,20 @@ function Board({ round, items, pool, dispatch }: {
   const avail = available(round);
   const acceptOk = canAccept(round);
   const n = round.learners.length;
+  // confirmed on the board itself: a browser confirm() dialog would take the page out of full screen
+  const [confirmShuffle, setConfirmShuffle] = useState(false);
+  const shuffle = () => { setConfirmShuffle(false); dispatch({ type: 'shuffle', pool }); };
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+      if (confirmShuffle) {
+        // while the shuffle question is open, Enter confirms and Escape cancels; nothing else
+        if (e.key === 'Enter') { e.preventDefault(); shuffle(); }
+        else if (e.key === 'Escape') setConfirmShuffle(false);
+        return;
+      }
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); dispatch({ type: 'undo' }); }
       else if (e.metaKey || e.ctrlKey || e.altKey) return;
       else if (e.key === 'Enter') { e.preventDefault(); dispatch({ type: 'accept' }); }
@@ -272,11 +281,9 @@ function Board({ round, items, pool, dispatch }: {
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [dispatch]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dispatch, confirmShuffle]);
 
-  const shuffle = () => {
-    if (window.confirm('Replace every available item on the board with a new draw? Used items stay.')) dispatch({ type: 'shuffle', pool });
-  };
 
   const gainFresh = round.lastGain && Date.now() - round.lastGain.at < 2500 ? round.lastGain : null;
   const hovered = hover ? items.get(hover) : null;
@@ -370,7 +377,7 @@ function Board({ round, items, pool, dispatch }: {
       {/* actions */}
       <div className="flex items-center gap-2 px-[2vw] py-[1.2vh] border-t border-border">
         <BarButton onClick={() => dispatch({ type: 'undo' })} disabled={!round.history.length} title="Undo (Ctrl/Cmd+Z)"><Undo2 className="w-4 h-4" />Undo</BarButton>
-        <BarButton onClick={shuffle} title="New draw for the available items"><Shuffle className="w-4 h-4" />Shuffle board</BarButton>
+        <BarButton onClick={() => setConfirmShuffle(true)} title="New draw for the available items"><Shuffle className="w-4 h-4" />Shuffle board</BarButton>
         <BarButton onClick={() => dispatch({ type: 'end' })}><Flag className="w-4 h-4" />End round</BarButton>
         <div className="flex-1 min-w-0 px-3 text-center text-[clamp(12px,1.55vh,15px)] text-muted-foreground truncate">
           {hovered
@@ -382,11 +389,28 @@ function Board({ round, items, pool, dispatch }: {
         <BarButton onClick={() => dispatch({ type: 'reject' })} title="Not accepted (X)" className="text-red-600 border-red-200 hover:bg-red-50"><X className="w-4 h-4" />Not accepted</BarButton>
         <BarButton onClick={() => dispatch({ type: 'pass' })} title="Pass (P)"><SkipForward className="w-4 h-4" />Pass</BarButton>
         <button type="button" onClick={() => dispatch({ type: 'accept' })} disabled={!acceptOk}
-          title={acceptOk ? 'Accept (Enter)' : 'Select at least 1 vocab item and 1 structure'}
+          title={acceptOk ? 'Accept (Enter)' : 'Select 1 vocab item and 1 structure, or 2 vocab items'}
           className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 text-white px-5 py-2 text-[clamp(14px,1.8vh,17px)] font-semibold hover:bg-green-700 disabled:opacity-35 disabled:hover:bg-green-600">
           <Check className="w-5 h-5" />Accept{round.selected.length ? ` +${round.selected.length}` : ''}
         </button>
       </div>
+
+      {confirmShuffle && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/25" onClick={() => setConfirmShuffle(false)}>
+          <div role="dialog" aria-modal="true" aria-labelledby="shuffle-title" onClick={e => e.stopPropagation()}
+            className="rounded-xl border border-border bg-card shadow-lg px-6 py-5 max-w-md">
+            <h2 id="shuffle-title" className="text-lg font-semibold">Shuffle the board?</h2>
+            <p className="text-sm text-muted-foreground mt-1">Every available item gets a new draw. Used items stay where they are.</p>
+            <div className="flex justify-end gap-2 mt-4">
+              <BarButton onClick={() => setConfirmShuffle(false)}>Cancel</BarButton>
+              <button type="button" onClick={shuffle} autoFocus
+                className="inline-flex items-center gap-1.5 rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold hover:opacity-90">
+                <Shuffle className="w-4 h-4" />Shuffle
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
