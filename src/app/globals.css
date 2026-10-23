@@ -1,6 +1,7 @@
 @import "tailwindcss";
 
-:root {
+/* .force-light: screens shared in class (games) keep the light palette even in dark mode */
+:root, .force-light {
   --card: #ffffff;
   --ring: #f59e0b;
   --input: #e5e7eb;
