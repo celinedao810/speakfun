@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
     const courseIds = (classCourses ?? []).map((r: { course_id: string }) => r.course_id);
 
     if (courseIds.length === 0) {
-      return NextResponse.json({ entries: [], commitThreshold: 10, masteredCount: 0, learningCount: 0, untouchedCount: 0 });
+      return NextResponse.json({ entries: [], commitThreshold: 5, masteredCount: 0, learningCount: 0, untouchedCount: 0 });
     }
 
     // 2. Get all lesson IDs from those courses
@@ -58,7 +58,7 @@ export async function GET(request: NextRequest) {
     const allLessonIds = (lessonRows ?? []).map((r: { id: string }) => r.id);
 
     if (allLessonIds.length === 0) {
-      return NextResponse.json({ entries: [], commitThreshold: 10, masteredCount: 0, learningCount: 0, untouchedCount: 0 });
+      return NextResponse.json({ entries: [], commitThreshold: 5, masteredCount: 0, learningCount: 0, untouchedCount: 0 });
     }
 
     // 3. Fetch exercises + mastery records + settings in parallel

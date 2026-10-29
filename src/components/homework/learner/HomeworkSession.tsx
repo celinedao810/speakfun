@@ -10,6 +10,7 @@ import {
 import { useAuth } from '@/context/AuthContext';
 import { generateFreeTalkTopic } from '@/lib/ai/aiClient';
 import Exercise1Vocab, { WordResult } from './Exercise1Vocab';
+import { orderByRotation } from '@/lib/homework/poolSelection';
 import Exercise2Structure, { StructureResult } from './Exercise2Structure';
 import Exercise3FreeTalk from './Exercise3FreeTalk';
 import HomeworkScorecard from './HomeworkScorecard';
@@ -255,15 +256,17 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
         // Vocab pool: prioritise wrong-not-mastered, then fresh-not-mastered, then mastered
         const masteryRes = await fetch(`/api/homework/vocab-notebook?classId=${classId}`);
         const masteryData = masteryRes.ok ? await masteryRes.json() : null;
-        const masteryEntries: Array<{ vocabItemId: string; lessonId: string; isCommitted: boolean }> =
+        const masteryEntries: Array<{ vocabItemId: string; lessonId: string; isCommitted: boolean; lastSeenAt?: string }> =
           masteryData?.entries ?? [];
 
         const seenKeys = new Set<string>();
         const masteredKeys = new Set<string>();
+        const lastSeenByKey = new Map<string, string>();
         for (const e of masteryEntries) {
           const k = `${e.lessonId}:${e.vocabItemId}`;
           seenKeys.add(k);
           if (e.isCommitted) masteredKeys.add(k);
+          if (e.lastSeenAt) lastSeenByKey.set(k, e.lastSeenAt);
         }
 
         const key = (v: VocabExerciseItem) => `${v.lessonId}:${v.id}`;
@@ -288,12 +291,14 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
           const wrongNotMastered = allVocab.filter(v =>
             seenKeys.has(key(v)) && wrongIds.has(v.id) && !masteredKeys.has(key(v))
           );
-          const freshNotMastered = allVocab
-            .filter(v => seenKeys.has(key(v)) && !wrongIds.has(v.id) && !masteredKeys.has(key(v)))
-            .sort(() => Math.random() - 0.5);
-          const unseenVocab = allVocab
-            .filter(v => !seenKeys.has(key(v)))
-            .sort(() => Math.random() - 0.5);
+          // Everything else that isn't mastered rotates: never-practised words first, then the
+          // least recently practised, so the pool walks through ALL unmastered vocab instead of
+          // re-serving the same few words.
+          const freshNotMastered = orderByRotation(
+            allVocab.filter(v => seenKeys.has(key(v)) && !wrongIds.has(v.id) && !masteredKeys.has(key(v))),
+            v => lastSeenByKey.get(key(v)),
+          );
+          const unseenVocab = orderByRotation(allVocab.filter(v => !seenKeys.has(key(v))), () => undefined);
           // Mastered words are excluded — pool only contains active (non-mastered) words
           // De-duplicate by word text so the same word from different lessons doesn't appear twice
           const seenWords = new Set<string>();
@@ -312,9 +317,19 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
         const structureLimit = settingsData?.reviewStructureCount ?? 5;
 
         // If resuming to EX3, restore the exact structure set used in Ex2
+        // Keys are "lessonId:id" because structure IDs ("s1"...) repeat across lessons; sessions
+        // saved before keys existed only have bare IDs (usedStructureIds), used as a fallback.
+        const savedStructureKeys = existingSubmission?.sessionState?.usedStructureKeys;
         const savedStructureIds = existingSubmission?.sessionState?.usedStructureIds;
         let structuresToUse: StructureExerciseItem[];
-        if (savedStructureIds && savedStructureIds.length > 0) {
+        if (savedStructureKeys && savedStructureKeys.length > 0) {
+          const keySet = new Set(savedStructureKeys);
+          const ordered = savedStructureKeys
+            .map(k => aggregatedStructures.find(s => `${s.lessonId}:${s.id}` === k))
+            .filter((s): s is StructureExerciseItem => s !== undefined);
+          const rest = aggregatedStructures.filter(s => !keySet.has(`${s.lessonId}:${s.id}`));
+          structuresToUse = [...ordered, ...rest];
+        } else if (savedStructureIds && savedStructureIds.length > 0) {
           const idSet = new Set(savedStructureIds);
           const ordered = savedStructureIds
             .map(id => aggregatedStructures.find(s => s.id === id))
@@ -332,11 +347,16 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
               .filter(e => e.isCommitted)
               .map(e => `${e.lessonId}:${e.structureItemId}`)
           );
+          const structureLastSeen = new Map<string, string>(
+            ((structMasteryData?.entries ?? []) as Array<{ structureItemId: string; lessonId: string; lastSeenAt?: string }>)
+              .filter(e => !!e.lastSeenAt)
+              .map(e => [`${e.lessonId}:${e.structureItemId}`, e.lastSeenAt as string])
+          );
           const activeStructures = aggregatedStructures.filter(
             st => !masteredStructureKeys.has(`${st.lessonId}:${st.id}`)
           );
           const structureSource = activeStructures.length > 0 ? activeStructures : aggregatedStructures;
-          structuresToUse = [...structureSource].sort(() => Math.random() - 0.5);
+          structuresToUse = orderByRotation(structureSource, st => structureLastSeen.get(`${st.lessonId}:${st.id}`));
         }
         setStructurePool(structuresToUse.slice(0, structureLimit));
 
@@ -414,7 +434,11 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
     await autoSave({
       ex2Score: score,
       ex2Completed: true,
-      sessionState: { usedStructureIds: structurePool.map(s => s.id), structureAttempts: attempts },
+      sessionState: {
+        usedStructureIds: structurePool.map(s => s.id),
+        usedStructureKeys: structurePool.map(s => `${s.lessonId}:${s.id}`),
+        structureAttempts: attempts,
+      },
     });
     generateFreeTalkTopic(
       vocabPool.map(v => v.word),

@@ -565,6 +565,8 @@ export interface HomeworkSessionState {
   vocabAttempts?: VocabAttemptAudit[];
   // Saved after Ex2 completes so Ex3 uses the exact same structure set.
   usedStructureIds?: string[];
+  // Same set as usedStructureIds but as "lessonId:id" (IDs repeat across lessons). Preferred on restore.
+  usedStructureKeys?: string[];
   // Saved after Ex2 completes so structure mastery can be updated even if
   // the final /submit call never runs.
   structureAttempts?: StructureAttemptAudit[];

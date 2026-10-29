@@ -231,7 +231,7 @@ export async function GET() {
       .filter(cid => courseEntriesMap.has(cid))
       .map(cid => {
         const classId = courseClassMap.get(cid)!;
-        const commitThreshold = classSettingsMap.get(classId) ?? 10;
+        const commitThreshold = classSettingsMap.get(classId) ?? 5;
         const entries = sortEntries(courseEntriesMap.get(cid)!);
         const masteredCount = entries.filter(e => e.isCommitted).length;
         const learningCount = entries.filter(e => !e.isCommitted && (e.correctCount > 0 || e.incorrectCount > 0)).length;
