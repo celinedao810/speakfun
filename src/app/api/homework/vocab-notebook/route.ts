@@ -17,6 +17,7 @@ export interface NotebookEntry {
   incorrectCount: number;
   isCommitted: boolean;
   lastSeenAt?: string;
+  lastAttemptCorrect?: boolean;
   committedAt?: string;
 }
 
@@ -92,6 +93,7 @@ export async function GET(request: NextRequest) {
           incorrectCount: mastery?.incorrectCount ?? 0,
           isCommitted: mastery?.isCommitted ?? false,
           lastSeenAt: mastery?.lastSeenAt,
+          lastAttemptCorrect: mastery?.lastAttemptCorrect,
           committedAt: mastery?.committedAt,
         });
       }

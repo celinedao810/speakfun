@@ -517,6 +517,8 @@ export interface VocabMasteryRecord {
   incorrectCount: number;
   isCommitted: boolean;
   lastSeenAt?: string;
+  /** Outcome of the most recent attempt; false = got it wrong last time. */
+  lastAttemptCorrect?: boolean;
   committedAt?: string;
 }
 
@@ -532,6 +534,8 @@ export interface StructureMasteryRecord {
   incorrectCount: number;
   isCommitted: boolean;
   lastSeenAt?: string;
+  /** Outcome of the most recent attempt; false = got it wrong last time. */
+  lastAttemptCorrect?: boolean;
   committedAt?: string;
 }
 

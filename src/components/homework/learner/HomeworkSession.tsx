@@ -10,7 +10,7 @@ import {
 import { useAuth } from '@/context/AuthContext';
 import { generateFreeTalkTopic } from '@/lib/ai/aiClient';
 import Exercise1Vocab, { WordResult } from './Exercise1Vocab';
-import { orderByRotation } from '@/lib/homework/poolSelection';
+import { pickPool } from '@/lib/homework/poolSelection';
 import Exercise2Structure, { StructureResult } from './Exercise2Structure';
 import Exercise3FreeTalk from './Exercise3FreeTalk';
 import HomeworkScorecard from './HomeworkScorecard';
@@ -250,23 +250,21 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
         const allVocab: VocabExerciseItem[] = exData.flatMap(e => e.vocabItems ?? []);
         const aggregatedStructures: StructureExerciseItem[] = exData.flatMap(e => e.structureItems ?? []);
 
-        const prevWrong = existingSubmission?.wrongVocabIds ?? [];
         const limit = settingsData?.reviewWordCount ?? 15;
 
-        // Vocab pool: prioritise wrong-not-mastered, then fresh-not-mastered, then mastered
+        // Vocab pool: only unmastered words, mixing retries of last-time-wrong words with
+        // never-practised and least-recently-practised ones (see pickPool).
         const masteryRes = await fetch(`/api/homework/vocab-notebook?classId=${classId}`);
         const masteryData = masteryRes.ok ? await masteryRes.json() : null;
-        const masteryEntries: Array<{ vocabItemId: string; lessonId: string; isCommitted: boolean; lastSeenAt?: string }> =
+        const masteryEntries: Array<{ vocabItemId: string; lessonId: string; isCommitted: boolean; lastSeenAt?: string; lastAttemptCorrect?: boolean }> =
           masteryData?.entries ?? [];
 
-        const seenKeys = new Set<string>();
         const masteredKeys = new Set<string>();
-        const lastSeenByKey = new Map<string, string>();
+        const progressByKey = new Map<string, { lastSeenAt?: string; lastAttemptCorrect?: boolean }>();
         for (const e of masteryEntries) {
           const k = `${e.lessonId}:${e.vocabItemId}`;
-          seenKeys.add(k);
           if (e.isCommitted) masteredKeys.add(k);
-          if (e.lastSeenAt) lastSeenByKey.set(k, e.lastSeenAt);
+          progressByKey.set(k, { lastSeenAt: e.lastSeenAt, lastAttemptCorrect: e.lastAttemptCorrect });
         }
 
         const key = (v: VocabExerciseItem) => `${v.lessonId}:${v.id}`;
@@ -287,29 +285,16 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
           }
           pool = reconstructed.slice(0, limit);
         } else {
-          const wrongIds = new Set(prevWrong);
-          const wrongNotMastered = allVocab.filter(v =>
-            seenKeys.has(key(v)) && wrongIds.has(v.id) && !masteredKeys.has(key(v))
-          );
-          // Everything else that isn't mastered rotates: never-practised words first, then the
-          // least recently practised, so the pool walks through ALL unmastered vocab instead of
-          // re-serving the same few words.
-          const freshNotMastered = orderByRotation(
-            allVocab.filter(v => seenKeys.has(key(v)) && !wrongIds.has(v.id) && !masteredKeys.has(key(v))),
-            v => lastSeenByKey.get(key(v)),
-          );
-          const unseenVocab = orderByRotation(allVocab.filter(v => !seenKeys.has(key(v))), () => undefined);
-          // Mastered words are excluded — pool only contains active (non-mastered) words
-          // De-duplicate by word text so the same word from different lessons doesn't appear twice
+          // Mastered words are excluded; the same word text from different lessons counts once
           const seenWords = new Set<string>();
-          pool = [...wrongNotMastered, ...freshNotMastered, ...unseenVocab]
-            .filter(v => {
-              const w = v.word.toLowerCase();
-              if (seenWords.has(w)) return false;
-              seenWords.add(w);
-              return true;
-            })
-            .slice(0, limit);
+          const candidates = allVocab.filter(v => {
+            if (masteredKeys.has(key(v))) return false;
+            const w = v.word.toLowerCase();
+            if (seenWords.has(w)) return false;
+            seenWords.add(w);
+            return true;
+          });
+          pool = pickPool(candidates, limit, v => progressByKey.get(key(v)) ?? {});
         }
 
         setVocabPool(pool);
@@ -347,16 +332,15 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
               .filter(e => e.isCommitted)
               .map(e => `${e.lessonId}:${e.structureItemId}`)
           );
-          const structureLastSeen = new Map<string, string>(
-            ((structMasteryData?.entries ?? []) as Array<{ structureItemId: string; lessonId: string; lastSeenAt?: string }>)
-              .filter(e => !!e.lastSeenAt)
-              .map(e => [`${e.lessonId}:${e.structureItemId}`, e.lastSeenAt as string])
+          const structureProgress = new Map<string, { lastSeenAt?: string; lastAttemptCorrect?: boolean }>(
+            ((structMasteryData?.entries ?? []) as Array<{ structureItemId: string; lessonId: string; lastSeenAt?: string; lastAttemptCorrect?: boolean }>)
+              .map(e => [`${e.lessonId}:${e.structureItemId}`, { lastSeenAt: e.lastSeenAt, lastAttemptCorrect: e.lastAttemptCorrect }])
           );
           const activeStructures = aggregatedStructures.filter(
             st => !masteredStructureKeys.has(`${st.lessonId}:${st.id}`)
           );
           const structureSource = activeStructures.length > 0 ? activeStructures : aggregatedStructures;
-          structuresToUse = orderByRotation(structureSource, st => structureLastSeen.get(`${st.lessonId}:${st.id}`));
+          structuresToUse = pickPool(structureSource, structureLimit, st => structureProgress.get(`${st.lessonId}:${st.id}`) ?? {});
         }
         setStructurePool(structuresToUse.slice(0, structureLimit));
 

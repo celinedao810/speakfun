@@ -88,6 +88,7 @@ interface StructureMasteryRow {
   incorrect_count: number;
   is_committed: boolean;
   last_seen_at: string | null;
+  last_attempt_correct: boolean | null;
   committed_at: string | null;
   created_at: string;
 }
@@ -102,6 +103,7 @@ interface VocabMasteryRow {
   incorrect_count: number;
   is_committed: boolean;
   last_seen_at: string | null;
+  last_attempt_correct: boolean | null;
   committed_at: string | null;
   created_at: string;
   updated_at: string;
@@ -222,6 +224,7 @@ function toStructureMastery(row: StructureMasteryRow): StructureMasteryRecord {
     incorrectCount: row.incorrect_count,
     isCommitted: row.is_committed,
     lastSeenAt: row.last_seen_at ?? undefined,
+    lastAttemptCorrect: row.last_attempt_correct ?? undefined,
     committedAt: row.committed_at ?? undefined,
   };
 }
@@ -237,6 +240,7 @@ function toVocabMastery(row: VocabMasteryRow): VocabMasteryRecord {
     incorrectCount: row.incorrect_count,
     isCommitted: row.is_committed,
     lastSeenAt: row.last_seen_at || undefined,
+    lastAttemptCorrect: row.last_attempt_correct ?? undefined,
     committedAt: row.committed_at || undefined,
   };
 }
@@ -624,6 +628,7 @@ export async function batchUpdateVocabMastery(
     lessonId: string;
     correctDelta: number;
     incorrectDelta: number;
+    lastCorrect: boolean;
     commitThreshold: number;
   };
   const aggregatedMap = new Map<string, VocabAgg>();
@@ -633,12 +638,14 @@ export async function batchUpdateVocabMastery(
     if (agg) {
       agg.correctDelta += u.correct ? 1 : 0;
       agg.incorrectDelta += u.correct ? 0 : 1;
+      agg.lastCorrect = u.correct; // attempts arrive in order, so the last one wins
     } else {
       aggregatedMap.set(k, {
         vocabItemId: u.vocabItemId,
         lessonId: u.lessonId,
         correctDelta: u.correct ? 1 : 0,
         incorrectDelta: u.correct ? 0 : 1,
+        lastCorrect: u.correct,
         commitThreshold: u.commitThreshold,
       });
     }
@@ -660,6 +667,7 @@ export async function batchUpdateVocabMastery(
       incorrect_count: newIncorrect,
       is_committed: isCommitted,
       last_seen_at: now,
+      last_attempt_correct: a.lastCorrect,
       committed_at: isCommitted && !prev?.is_committed ? now : (prev?.committed_at || null),
     };
   });
@@ -743,6 +751,7 @@ export async function batchUpdateStructureMastery(
     lessonId: string;
     correctDelta: number;
     incorrectDelta: number;
+    lastCorrect: boolean;
     commitThreshold: number;
   };
   const aggregatedMap = new Map<string, StructAgg>();
@@ -752,12 +761,14 @@ export async function batchUpdateStructureMastery(
     if (agg) {
       agg.correctDelta += u.correct ? 1 : 0;
       agg.incorrectDelta += u.correct ? 0 : 1;
+      agg.lastCorrect = u.correct; // attempts arrive in order, so the last one wins
     } else {
       aggregatedMap.set(k, {
         structureItemId: u.structureItemId,
         lessonId: u.lessonId,
         correctDelta: u.correct ? 1 : 0,
         incorrectDelta: u.correct ? 0 : 1,
+        lastCorrect: u.correct,
         commitThreshold: u.commitThreshold,
       });
     }
@@ -779,6 +790,7 @@ export async function batchUpdateStructureMastery(
       incorrect_count: newIncorrect,
       is_committed: isCommitted,
       last_seen_at: now,
+      last_attempt_correct: a.lastCorrect,
       committed_at: isCommitted && !prev?.is_committed ? now : (prev?.committed_at || null),
     };
   });
