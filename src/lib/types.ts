@@ -517,6 +517,8 @@ export interface VocabMasteryRecord {
   incorrectCount: number;
   isCommitted: boolean;
   lastSeenAt?: string;
+  /** Outcome of the most recent attempt; false = got it wrong last time. */
+  lastAttemptCorrect?: boolean;
   committedAt?: string;
 }
 
@@ -532,6 +534,8 @@ export interface StructureMasteryRecord {
   incorrectCount: number;
   isCommitted: boolean;
   lastSeenAt?: string;
+  /** Outcome of the most recent attempt; false = got it wrong last time. */
+  lastAttemptCorrect?: boolean;
   committedAt?: string;
 }
 
@@ -543,6 +547,12 @@ export interface StructureAttemptAudit {
 }
 
 // --- Homework submission ---
+
+/** Set once a session's attempts have been written to the mastery tables, so they are never counted twice. */
+export interface MasteryApplied {
+  wordsCommittedCount: number;
+  structuresCommittedCount: number;
+}
 
 export interface HomeworkSessionState {
   currentExercise?: 'VOCAB' | 'SENTENCE' | 'CONVERSATION';
@@ -565,9 +575,12 @@ export interface HomeworkSessionState {
   vocabAttempts?: VocabAttemptAudit[];
   // Saved after Ex2 completes so Ex3 uses the exact same structure set.
   usedStructureIds?: string[];
+  // Same set as usedStructureIds but as "lessonId:id" (IDs repeat across lessons). Preferred on restore.
+  usedStructureKeys?: string[];
   // Saved after Ex2 completes so structure mastery can be updated even if
   // the final /submit call never runs.
   structureAttempts?: StructureAttemptAudit[];
+  masteryApplied?: MasteryApplied;
 }
 
 export interface HomeworkSubmission {
@@ -584,6 +597,7 @@ export interface HomeworkSubmission {
   ex2Completed: boolean;
   ex3Completed: boolean;
   allCompleted: boolean;
+  /** "lessonId:vocabId" keys (see itemKey). Rows saved before this change hold bare IDs; nothing reads them for logic. */
   wrongVocabIds: string[];
   readingMastered: boolean;
   sessionState: HomeworkSessionState;

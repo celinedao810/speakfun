@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { BookOpen, MessageCircle, ChevronDown, ChevronUp, Loader2, CheckCircle } from 'lucide-react';
 import { NotebookEntry } from '@/app/api/homework/vocab-notebook/route';
 import { StructureNotebookEntry } from '@/app/api/homework/structure-notebook/route';
+import { itemKey } from '@/lib/homework/itemKeys';
 
 interface VocabNotebookData {
   entries: NotebookEntry[];
@@ -160,7 +161,7 @@ function VocabTab({ data }: { data: VocabNotebookData | null }) {
           </p>
           <div className="space-y-3">
             {learningEntries.map(entry => (
-              <WordCard key={`${entry.lessonId}:${entry.vocabItemId}`} entry={entry} commitThreshold={data.commitThreshold} />
+              <WordCard key={itemKey(entry.lessonId, entry.vocabItemId)} entry={entry} commitThreshold={data.commitThreshold} />
             ))}
           </div>
         </div>
@@ -168,14 +169,14 @@ function VocabTab({ data }: { data: VocabNotebookData | null }) {
       {untouchedEntries.length > 0 && (
         <CollapsibleGroup label={`Coming Up (${untouchedEntries.length})`} labelClass="text-muted-foreground/60">
           {untouchedEntries.map(entry => (
-            <WordCard key={`${entry.lessonId}:${entry.vocabItemId}`} entry={entry} commitThreshold={data.commitThreshold} />
+            <WordCard key={itemKey(entry.lessonId, entry.vocabItemId)} entry={entry} commitThreshold={data.commitThreshold} />
           ))}
         </CollapsibleGroup>
       )}
       {masteredEntries.length > 0 && (
         <CollapsibleGroup label={`Mastered (${masteredEntries.length})`} labelClass="text-emerald-600">
           {masteredEntries.map(entry => (
-            <WordCard key={`${entry.lessonId}:${entry.vocabItemId}`} entry={entry} commitThreshold={data.commitThreshold} />
+            <WordCard key={itemKey(entry.lessonId, entry.vocabItemId)} entry={entry} commitThreshold={data.commitThreshold} />
           ))}
         </CollapsibleGroup>
       )}
@@ -207,7 +208,7 @@ function StructuresTab({ data }: { data: StructureNotebookData | null }) {
           </p>
           <div className="space-y-3">
             {learningEntries.map(entry => (
-              <StructureCard key={`${entry.lessonId}:${entry.structureItemId}`} entry={entry} commitThreshold={data.commitThreshold} />
+              <StructureCard key={itemKey(entry.lessonId, entry.structureItemId)} entry={entry} commitThreshold={data.commitThreshold} />
             ))}
           </div>
         </div>
@@ -215,14 +216,14 @@ function StructuresTab({ data }: { data: StructureNotebookData | null }) {
       {untouchedEntries.length > 0 && (
         <CollapsibleGroup label={`Coming Up (${untouchedEntries.length})`} labelClass="text-muted-foreground/60">
           {untouchedEntries.map(entry => (
-            <StructureCard key={`${entry.lessonId}:${entry.structureItemId}`} entry={entry} commitThreshold={data.commitThreshold} />
+            <StructureCard key={itemKey(entry.lessonId, entry.structureItemId)} entry={entry} commitThreshold={data.commitThreshold} />
           ))}
         </CollapsibleGroup>
       )}
       {masteredEntries.length > 0 && (
         <CollapsibleGroup label={`Mastered (${masteredEntries.length})`} labelClass="text-emerald-600">
           {masteredEntries.map(entry => (
-            <StructureCard key={`${entry.lessonId}:${entry.structureItemId}`} entry={entry} commitThreshold={data.commitThreshold} />
+            <StructureCard key={itemKey(entry.lessonId, entry.structureItemId)} entry={entry} commitThreshold={data.commitThreshold} />
           ))}
         </CollapsibleGroup>
       )}

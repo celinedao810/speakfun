@@ -10,6 +10,7 @@ import {
   HomeworkSessionState,
   LeaderboardEntry,
 } from '@/lib/types';
+import { itemKey } from '@/lib/homework/itemKeys';
 
 // ============================================================================
 // Row types (snake_case matching DB columns)
@@ -88,6 +89,7 @@ interface StructureMasteryRow {
   incorrect_count: number;
   is_committed: boolean;
   last_seen_at: string | null;
+  last_attempt_correct: boolean | null;
   committed_at: string | null;
   created_at: string;
 }
@@ -102,6 +104,7 @@ interface VocabMasteryRow {
   incorrect_count: number;
   is_committed: boolean;
   last_seen_at: string | null;
+  last_attempt_correct: boolean | null;
   committed_at: string | null;
   created_at: string;
   updated_at: string;
@@ -200,7 +203,7 @@ function toClassHomeworkSettings(row: ClassHomeworkSettingsRow): ClassHomeworkSe
     wordsPerSession: row.words_per_session,
     structuresPerSession: row.structures_per_session,
     correctGuessesToCommit: row.correct_guesses_to_commit,
-    structureGuessesToCommit: row.structure_guesses_to_commit ?? 10,
+    structureGuessesToCommit: row.structure_guesses_to_commit ?? 5,
     reviewIntervalDays: row.review_interval_days,
     reviewWordCount: row.review_word_count,
     reviewStructureCount: row.review_structure_count,
@@ -222,6 +225,7 @@ function toStructureMastery(row: StructureMasteryRow): StructureMasteryRecord {
     incorrectCount: row.incorrect_count,
     isCommitted: row.is_committed,
     lastSeenAt: row.last_seen_at ?? undefined,
+    lastAttemptCorrect: row.last_attempt_correct ?? undefined,
     committedAt: row.committed_at ?? undefined,
   };
 }
@@ -237,6 +241,7 @@ function toVocabMastery(row: VocabMasteryRow): VocabMasteryRecord {
     incorrectCount: row.incorrect_count,
     isCommitted: row.is_committed,
     lastSeenAt: row.last_seen_at || undefined,
+    lastAttemptCorrect: row.last_attempt_correct ?? undefined,
     committedAt: row.committed_at || undefined,
   };
 }
@@ -612,7 +617,7 @@ export async function batchUpdateVocabMastery(
     .in('vocab_item_id', updates.map(u => u.vocabItemId));
 
   const existingMap = new Map(
-    ((existing as VocabMasteryRow[]) || []).map(r => [`${r.lesson_id}:${r.vocab_item_id}`, r])
+    ((existing as VocabMasteryRow[]) || []).map(r => [itemKey(r.lesson_id, r.vocab_item_id), r])
   );
 
   // Aggregate duplicate attempts for the same (lessonId, vocabItemId). Ex1 round-2
@@ -624,21 +629,24 @@ export async function batchUpdateVocabMastery(
     lessonId: string;
     correctDelta: number;
     incorrectDelta: number;
+    lastCorrect: boolean;
     commitThreshold: number;
   };
   const aggregatedMap = new Map<string, VocabAgg>();
   for (const u of updates) {
-    const k = `${u.lessonId}:${u.vocabItemId}`;
+    const k = itemKey(u.lessonId, u.vocabItemId);
     const agg = aggregatedMap.get(k);
     if (agg) {
       agg.correctDelta += u.correct ? 1 : 0;
       agg.incorrectDelta += u.correct ? 0 : 1;
+      agg.lastCorrect = u.correct; // attempts arrive in order, so the last one wins
     } else {
       aggregatedMap.set(k, {
         vocabItemId: u.vocabItemId,
         lessonId: u.lessonId,
         correctDelta: u.correct ? 1 : 0,
         incorrectDelta: u.correct ? 0 : 1,
+        lastCorrect: u.correct,
         commitThreshold: u.commitThreshold,
       });
     }
@@ -646,7 +654,7 @@ export async function batchUpdateVocabMastery(
 
   let newlyCommittedCount = 0;
   const upsertRows = Array.from(aggregatedMap.values()).map(a => {
-    const prev = existingMap.get(`${a.lessonId}:${a.vocabItemId}`);
+    const prev = existingMap.get(itemKey(a.lessonId, a.vocabItemId));
     const newCorrect = (prev?.correct_count || 0) + a.correctDelta;
     const newIncorrect = (prev?.incorrect_count || 0) + a.incorrectDelta;
     const isCommitted = newCorrect >= a.commitThreshold;
@@ -660,6 +668,7 @@ export async function batchUpdateVocabMastery(
       incorrect_count: newIncorrect,
       is_committed: isCommitted,
       last_seen_at: now,
+      last_attempt_correct: a.lastCorrect,
       committed_at: isCommitted && !prev?.is_committed ? now : (prev?.committed_at || null),
     };
   });
@@ -731,7 +740,7 @@ export async function batchUpdateStructureMastery(
     .in('structure_item_id', updates.map(u => u.structureItemId));
 
   const existingMap = new Map(
-    ((existing as StructureMasteryRow[]) || []).map(r => [`${r.lesson_id}:${r.structure_item_id}`, r])
+    ((existing as StructureMasteryRow[]) || []).map(r => [itemKey(r.lesson_id, r.structure_item_id), r])
   );
 
   // Aggregate duplicate attempts for the same (lessonId, structureItemId). Ex2
@@ -743,21 +752,24 @@ export async function batchUpdateStructureMastery(
     lessonId: string;
     correctDelta: number;
     incorrectDelta: number;
+    lastCorrect: boolean;
     commitThreshold: number;
   };
   const aggregatedMap = new Map<string, StructAgg>();
   for (const u of updates) {
-    const k = `${u.lessonId}:${u.structureItemId}`;
+    const k = itemKey(u.lessonId, u.structureItemId);
     const agg = aggregatedMap.get(k);
     if (agg) {
       agg.correctDelta += u.correct ? 1 : 0;
       agg.incorrectDelta += u.correct ? 0 : 1;
+      agg.lastCorrect = u.correct; // attempts arrive in order, so the last one wins
     } else {
       aggregatedMap.set(k, {
         structureItemId: u.structureItemId,
         lessonId: u.lessonId,
         correctDelta: u.correct ? 1 : 0,
         incorrectDelta: u.correct ? 0 : 1,
+        lastCorrect: u.correct,
         commitThreshold: u.commitThreshold,
       });
     }
@@ -765,7 +777,7 @@ export async function batchUpdateStructureMastery(
 
   let newlyCommittedCount = 0;
   const upsertRows = Array.from(aggregatedMap.values()).map(a => {
-    const prev = existingMap.get(`${a.lessonId}:${a.structureItemId}`);
+    const prev = existingMap.get(itemKey(a.lessonId, a.structureItemId));
     const newCorrect = (prev?.correct_count || 0) + a.correctDelta;
     const newIncorrect = (prev?.incorrect_count || 0) + a.incorrectDelta;
     const isCommitted = newCorrect >= a.commitThreshold;
@@ -779,6 +791,7 @@ export async function batchUpdateStructureMastery(
       incorrect_count: newIncorrect,
       is_committed: isCommitted,
       last_seen_at: now,
+      last_attempt_correct: a.lastCorrect,
       committed_at: isCommitted && !prev?.is_committed ? now : (prev?.committed_at || null),
     };
   });
@@ -800,7 +813,7 @@ const DEFAULT_SETTINGS: Omit<ClassHomeworkSettings, 'id' | 'classId'> = {
   wordsPerSession: 10,
   structuresPerSession: 5,
   correctGuessesToCommit: 7,
-  structureGuessesToCommit: 10,
+  structureGuessesToCommit: 5,
   reviewIntervalDays: 7,
   reviewWordCount: 15,
   reviewStructureCount: 5,

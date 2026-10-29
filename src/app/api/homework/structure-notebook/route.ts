@@ -5,6 +5,7 @@ import {
   fetchLessonExercisesForLessons,
   fetchClassHomeworkSettings,
 } from '@/lib/supabase/queries/homework';
+import { itemKey } from '@/lib/homework/itemKeys';
 
 export interface StructureNotebookEntry {
   structureItemId: string;
@@ -16,6 +17,7 @@ export interface StructureNotebookEntry {
   incorrectCount: number;
   isCommitted: boolean;
   lastSeenAt?: string;
+  lastAttemptCorrect?: boolean;
   committedAt?: string;
 }
 
@@ -47,7 +49,7 @@ export async function GET(request: NextRequest) {
     const courseIds = (classCourses ?? []).map((r: { course_id: string }) => r.course_id);
 
     if (courseIds.length === 0) {
-      return NextResponse.json({ entries: [], commitThreshold: 10, masteredCount: 0, learningCount: 0, untouchedCount: 0 });
+      return NextResponse.json({ entries: [], commitThreshold: 5, masteredCount: 0, learningCount: 0, untouchedCount: 0 });
     }
 
     // 2. Get all lesson IDs from those courses
@@ -58,7 +60,7 @@ export async function GET(request: NextRequest) {
     const allLessonIds = (lessonRows ?? []).map((r: { id: string }) => r.id);
 
     if (allLessonIds.length === 0) {
-      return NextResponse.json({ entries: [], commitThreshold: 10, masteredCount: 0, learningCount: 0, untouchedCount: 0 });
+      return NextResponse.json({ entries: [], commitThreshold: 5, masteredCount: 0, learningCount: 0, untouchedCount: 0 });
     }
 
     // 3. Fetch exercises + mastery records + settings in parallel
@@ -70,7 +72,7 @@ export async function GET(request: NextRequest) {
 
     // Compound key lookup (lessonId:structureItemId) — structure IDs like "s1"/"s2" are
     // reused across lessons and are NOT globally unique.
-    const masteryCompoundMap = new Map(masteryRecords.map(r => [`${r.lessonId}:${r.structureItemId}`, r]));
+    const masteryCompoundMap = new Map(masteryRecords.map(r => [itemKey(r.lessonId, r.structureItemId), r]));
 
     const commitThreshold = settings.structureGuessesToCommit;
 
@@ -78,7 +80,7 @@ export async function GET(request: NextRequest) {
     const entries: StructureNotebookEntry[] = [];
     for (const ex of lessonExercises) {
       for (const item of ex.structureItems) {
-        const mastery = masteryCompoundMap.get(`${ex.lessonId}:${item.id}`);
+        const mastery = masteryCompoundMap.get(itemKey(ex.lessonId, item.id));
         entries.push({
           structureItemId: item.id,
           pattern: item.pattern,
@@ -89,6 +91,7 @@ export async function GET(request: NextRequest) {
           incorrectCount: mastery?.incorrectCount ?? 0,
           isCommitted: mastery?.isCommitted ?? false,
           lastSeenAt: mastery?.lastSeenAt,
+          lastAttemptCorrect: mastery?.lastAttemptCorrect,
           committedAt: mastery?.committedAt,
         });
       }

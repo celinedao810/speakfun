@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient as createServerClient } from '@/lib/supabase/server';
-import { upsertSubmission, batchUpdateVocabMastery, batchUpdateStructureMastery, fetchClassHomeworkSettings, fetchLessonExercises } from '@/lib/supabase/queries/homework';
+import { upsertSubmission, fetchSubmission, fetchLessonExercises } from '@/lib/supabase/queries/homework';
+import { applySessionMastery } from '@/lib/homework/applyMastery';
+import { MasteryApplied, StructureAttemptAudit, VocabAttemptAudit } from '@/lib/types';
 
 interface VocabAttempt {
   vocabItemId: string;
@@ -79,6 +81,20 @@ export async function POST(request: NextRequest) {
       readingMastered = (ex3aScore ?? 0) >= maxReadingScore;
     }
 
+    // Record mastery unless /save-progress already did when the last exercise completed
+    // (it sets masteryApplied) — counting a session twice would double every correct guess.
+    const existing = await fetchSubmission(supabase, user.id, windowId);
+    const masteryApplied: MasteryApplied = existing?.sessionState?.masteryApplied
+      ?? await applySessionMastery(
+        supabase,
+        user.id,
+        classId,
+        vocabAttempts as unknown as VocabAttemptAudit[],
+        structureAttempts as unknown as StructureAttemptAudit[],
+      );
+    const wordsCommittedCount = masteryApplied.wordsCommittedCount;
+    const structuresCommittedCount = masteryApplied.structuresCommittedCount;
+
     // Finalize submission
     const submission = await upsertSubmission(supabase, {
       learnerId: user.id,
@@ -95,53 +111,9 @@ export async function POST(request: NextRequest) {
       allCompleted: true,
       wrongVocabIds: wrongVocabIds ?? [],
       readingMastered,
-      sessionState: {},
+      sessionState: { masteryApplied },
       submittedAt,
     });
-
-    // Update vocab mastery records
-    let wordsCommittedCount = 0;
-    let structuresCommittedCount = 0;
-    const settings = await fetchClassHomeworkSettings(supabase, classId);
-
-    if (vocabAttempts && vocabAttempts.length > 0) {
-      const masteryResult = await batchUpdateVocabMastery(
-        supabase,
-        user.id,
-        classId,
-        vocabAttempts.map(a => ({
-          vocabItemId: a.vocabItemId,
-          lessonId: a.lessonId,
-          correct: typeof a.isCorrectWord === 'boolean'
-            ? a.isCorrectWord
-            : !!((a as unknown as { correct?: boolean }).correct),
-          commitThreshold: settings.correctGuessesToCommit,
-        }))
-      );
-      if (!masteryResult.ok) {
-        console.error('[homework/submit] Vocab mastery update failed for learner', user.id, 'class', classId, 'windowId', windowId);
-      }
-      wordsCommittedCount = masteryResult.newlyCommittedCount;
-    }
-
-    // Update structure mastery records
-    if (structureAttempts && structureAttempts.length > 0) {
-      const structMasteryResult = await batchUpdateStructureMastery(
-        supabase,
-        user.id,
-        classId,
-        structureAttempts.map(a => ({
-          structureItemId: a.structureItemId,
-          lessonId: a.lessonId,
-          correct: a.isCorrect,
-          commitThreshold: settings.structureGuessesToCommit,
-        }))
-      );
-      if (!structMasteryResult.ok) {
-        console.error('[homework/submit] Structure mastery update failed for learner', user.id, 'class', classId, 'windowId', windowId);
-      }
-      structuresCommittedCount = structMasteryResult.newlyCommittedCount;
-    }
 
     let auditRowsInserted = 0;
 

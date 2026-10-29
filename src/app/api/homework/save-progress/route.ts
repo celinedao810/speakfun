@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient as createServerClient } from '@/lib/supabase/server';
-import { fetchSubmission, upsertSubmission, batchUpdateVocabMastery, batchUpdateStructureMastery, fetchClassHomeworkSettings } from '@/lib/supabase/queries/homework';
+import { fetchSubmission, upsertSubmission } from '@/lib/supabase/queries/homework';
+import { applySessionMastery } from '@/lib/homework/applyMastery';
 import { HomeworkSessionState } from '@/lib/types';
 
 /**
@@ -64,6 +65,18 @@ export async function POST(request: NextRequest) {
 
     const mergedSessionState: HomeworkSessionState = { ...existing?.sessionState ?? {}, ...sessionState ?? {} };
 
+    // When all exercises complete for the first time, record mastery now so it is committed even
+    // if the final /submit call never runs. The masteryApplied flag stops /submit counting it again.
+    if (allDone && !wasAlreadyCompleted && !mergedSessionState.masteryApplied) {
+      mergedSessionState.masteryApplied = await applySessionMastery(
+        supabase,
+        user.id,
+        classId,
+        mergedSessionState.vocabAttempts,
+        mergedSessionState.structureAttempts,
+      );
+    }
+
     await upsertSubmission(supabase, {
       learnerId: user.id,
       windowId,
@@ -83,42 +96,6 @@ export async function POST(request: NextRequest) {
       submittedAt,
       readingMastered: existing?.readingMastered ?? false,
     });
-
-    // When all exercises complete for the first time, update mastery records
-    // so they are always committed even if the final /submit call never runs.
-    if (allDone && !wasAlreadyCompleted) {
-      const settings = await fetchClassHomeworkSettings(supabase, classId);
-      const vocabAttempts = mergedSessionState.vocabAttempts ?? [];
-      const structureAttempts = mergedSessionState.structureAttempts ?? [];
-
-      if (vocabAttempts.length > 0) {
-        await batchUpdateVocabMastery(
-          supabase,
-          user.id,
-          classId,
-          vocabAttempts.map(a => ({
-            vocabItemId: a.vocabItemId,
-            lessonId: a.lessonId,
-            correct: a.isCorrectWord,
-            commitThreshold: settings.correctGuessesToCommit,
-          }))
-        );
-      }
-
-      if (structureAttempts.length > 0) {
-        await batchUpdateStructureMastery(
-          supabase,
-          user.id,
-          classId,
-          structureAttempts.map(a => ({
-            structureItemId: a.structureItemId,
-            lessonId: a.lessonId,
-            correct: a.isCorrect,
-            commitThreshold: settings.structureGuessesToCommit,
-          }))
-        );
-      }
-    }
 
     return NextResponse.json({ success: true });
   } catch (error: unknown) {

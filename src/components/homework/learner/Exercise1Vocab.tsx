@@ -5,10 +5,12 @@ import { CheckCircle, Loader2, Mic, Square } from 'lucide-react';
 import { VocabAttemptAudit, VocabExerciseItem } from '@/lib/types';
 import { matchVocabFromCandidates } from '@/lib/ai/aiClient';
 import { useContinuousSpeech } from '@/lib/audio/useContinuousSpeech';
+import { itemKey } from '@/lib/homework/itemKeys';
 
 interface Exercise1VocabProps {
   vocabPool: VocabExerciseItem[];
-  onComplete: (score: number, wrongVocabIds: string[], attempts: VocabAttemptAudit[], wordResults: WordResult[]) => void;
+  /** wrongVocabKeys are "lessonId:vocabId" keys (see itemKey), not bare IDs. */
+  onComplete: (score: number, wrongVocabKeys: string[], attempts: VocabAttemptAudit[], wordResults: WordResult[]) => void;
 }
 
 export interface WordResult {
@@ -93,8 +95,9 @@ export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1Vocab
 
     // Any blocks still in blocksRef that weren't matched → wrong
     blocksRef.current.forEach(b => {
-      if (!b.matched && !wrongVocabIdsRef.current.includes(b.vocabItem.id)) {
-        wrongVocabIdsRef.current = [...wrongVocabIdsRef.current, b.vocabItem.id];
+      const wrongKey = itemKey(b.vocabItem.lessonId, b.vocabItem.id);
+      if (!b.matched && !wrongVocabIdsRef.current.includes(wrongKey)) {
+        wrongVocabIdsRef.current = [...wrongVocabIdsRef.current, wrongKey];
       }
     });
 
@@ -107,15 +110,35 @@ export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1Vocab
       if (seenResultWords.has(w)) continue;
       seenResultWords.add(w);
       const matched = completedResultsRef.current.find(
-        r => r.item.id === item.id || r.item.word.toLowerCase() === w
+        r => itemKey(r.item.lessonId, r.item.id) === itemKey(item.lessonId, item.id) || r.item.word.toLowerCase() === w
       );
       allWordResults.push(matched ?? { item, pointsEarned: 0, isCorrect: false });
     }
 
+    // A word that fell off unmatched has no attempt yet. Record it as a miss so mastery tracks
+    // incorrect answers and "wrong last time" words come back (and the scorecard's x/y is real).
+    const missTimestamp = new Date().toISOString();
+    const missedAttempts: VocabAttemptAudit[] = allWordResults
+      .filter(r => !r.isCorrect)
+      .map(r => ({
+        vocabItemId: r.item.id,
+        lessonId: r.item.lessonId,
+        targetWord: r.item.word,
+        recognizedWord: '',
+        isCorrectWord: false,
+        pronunciationScore: 0,
+        pointsEarned: 0,
+        feedback: '',
+        timedMode: true,
+        timeTakenMs: 0,
+        timedOut: true,
+        attemptTimestamp: missTimestamp,
+      }));
+
     onCompleteRef.current(
       totalScoreRef.current,
       wrongVocabIdsRef.current,
-      attemptsRef.current,
+      [...attemptsRef.current, ...missedAttempts],
       allWordResults,
     );
   }, [vocabPool]);
@@ -142,8 +165,9 @@ export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1Vocab
 
       if (block.progress >= 1) {
         // Block fell off without being matched
-        if (!wrongVocabIdsRef.current.includes(block.vocabItem.id)) {
-          wrongVocabIdsRef.current = [...wrongVocabIdsRef.current, block.vocabItem.id];
+        const blockKey = itemKey(block.vocabItem.lessonId, block.vocabItem.id);
+        if (!wrongVocabIdsRef.current.includes(blockKey)) {
+          wrongVocabIdsRef.current = [...wrongVocabIdsRef.current, blockKey];
         }
         changed = true;
         // Don't push to updatedBlocks → removed from render
@@ -189,7 +213,9 @@ export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1Vocab
     // Blocks on screen when the learner started speaking, plus any that appeared
     // since — a block that fell off mid-word was still the one they were aiming at.
     const visibleNow = visibleAtStart.filter(
-      b => !completedResultsRef.current.some(r => r.item.id === b.vocabItem.id)
+      b => !completedResultsRef.current.some(
+        r => itemKey(r.item.lessonId, r.item.id) === itemKey(b.vocabItem.lessonId, b.vocabItem.id)
+      )
     );
     for (const b of visibleBlocks()) {
       if (!visibleNow.some(v => v.uid === b.uid)) visibleNow.push(b);
@@ -212,7 +238,7 @@ export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1Vocab
 
         // Guard against two concurrent recordings matching the same word (by id or word text)
         if (completedResultsRef.current.some(r =>
-          r.item.id === matchedBlock.vocabItem.id ||
+          itemKey(r.item.lessonId, r.item.id) === itemKey(matchedBlock.vocabItem.lessonId, matchedBlock.vocabItem.id) ||
           r.item.word.toLowerCase() === matchedBlock.vocabItem.word.toLowerCase()
         )) return;
 
@@ -221,7 +247,8 @@ export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1Vocab
         setActiveBlocks(prev => prev.filter(b => b.uid !== matchedUid));
 
         // If the RAF already added this word to wrongVocabIds (block fell while AI scored), undo it
-        wrongVocabIdsRef.current = wrongVocabIdsRef.current.filter(id => id !== matchedBlock.vocabItem.id);
+        const matchedKey = itemKey(matchedBlock.vocabItem.lessonId, matchedBlock.vocabItem.id);
+        wrongVocabIdsRef.current = wrongVocabIdsRef.current.filter(k => k !== matchedKey);
 
         totalScoreRef.current += result.pointsEarned;
         setTotalScore(totalScoreRef.current);
@@ -290,7 +317,7 @@ export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1Vocab
       const slotBase = X_SLOTS[i % 3];
       const jitter = (Math.random() * 2 - 1) * SLOT_JITTER;
       return {
-        uid: `${item.id}-${i}`,
+        uid: `${itemKey(item.lessonId, item.id)}-${i}`,
         vocabItem: item,
         xPercent: slotBase + jitter,
         launchTime: now + i * launchInterval,

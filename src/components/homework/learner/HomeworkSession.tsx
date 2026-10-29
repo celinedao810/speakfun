@@ -10,6 +10,8 @@ import {
 import { useAuth } from '@/context/AuthContext';
 import { generateFreeTalkTopic } from '@/lib/ai/aiClient';
 import Exercise1Vocab, { WordResult } from './Exercise1Vocab';
+import { pickPool } from '@/lib/homework/poolSelection';
+import { itemKey } from '@/lib/homework/itemKeys';
 import Exercise2Structure, { StructureResult } from './Exercise2Structure';
 import Exercise3FreeTalk from './Exercise3FreeTalk';
 import HomeworkScorecard from './HomeworkScorecard';
@@ -249,24 +251,24 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
         const allVocab: VocabExerciseItem[] = exData.flatMap(e => e.vocabItems ?? []);
         const aggregatedStructures: StructureExerciseItem[] = exData.flatMap(e => e.structureItems ?? []);
 
-        const prevWrong = existingSubmission?.wrongVocabIds ?? [];
         const limit = settingsData?.reviewWordCount ?? 15;
 
-        // Vocab pool: prioritise wrong-not-mastered, then fresh-not-mastered, then mastered
+        // Vocab pool: only unmastered words, mixing retries of last-time-wrong words with
+        // never-practised and least-recently-practised ones (see pickPool).
         const masteryRes = await fetch(`/api/homework/vocab-notebook?classId=${classId}`);
         const masteryData = masteryRes.ok ? await masteryRes.json() : null;
-        const masteryEntries: Array<{ vocabItemId: string; lessonId: string; isCommitted: boolean }> =
+        const masteryEntries: Array<{ vocabItemId: string; lessonId: string; isCommitted: boolean; lastSeenAt?: string; lastAttemptCorrect?: boolean }> =
           masteryData?.entries ?? [];
 
-        const seenKeys = new Set<string>();
         const masteredKeys = new Set<string>();
+        const progressByKey = new Map<string, { lastSeenAt?: string; lastAttemptCorrect?: boolean }>();
         for (const e of masteryEntries) {
-          const k = `${e.lessonId}:${e.vocabItemId}`;
-          seenKeys.add(k);
+          const k = itemKey(e.lessonId, e.vocabItemId);
           if (e.isCommitted) masteredKeys.add(k);
+          progressByKey.set(k, { lastSeenAt: e.lastSeenAt, lastAttemptCorrect: e.lastAttemptCorrect });
         }
 
-        const key = (v: VocabExerciseItem) => `${v.lessonId}:${v.id}`;
+        const key = (v: VocabExerciseItem) => itemKey(v.lessonId, v.id);
 
         // If Ex1 already completed, rebuild the pool from the saved vocab attempts
         // so Ex2/Ex3 display the exact same words Ex1 tested (instead of re-picking).
@@ -276,7 +278,7 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
           const seenPairs = new Set<string>();
           const reconstructed: VocabExerciseItem[] = [];
           for (const a of savedVocabAttempts) {
-            const k = `${a.lessonId}:${a.vocabItemId}`;
+            const k = itemKey(a.lessonId, a.vocabItemId);
             if (seenPairs.has(k)) continue;
             seenPairs.add(k);
             const v = allVocab.find(x => x.lessonId === a.lessonId && x.id === a.vocabItemId);
@@ -284,27 +286,25 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
           }
           pool = reconstructed.slice(0, limit);
         } else {
-          const wrongIds = new Set(prevWrong);
-          const wrongNotMastered = allVocab.filter(v =>
-            seenKeys.has(key(v)) && wrongIds.has(v.id) && !masteredKeys.has(key(v))
-          );
-          const freshNotMastered = allVocab
-            .filter(v => seenKeys.has(key(v)) && !wrongIds.has(v.id) && !masteredKeys.has(key(v)))
-            .sort(() => Math.random() - 0.5);
-          const unseenVocab = allVocab
-            .filter(v => !seenKeys.has(key(v)))
-            .sort(() => Math.random() - 0.5);
-          // Mastered words are excluded — pool only contains active (non-mastered) words
-          // De-duplicate by word text so the same word from different lessons doesn't appear twice
-          const seenWords = new Set<string>();
-          pool = [...wrongNotMastered, ...freshNotMastered, ...unseenVocab]
-            .filter(v => {
-              const w = v.word.toLowerCase();
-              if (seenWords.has(w)) return false;
-              seenWords.add(w);
-              return true;
-            })
-            .slice(0, limit);
+          // The same word text can exist in several lessons. Treat it as ONE word: skip it if it
+          // is mastered in any lesson, otherwise keep the instance with the most recent practice
+          // (ties broken by key) so its progress follows it and the choice never flips.
+          const byWord = new Map<string, VocabExerciseItem[]>();
+          for (const v of allVocab) {
+            const w = v.word.toLowerCase().trim();
+            byWord.set(w, [...(byWord.get(w) ?? []), v]);
+          }
+          const candidates: VocabExerciseItem[] = [];
+          for (const instances of byWord.values()) {
+            if (instances.some(v => masteredKeys.has(key(v)))) continue;
+            const best = [...instances].sort((a, b) => {
+              const la = progressByKey.get(key(a))?.lastSeenAt ?? '';
+              const lb = progressByKey.get(key(b))?.lastSeenAt ?? '';
+              return lb.localeCompare(la) || key(a).localeCompare(key(b));
+            })[0];
+            candidates.push(best);
+          }
+          pool = pickPool(candidates, limit, v => progressByKey.get(key(v)) ?? {});
         }
 
         setVocabPool(pool);
@@ -312,17 +312,49 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
         const structureLimit = settingsData?.reviewStructureCount ?? 5;
 
         // If resuming to EX3, restore the exact structure set used in Ex2
+        // Keys are "lessonId:id" because structure IDs ("s1"...) repeat across lessons; sessions
+        // saved before keys existed only have bare IDs (usedStructureIds), used as a fallback.
+        const savedStructureKeys = existingSubmission?.sessionState?.usedStructureKeys;
         const savedStructureIds = existingSubmission?.sessionState?.usedStructureIds;
         let structuresToUse: StructureExerciseItem[];
-        if (savedStructureIds && savedStructureIds.length > 0) {
-          const idSet = new Set(savedStructureIds);
-          const ordered = savedStructureIds
-            .map(id => aggregatedStructures.find(s => s.id === id))
+        if (savedStructureKeys && savedStructureKeys.length > 0) {
+          const keySet = new Set(savedStructureKeys);
+          const ordered = savedStructureKeys
+            .map(k => aggregatedStructures.find(s => itemKey(s.lessonId, s.id) === k))
             .filter((s): s is StructureExerciseItem => s !== undefined);
-          const rest = aggregatedStructures.filter(s => !idSet.has(s.id));
+          const rest = aggregatedStructures.filter(s => !keySet.has(itemKey(s.lessonId, s.id)));
+          structuresToUse = [...ordered, ...rest];
+        } else if (savedStructureIds && savedStructureIds.length > 0) {
+          // Legacy session saved before keys existed. A bare ID is only trusted when exactly one
+          // structure in the pool has it; an ambiguous ID could be the wrong lesson's structure.
+          const unique = (id: string) => {
+            const matches = aggregatedStructures.filter(st => st.id === id);
+            return matches.length === 1 ? matches[0] : undefined;
+          };
+          const ordered = savedStructureIds.map(unique).filter((st): st is StructureExerciseItem => st !== undefined);
+          const orderedKeys = new Set(ordered.map(st => itemKey(st.lessonId, st.id)));
+          const rest = aggregatedStructures.filter(st => !orderedKeys.has(itemKey(st.lessonId, st.id)));
           structuresToUse = [...ordered, ...rest];
         } else {
-          structuresToUse = [...aggregatedStructures].sort(() => Math.random() - 0.5);
+          // Drop structures this learner has mastered (keyed by lessonId:id — structure IDs
+          // like "s1" repeat across lessons). If everything is mastered, keep the full list so
+          // Ex2/Ex3 still have material to practise.
+          const structMasteryRes = await fetch(`/api/homework/structure-notebook?classId=${classId}`);
+          const structMasteryData = structMasteryRes.ok ? await structMasteryRes.json() : null;
+          const masteredStructureKeys = new Set<string>(
+            ((structMasteryData?.entries ?? []) as Array<{ structureItemId: string; lessonId: string; isCommitted: boolean }>)
+              .filter(e => e.isCommitted)
+              .map(e => itemKey(e.lessonId, e.structureItemId))
+          );
+          const structureProgress = new Map<string, { lastSeenAt?: string; lastAttemptCorrect?: boolean }>(
+            ((structMasteryData?.entries ?? []) as Array<{ structureItemId: string; lessonId: string; lastSeenAt?: string; lastAttemptCorrect?: boolean }>)
+              .map(e => [itemKey(e.lessonId, e.structureItemId), { lastSeenAt: e.lastSeenAt, lastAttemptCorrect: e.lastAttemptCorrect }])
+          );
+          const activeStructures = aggregatedStructures.filter(
+            st => !masteredStructureKeys.has(itemKey(st.lessonId, st.id))
+          );
+          const structureSource = activeStructures.length > 0 ? activeStructures : aggregatedStructures;
+          structuresToUse = pickPool(structureSource, structureLimit, st => structureProgress.get(itemKey(st.lessonId, st.id)) ?? {});
         }
         setStructurePool(structuresToUse.slice(0, structureLimit));
 
@@ -400,7 +432,11 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
     await autoSave({
       ex2Score: score,
       ex2Completed: true,
-      sessionState: { usedStructureIds: structurePool.map(s => s.id), structureAttempts: attempts },
+      sessionState: {
+        usedStructureIds: structurePool.map(s => s.id),
+        usedStructureKeys: structurePool.map(s => itemKey(s.lessonId, s.id)),
+        structureAttempts: attempts,
+      },
     });
     generateFreeTalkTopic(
       vocabPool.map(v => v.word),
@@ -412,7 +448,8 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
 
   const handleEx3Complete = useCallback(async (score: number, attempts: StructureAttemptAudit[] = []) => {
     setEx3bScore(score);
-    setStructureAttempts(attempts);
+    // Ex3 reports no structure attempts; keep Ex2's so /submit can still record mastery if needed.
+    if (attempts.length > 0) setStructureAttempts(attempts);
     await autoSave({ ex3bScore: score, ex3Completed: true });
     setPhase('SUBMITTING');
   }, [autoSave]);
