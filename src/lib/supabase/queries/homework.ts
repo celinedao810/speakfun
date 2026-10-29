@@ -10,6 +10,7 @@ import {
   HomeworkSessionState,
   LeaderboardEntry,
 } from '@/lib/types';
+import { itemKey } from '@/lib/homework/itemKeys';
 
 // ============================================================================
 // Row types (snake_case matching DB columns)
@@ -616,7 +617,7 @@ export async function batchUpdateVocabMastery(
     .in('vocab_item_id', updates.map(u => u.vocabItemId));
 
   const existingMap = new Map(
-    ((existing as VocabMasteryRow[]) || []).map(r => [`${r.lesson_id}:${r.vocab_item_id}`, r])
+    ((existing as VocabMasteryRow[]) || []).map(r => [itemKey(r.lesson_id, r.vocab_item_id), r])
   );
 
   // Aggregate duplicate attempts for the same (lessonId, vocabItemId). Ex1 round-2
@@ -633,7 +634,7 @@ export async function batchUpdateVocabMastery(
   };
   const aggregatedMap = new Map<string, VocabAgg>();
   for (const u of updates) {
-    const k = `${u.lessonId}:${u.vocabItemId}`;
+    const k = itemKey(u.lessonId, u.vocabItemId);
     const agg = aggregatedMap.get(k);
     if (agg) {
       agg.correctDelta += u.correct ? 1 : 0;
@@ -653,7 +654,7 @@ export async function batchUpdateVocabMastery(
 
   let newlyCommittedCount = 0;
   const upsertRows = Array.from(aggregatedMap.values()).map(a => {
-    const prev = existingMap.get(`${a.lessonId}:${a.vocabItemId}`);
+    const prev = existingMap.get(itemKey(a.lessonId, a.vocabItemId));
     const newCorrect = (prev?.correct_count || 0) + a.correctDelta;
     const newIncorrect = (prev?.incorrect_count || 0) + a.incorrectDelta;
     const isCommitted = newCorrect >= a.commitThreshold;
@@ -739,7 +740,7 @@ export async function batchUpdateStructureMastery(
     .in('structure_item_id', updates.map(u => u.structureItemId));
 
   const existingMap = new Map(
-    ((existing as StructureMasteryRow[]) || []).map(r => [`${r.lesson_id}:${r.structure_item_id}`, r])
+    ((existing as StructureMasteryRow[]) || []).map(r => [itemKey(r.lesson_id, r.structure_item_id), r])
   );
 
   // Aggregate duplicate attempts for the same (lessonId, structureItemId). Ex2
@@ -756,7 +757,7 @@ export async function batchUpdateStructureMastery(
   };
   const aggregatedMap = new Map<string, StructAgg>();
   for (const u of updates) {
-    const k = `${u.lessonId}:${u.structureItemId}`;
+    const k = itemKey(u.lessonId, u.structureItemId);
     const agg = aggregatedMap.get(k);
     if (agg) {
       agg.correctDelta += u.correct ? 1 : 0;
@@ -776,7 +777,7 @@ export async function batchUpdateStructureMastery(
 
   let newlyCommittedCount = 0;
   const upsertRows = Array.from(aggregatedMap.values()).map(a => {
-    const prev = existingMap.get(`${a.lessonId}:${a.structureItemId}`);
+    const prev = existingMap.get(itemKey(a.lessonId, a.structureItemId));
     const newCorrect = (prev?.correct_count || 0) + a.correctDelta;
     const newIncorrect = (prev?.incorrect_count || 0) + a.incorrectDelta;
     const isCommitted = newCorrect >= a.commitThreshold;

@@ -4,6 +4,7 @@ import React from 'react';
 import { Trophy, Star, BookOpen, MessageCircle, CheckCircle, ArrowRight, Home } from 'lucide-react';
 import Link from 'next/link';
 import { VocabAttemptAudit } from '@/lib/types';
+import { itemKey } from '@/lib/homework/itemKeys';
 
 interface ScorecardProps {
   windowId: string;
@@ -65,7 +66,7 @@ export default function HomeworkScorecard({
   // if any of its attempts (round 1 or round 2) was correct.
   const wordCorrectByKey = new Map<string, boolean>();
   for (const a of vocabAttempts) {
-    const k = `${a.lessonId}:${a.vocabItemId}`;
+    const k = itemKey(a.lessonId, a.vocabItemId);
     wordCorrectByKey.set(k, (wordCorrectByKey.get(k) ?? false) || a.isCorrectWord);
   }
   const totalAttempts = wordCorrectByKey.size;

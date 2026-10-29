@@ -5,6 +5,7 @@ import { CheckCircle, AlertCircle, RotateCcw, ChevronRight, MicOff } from 'lucid
 import { VocabExerciseItem, StructureExerciseItem, FreeTalkScoringResult } from '@/lib/types';
 import { scoreFreeTalk, generateAnswerGuide } from '@/lib/ai/aiClient';
 import AudioRecorder, { AudioRecorderHandle } from '@/components/AudioRecorder';
+import { itemKey } from '@/lib/homework/itemKeys';
 
 const BASELINE = 7;
 const MAX_ATTEMPTS_BEFORE_SKIP = 5;
@@ -209,7 +210,7 @@ export default function Exercise3FreeTalk({ vocabWords, structures, topic, durat
             <p className="text-xs font-semibold text-indigo-600 uppercase tracking-wide mb-1.5">Vocabulary to use</p>
             <div className="flex flex-wrap gap-1.5">
               {vocabWords.map(v => (
-                <span key={v.id} className="bg-indigo-100 text-indigo-800 text-xs px-2.5 py-0.5 rounded-full font-medium">
+                <span key={itemKey(v.lessonId, v.id)} className="bg-indigo-100 text-indigo-800 text-xs px-2.5 py-0.5 rounded-full font-medium">
                   {v.word}
                 </span>
               ))}

@@ -5,6 +5,7 @@ import {
   fetchLessonExercisesForLessons,
   fetchClassHomeworkSettings,
 } from '@/lib/supabase/queries/homework';
+import { itemKey } from '@/lib/homework/itemKeys';
 
 export interface StructureNotebookEntry {
   structureItemId: string;
@@ -71,7 +72,7 @@ export async function GET(request: NextRequest) {
 
     // Compound key lookup (lessonId:structureItemId) — structure IDs like "s1"/"s2" are
     // reused across lessons and are NOT globally unique.
-    const masteryCompoundMap = new Map(masteryRecords.map(r => [`${r.lessonId}:${r.structureItemId}`, r]));
+    const masteryCompoundMap = new Map(masteryRecords.map(r => [itemKey(r.lessonId, r.structureItemId), r]));
 
     const commitThreshold = settings.structureGuessesToCommit;
 
@@ -79,7 +80,7 @@ export async function GET(request: NextRequest) {
     const entries: StructureNotebookEntry[] = [];
     for (const ex of lessonExercises) {
       for (const item of ex.structureItems) {
-        const mastery = masteryCompoundMap.get(`${ex.lessonId}:${item.id}`);
+        const mastery = masteryCompoundMap.get(itemKey(ex.lessonId, item.id));
         entries.push({
           structureItemId: item.id,
           pattern: item.pattern,

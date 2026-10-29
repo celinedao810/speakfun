@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Exercise1Vocab, { WordResult } from '@/components/homework/learner/Exercise1Vocab';
 import { VocabAttemptAudit, VocabExerciseItem } from '@/lib/types';
+import { itemKey } from '@/lib/homework/itemKeys';
 
 const SAMPLE_WORDS: VocabExerciseItem[] = [
   { word: 'deploy', ipa: '/dɪˈplɔɪ/', clue: 'verb: to release software so people can use it' },
@@ -44,7 +45,7 @@ export default function VocabGamePlayground() {
           <p className="font-bold">Score: {result.score}</p>
           <ul className="text-sm space-y-1">
             {result.wordResults.map(r => (
-              <li key={r.item.id}>
+              <li key={itemKey(r.item.lessonId, r.item.id)}>
                 {r.isCorrect ? '✅' : '❌'} {r.item.word}
                 {r.recognizedWord ? ` — heard “${r.recognizedWord}”` : ''} ({r.pointsEarned} pt)
               </li>

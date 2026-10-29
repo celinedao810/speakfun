@@ -5,6 +5,7 @@ import {
   fetchLessonExercisesForLessons,
   fetchClassHomeworkSettings,
 } from '@/lib/supabase/queries/homework';
+import { itemKey } from '@/lib/homework/itemKeys';
 
 export interface NotebookEntry {
   vocabItemId: string;
@@ -73,7 +74,7 @@ export async function GET(request: NextRequest) {
     // Compound key lookup (lessonId:vocabItemId) — vocab IDs like "v1"/"v2" are
     // reused across lessons and are NOT globally unique, so we must always scope
     // mastery records to the specific lesson.
-    const masteryCompoundMap = new Map(masteryRecords.map(r => [`${r.lessonId}:${r.vocabItemId}`, r]));
+    const masteryCompoundMap = new Map(masteryRecords.map(r => [itemKey(r.lessonId, r.vocabItemId), r]));
 
     const commitThreshold = settings.correctGuessesToCommit;
 
@@ -81,7 +82,7 @@ export async function GET(request: NextRequest) {
     const entries: NotebookEntry[] = [];
     for (const ex of lessonExercises) {
       for (const item of ex.vocabItems) {
-        const mastery = masteryCompoundMap.get(`${ex.lessonId}:${item.id}`);
+        const mastery = masteryCompoundMap.get(itemKey(ex.lessonId, item.id));
         entries.push({
           vocabItemId: item.id,
           word: item.word,

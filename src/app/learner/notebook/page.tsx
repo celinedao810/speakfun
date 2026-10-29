@@ -6,6 +6,7 @@ import { GlobalNotebookResponse, CourseNotebook } from '@/app/api/homework/vocab
 import { NotebookEntry } from '@/app/api/homework/vocab-notebook/route';
 import { GlobalStructureNotebookResponse, CourseStructureNotebook } from '@/app/api/homework/structure-notebook/global/route';
 import { StructureNotebookEntry } from '@/app/api/homework/structure-notebook/route';
+import { itemKey } from '@/lib/homework/itemKeys';
 
 export default function NotebookPage() {
   const [vocabData, setVocabData] = useState<GlobalNotebookResponse | null>(null);
@@ -304,14 +305,14 @@ function CourseSection({ course, searchQuery = '' }: { course: CourseNotebook; s
             <>
               {course.entries.filter(matchEntry).map(entry => (
                 <WordCard
-                  key={`${entry.lessonId}:${entry.vocabItemId}`}
+                  key={itemKey(entry.lessonId, entry.vocabItemId)}
                   entry={entry}
                   commitThreshold={course.commitThreshold}
                   highlight={searchQuery.trim()}
                 />
               ))}
               {course.entries.filter(e => !matchEntry(e)).map(entry => (
-                <div key={`${entry.lessonId}:${entry.vocabItemId}`} className="opacity-40">
+                <div key={itemKey(entry.lessonId, entry.vocabItemId)} className="opacity-40">
                   <WordCard entry={entry} commitThreshold={course.commitThreshold} />
                 </div>
               ))}
@@ -326,7 +327,7 @@ function CourseSection({ course, searchQuery = '' }: { course: CourseNotebook; s
                   <div className="space-y-3">
                     {learningEntries.map(entry => (
                       <WordCard
-                        key={`${entry.lessonId}:${entry.vocabItemId}`}
+                        key={itemKey(entry.lessonId, entry.vocabItemId)}
                         entry={entry}
                         commitThreshold={course.commitThreshold}
                       />
@@ -341,7 +342,7 @@ function CourseSection({ course, searchQuery = '' }: { course: CourseNotebook; s
                 >
                   {untouchedEntries.map(entry => (
                     <WordCard
-                      key={`${entry.lessonId}:${entry.vocabItemId}`}
+                      key={itemKey(entry.lessonId, entry.vocabItemId)}
                       entry={entry}
                       commitThreshold={course.commitThreshold}
                     />
@@ -355,7 +356,7 @@ function CourseSection({ course, searchQuery = '' }: { course: CourseNotebook; s
                 >
                   {masteredEntries.map(entry => (
                     <WordCard
-                      key={`${entry.lessonId}:${entry.vocabItemId}`}
+                      key={itemKey(entry.lessonId, entry.vocabItemId)}
                       entry={entry}
                       commitThreshold={course.commitThreshold}
                     />
@@ -427,14 +428,14 @@ function StructureCourseSection({ course, searchQuery = '' }: { course: CourseSt
             <>
               {course.entries.filter(matchEntry).map(entry => (
                 <StructureCard
-                  key={`${entry.lessonId}:${entry.structureItemId}`}
+                  key={itemKey(entry.lessonId, entry.structureItemId)}
                   entry={entry}
                   commitThreshold={course.commitThreshold}
                   highlight={searchQuery.trim()}
                 />
               ))}
               {course.entries.filter(e => !matchEntry(e)).map(entry => (
-                <div key={`${entry.lessonId}:${entry.structureItemId}`} className="opacity-40">
+                <div key={itemKey(entry.lessonId, entry.structureItemId)} className="opacity-40">
                   <StructureCard entry={entry} commitThreshold={course.commitThreshold} />
                 </div>
               ))}
@@ -449,7 +450,7 @@ function StructureCourseSection({ course, searchQuery = '' }: { course: CourseSt
                   <div className="space-y-3">
                     {learningEntries.map(entry => (
                       <StructureCard
-                        key={`${entry.lessonId}:${entry.structureItemId}`}
+                        key={itemKey(entry.lessonId, entry.structureItemId)}
                         entry={entry}
                         commitThreshold={course.commitThreshold}
                       />
@@ -464,7 +465,7 @@ function StructureCourseSection({ course, searchQuery = '' }: { course: CourseSt
                 >
                   {untouchedEntries.map(entry => (
                     <StructureCard
-                      key={`${entry.lessonId}:${entry.structureItemId}`}
+                      key={itemKey(entry.lessonId, entry.structureItemId)}
                       entry={entry}
                       commitThreshold={course.commitThreshold}
                     />
@@ -478,7 +479,7 @@ function StructureCourseSection({ course, searchQuery = '' }: { course: CourseSt
                 >
                   {masteredEntries.map(entry => (
                     <StructureCard
-                      key={`${entry.lessonId}:${entry.structureItemId}`}
+                      key={itemKey(entry.lessonId, entry.structureItemId)}
                       entry={entry}
                       commitThreshold={course.commitThreshold}
                     />

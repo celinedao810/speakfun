@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { BookOpen, ChevronDown, ChevronUp, Loader2, CheckCircle } from 'lucide-react';
 import { NotebookEntry } from '@/app/api/homework/vocab-notebook/route';
+import { itemKey } from '@/lib/homework/itemKeys';
 
 interface VocabNotebookData {
   entries: NotebookEntry[];
@@ -88,7 +89,7 @@ export default function VocabNotebook({ classId }: { classId: string }) {
                   </p>
                   <div className="space-y-3">
                     {learningEntries.map(entry => (
-                      <WordCard key={`${entry.lessonId}:${entry.vocabItemId}`} entry={entry} commitThreshold={data!.commitThreshold} />
+                      <WordCard key={itemKey(entry.lessonId, entry.vocabItemId)} entry={entry} commitThreshold={data!.commitThreshold} />
                     ))}
                   </div>
                 </div>
@@ -101,7 +102,7 @@ export default function VocabNotebook({ classId }: { classId: string }) {
                   labelClass="text-muted-foreground/60"
                 >
                   {untouchedEntries.map(entry => (
-                    <WordCard key={`${entry.lessonId}:${entry.vocabItemId}`} entry={entry} commitThreshold={data!.commitThreshold} />
+                    <WordCard key={itemKey(entry.lessonId, entry.vocabItemId)} entry={entry} commitThreshold={data!.commitThreshold} />
                   ))}
                 </CollapsibleGroup>
               )}
@@ -113,7 +114,7 @@ export default function VocabNotebook({ classId }: { classId: string }) {
                   labelClass="text-emerald-600"
                 >
                   {masteredEntries.map(entry => (
-                    <WordCard key={`${entry.lessonId}:${entry.vocabItemId}`} entry={entry} commitThreshold={data!.commitThreshold} />
+                    <WordCard key={itemKey(entry.lessonId, entry.vocabItemId)} entry={entry} commitThreshold={data!.commitThreshold} />
                   ))}
                 </CollapsibleGroup>
               )}
