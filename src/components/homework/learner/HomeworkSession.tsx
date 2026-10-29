@@ -322,7 +322,21 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
           const rest = aggregatedStructures.filter(s => !idSet.has(s.id));
           structuresToUse = [...ordered, ...rest];
         } else {
-          structuresToUse = [...aggregatedStructures].sort(() => Math.random() - 0.5);
+          // Drop structures this learner has mastered (keyed by lessonId:id — structure IDs
+          // like "s1" repeat across lessons). If everything is mastered, keep the full list so
+          // Ex2/Ex3 still have material to practise.
+          const structMasteryRes = await fetch(`/api/homework/structure-notebook?classId=${classId}`);
+          const structMasteryData = structMasteryRes.ok ? await structMasteryRes.json() : null;
+          const masteredStructureKeys = new Set<string>(
+            ((structMasteryData?.entries ?? []) as Array<{ structureItemId: string; lessonId: string; isCommitted: boolean }>)
+              .filter(e => e.isCommitted)
+              .map(e => `${e.lessonId}:${e.structureItemId}`)
+          );
+          const activeStructures = aggregatedStructures.filter(
+            st => !masteredStructureKeys.has(`${st.lessonId}:${st.id}`)
+          );
+          const structureSource = activeStructures.length > 0 ? activeStructures : aggregatedStructures;
+          structuresToUse = [...structureSource].sort(() => Math.random() - 0.5);
         }
         setStructurePool(structuresToUse.slice(0, structureLimit));
 
