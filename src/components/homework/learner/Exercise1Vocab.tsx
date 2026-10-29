@@ -115,10 +115,30 @@ export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1Vocab
       allWordResults.push(matched ?? { item, pointsEarned: 0, isCorrect: false });
     }
 
+    // A word that fell off unmatched has no attempt yet. Record it as a miss so mastery tracks
+    // incorrect answers and "wrong last time" words come back (and the scorecard's x/y is real).
+    const missTimestamp = new Date().toISOString();
+    const missedAttempts: VocabAttemptAudit[] = allWordResults
+      .filter(r => !r.isCorrect)
+      .map(r => ({
+        vocabItemId: r.item.id,
+        lessonId: r.item.lessonId,
+        targetWord: r.item.word,
+        recognizedWord: '',
+        isCorrectWord: false,
+        pronunciationScore: 0,
+        pointsEarned: 0,
+        feedback: '',
+        timedMode: true,
+        timeTakenMs: 0,
+        timedOut: true,
+        attemptTimestamp: missTimestamp,
+      }));
+
     onCompleteRef.current(
       totalScoreRef.current,
       wrongVocabIdsRef.current,
-      attemptsRef.current,
+      [...attemptsRef.current, ...missedAttempts],
       allWordResults,
     );
   }, [vocabPool]);
