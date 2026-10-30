@@ -7,7 +7,7 @@ import type { StatusResponse } from '@/lib/voiceChain/types';
 import { BadgeCelebration, useBadges } from './Badges';
 import FunLoading from './FunLoading';
 import Leaderboard from './Leaderboard';
-import MyDay from './MyDay';
+import MyProgress from './MyProgress';
 import NicknameForm from './NicknameForm';
 import PlayPanel from './PlayPanel';
 import QuickGuide, { TOUR_STEPS } from './QuickGuide';
@@ -15,7 +15,7 @@ import TeacherLearnerStats from './TeacherLearnerStats';
 import Tour from './Tour';
 import './voiceChain.css';
 
-type Tab = 'play' | 'day' | 'leaderboard' | 'learners';
+type Tab = 'play' | 'progress' | 'leaderboard' | 'learners';
 
 const TOUR_DONE = 'speakfun:voice-chain:tour-done';
 const GUIDE_OPEN = 'speakfun:voice-chain:guide-open';
@@ -53,9 +53,9 @@ export default function VoiceChainHome({ role }: { role: 'teacher' | 'learner' }
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [tab, refresh]);
 
-  // Fresh streak/badges whenever My day is opened
+  // Fresh streak/badges whenever My progress is opened
   const checkBadges = badges.check;
-  useEffect(() => { if (tab === 'day') void checkBadges(); }, [tab, checkBadges]);
+  useEffect(() => { if (tab === 'progress') void checkBadges(); }, [tab, checkBadges]);
 
   // The quick guide starts open until the tour has been seen once
   useEffect(() => {
@@ -94,7 +94,7 @@ export default function VoiceChainHome({ role }: { role: 'teacher' | 'learner' }
 
   const tabs: { id: Tab; label: string }[] = [
     { id: 'play', label: 'Play' },
-    { id: 'day', label: 'My day' },
+    { id: 'progress', label: 'My progress' },
     { id: 'leaderboard', label: 'Leaderboard' },
     ...(role === 'teacher' ? [{ id: 'learners' as Tab, label: 'Learners' }] : []),
   ];
@@ -119,7 +119,7 @@ export default function VoiceChainHome({ role }: { role: 'teacher' | 'learner' }
         </div>
         <div className="ml-auto flex items-center gap-2">
           {streak > 0 && (
-            <button type="button" onClick={() => setTab('day')} title={`${streak}-day streak`}
+            <button type="button" onClick={() => setTab('progress')} title={`${streak}-day streak`}
               className="flex items-center gap-1 rounded-full bg-gradient-to-r from-amber-400 to-red-500 px-2.5 py-1 text-xs font-semibold text-white">
               <Flame className="w-3.5 h-3.5" />{streak}
             </button>
@@ -151,7 +151,7 @@ export default function VoiceChainHome({ role }: { role: 'teacher' | 'learner' }
             />
           )
           : tab === 'play' ? <PlayPanel status={status} onChange={refresh} onSent={() => void badges.check()} />
-          : tab === 'day' ? <MyDay badgeStats={badges.stats} />
+          : tab === 'progress' ? <MyProgress badgeStats={badges.stats} />
           : tab === 'leaderboard' ? <Leaderboard />
           : <TeacherLearnerStats />}
       </div>

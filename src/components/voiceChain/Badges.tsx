@@ -33,10 +33,10 @@ function formatValue(b: BadgeState, value: number) {
   return value.toLocaleString();
 }
 
-export function Medallion({ badge, size = 'md' }: { badge: BadgeState; size?: 'md' | 'lg' }) {
+export function Medallion({ badge, size = 'md' }: { badge: BadgeState; size?: 'sm' | 'md' | 'lg' }) {
   const Icon = GROUP_ICON[badge.group];
-  const dims = size === 'lg' ? 'w-24 h-24' : 'w-14 h-14';
-  const icon = size === 'lg' ? 'w-11 h-11' : 'w-6 h-6';
+  const dims = size === 'lg' ? 'w-24 h-24' : size === 'sm' ? 'w-11 h-11' : 'w-14 h-14';
+  const icon = size === 'lg' ? 'w-11 h-11' : size === 'sm' ? 'w-5 h-5' : 'w-6 h-6';
   return (
     <div className={`relative ${dims} rounded-full flex items-center justify-center shadow-sm ring-4 ring-background ${
       badge.earned ? TIER_STYLE[badge.tier] : 'bg-muted text-muted-foreground/50'
@@ -51,54 +51,77 @@ export function Medallion({ badge, size = 'md' }: { badge: BadgeState; size?: 'm
   );
 }
 
+function progressOf(b: BadgeState) {
+  return Math.min(1, b.value / b.goal);
+}
+
 // ---------------------------------------------------------------------------
-// Streak card + grid (My day)
+// Badges on My progress: one scrollable row, the full grid on demand
 // ---------------------------------------------------------------------------
 
-export function StreakCard({ stats }: { stats: BadgeStats }) {
-  const on = stats.currentStreak > 0;
+/**
+ * One row: earned badges, then the next badge to earn in each group. Tapping one
+ * explains it; by default the caption shows the locked badge closest to being earned.
+ */
+export function BadgeStrip({ stats }: { stats: BadgeStats }) {
+  const [showAll, setShowAll] = useState(false);
+  const badges = evaluateBadges(stats);
+  const earned = badges.filter(b => b.earned);
+  const nextUp = BADGE_GROUPS
+    .map(({ group }) => badges.find(b => b.group === group && !b.earned))
+    .filter((b): b is BadgeState => !!b);
+  const row = [...earned, ...nextUp];
+  const closest = [...nextUp].sort((a, b) => progressOf(b) - progressOf(a))[0] ?? earned[earned.length - 1];
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selected = badges.find(b => b.id === selectedId) ?? closest;
+
   return (
-    <div className="flex items-center gap-4 rounded-xl border border-border px-4 py-3">
-      <div className={`w-12 h-12 rounded-full flex items-center justify-center ${on ? 'bg-gradient-to-br from-amber-400 to-red-500 text-white' : 'bg-muted text-muted-foreground'}`}>
-        <Flame className="w-6 h-6" />
-      </div>
-      <div className="min-w-0">
-        <p className="text-lg font-semibold text-foreground">
-          {stats.currentStreak}-day streak
+    <div className="space-y-2">
+      <div className="flex items-baseline justify-between">
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+          Badges · {earned.length} of {badges.length} earned
         </p>
-        <p className="text-xs text-muted-foreground">
-          {on ? 'Speak once a day to keep it going.' : 'Send a message today to start a streak.'}
-          {stats.longestStreak > 0 && ` Longest: ${stats.longestStreak} ${stats.longestStreak === 1 ? 'day' : 'days'}.`}
-        </p>
+        <button type="button" onClick={() => setShowAll(v => !v)} className="text-xs font-medium text-primary hover:underline">
+          {showAll ? 'Show less' : 'See all'}
+        </button>
       </div>
+
+      {showAll ? <BadgeGrid stats={stats} /> : (
+        <>
+          <ul className="flex gap-1 overflow-x-auto pb-1 -mx-1 px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {row.map(b => (
+              <li key={b.id} className="shrink-0">
+                <button type="button" onClick={() => setSelectedId(b.id)} aria-pressed={selected?.id === b.id}
+                  className={`flex w-[4.25rem] flex-col items-center gap-1 rounded-lg px-1 py-1.5 text-center ${selected?.id === b.id ? 'bg-muted' : 'hover:bg-muted/60'}`}>
+                  <Medallion badge={b} size="sm" />
+                  <span className={`text-[11px] leading-tight line-clamp-2 ${b.earned ? 'text-foreground' : 'text-muted-foreground'}`}>{b.title}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+          {selected && (
+            <p className="text-xs text-muted-foreground">
+              {!selected.earned && selected === closest && !selectedId && <span className="font-medium text-primary">Next up: </span>}
+              <span className="font-medium text-foreground">{selected.title}</span> — {selected.description}
+              {selected.earned ? ' · earned' : ` · ${formatValue(selected, selected.value)} / ${formatValue(selected, selected.goal)}`}
+            </p>
+          )}
+        </>
+      )}
     </div>
   );
 }
 
+/** Every badge, grouped, with progress on the locked ones. */
 export function BadgeGrid({ stats }: { stats: BadgeStats }) {
-  const [showAll, setShowAll] = useState(false);
   const badges = evaluateBadges(stats);
-  const earned = badges.filter(b => b.earned).length;
-
-  // Compact view: what's earned plus the next badge to aim for in each group
-  const visible = (group: BadgeGroup) => {
-    const inGroup = badges.filter(b => b.group === group);
-    if (showAll) return inGroup;
-    const next = inGroup.find(b => !b.earned);
-    return inGroup.filter(b => b.earned || b === next);
-  };
-
   return (
-    <div className="space-y-4">
-      <div className="flex items-baseline justify-between">
-        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Badges</p>
-        <p className="text-xs text-muted-foreground">{earned} of {badges.length} earned</p>
-      </div>
+    <div className="space-y-4 pt-1">
       {BADGE_GROUPS.map(({ group, label }) => (
         <div key={group}>
           <p className="text-xs font-medium text-foreground mb-2">{label}</p>
           <ul className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-7 gap-x-2 gap-y-4">
-            {visible(group).map(b => (
+            {badges.filter(b => b.group === group).map(b => (
               <li key={b.id} className="flex flex-col items-center text-center gap-1.5" title={b.description}>
                 <Medallion badge={b} />
                 <p className={`text-xs font-medium leading-tight ${b.earned ? 'text-foreground' : 'text-muted-foreground'}`}>{b.title}</p>
@@ -106,7 +129,7 @@ export function BadgeGrid({ stats }: { stats: BadgeStats }) {
                 {!b.earned && (
                   <div className="w-full max-w-[5.5rem]">
                     <div className="h-1 rounded-full bg-muted overflow-hidden">
-                      <div className="h-full bg-primary" style={{ width: `${Math.min(100, (b.value / b.goal) * 100)}%` }} />
+                      <div className="h-full bg-primary" style={{ width: `${progressOf(b) * 100}%` }} />
                     </div>
                     <p className="text-[10px] text-muted-foreground mt-0.5">{formatValue(b, b.value)} / {formatValue(b, b.goal)}</p>
                   </div>
@@ -116,9 +139,6 @@ export function BadgeGrid({ stats }: { stats: BadgeStats }) {
           </ul>
         </div>
       ))}
-      <button type="button" onClick={() => setShowAll(v => !v)} className="text-xs font-medium text-primary hover:underline">
-        {showAll ? 'Show fewer badges' : `Show all ${badges.length} badges`}
-      </button>
     </div>
   );
 }

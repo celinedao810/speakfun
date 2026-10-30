@@ -37,7 +37,7 @@ export interface ClaimView {
   resumed: boolean;
 }
 
-/** Who sent the related message. Other users' recordings are never shared on "My day". */
+/** Who sent the related message. Other users' recordings are never shared on "My progress". */
 export interface ReplyPreview {
   nickname: string;
   durationSeconds: number;
@@ -63,8 +63,6 @@ export interface MyMessage {
   feedback: VoiceChainFeedback | null;
   /** The message this one answered. */
   repliedTo: ReplyPreview | null;
-  /** The answer this message received. */
-  reply: ReplyPreview | null;
 }
 
 export interface DayStats {

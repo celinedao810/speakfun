@@ -41,7 +41,7 @@ export const VOICE_CHAIN = {
 
   retentionHours: 24,
   signedUrlSeconds: 10 * 60,
-  /** Links to your own recordings on My day last longer, so the page can stay open. */
+  /** Links to your own recordings on My progress last longer, so the page can stay open. */
   ownAudioUrlSeconds: 60 * 60,
   /** Largest accepted base64 payload (~3 MB of audio). */
   maxAudioBase64Chars: 4_000_000,

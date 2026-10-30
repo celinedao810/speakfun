@@ -209,7 +209,6 @@ export function myMessageView(
   row: MessageRow,
   audioUrl: string | null,
   repliedTo: ReplyPreview | null,
-  reply: ReplyPreview | null,
 ): MyMessage {
   return {
     id: row.id,
@@ -235,7 +234,6 @@ export function myMessageView(
     total: row.score_total,
     feedback: row.feedback,
     repliedTo,
-    reply,
   };
 }
 

@@ -201,7 +201,7 @@ export async function POST(request: NextRequest) {
       : null;
     const res: SubmitResponse = {
       accepted: true,
-      message: myMessageView(row, urls.get(audioPath) ?? null, repliedTo, null),
+      message: myMessageView(row, urls.get(audioPath) ?? null, repliedTo),
     };
     return NextResponse.json(res);
   } catch (err) {

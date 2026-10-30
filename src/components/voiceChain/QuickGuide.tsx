@@ -83,7 +83,7 @@ export const TOUR_STEPS: TourStep[] = [
     target: 'tabs',
     icon: Award,
     title: 'Streaks, badges and the leaderboard',
-    body: <><strong>My day</strong> has your stats, streak and badges. <strong>Leaderboard</strong> shows this week’s top speakers. Recordings are deleted after 24 hours; your scores stay.</>,
+    body: <><strong>My progress</strong> has your recordings, streak, badges and stats. <strong>Leaderboard</strong> shows this week’s top speakers. Recordings are deleted after 24 hours; your scores stay.</>,
   },
   {
     target: 'nickname',
