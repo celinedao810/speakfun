@@ -52,8 +52,8 @@ export const VOICE_CHAIN = {
   modes: {
     relaxed: {
       label: 'Relaxed',
-      description: 'Up to 2 replays, no time limit on the letter, 15s to think.',
-      plays: 3,
+      description: '1 replay, no time limit on the letter, 15s to think.',
+      plays: 2,
       letterSeconds: null,
       thinkSeconds: 15,
       bonus: 1,
