@@ -13,7 +13,7 @@ export default function Home() {
   useEffect(() => {
     if (!authLoading) {
       if (role === 'TEACHER') {
-        router.replace('/teacher');
+        router.replace('/teacher/voice-chain');
       } else {
         router.replace('/learner/classes');
       }
