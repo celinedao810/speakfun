@@ -3,12 +3,13 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { BookOpen, BookMarked, Gamepad2 } from 'lucide-react';
+import { BookOpen, BookMarked, Gamepad2, MessagesSquare } from 'lucide-react';
 
 const tabs = [
   { href: '/learner/classes', label: 'My Classes', icon: BookOpen },
   { href: '/learner/notebook', label: 'Notebook', icon: BookMarked },
   { href: '/learner/games', label: 'Games', icon: Gamepad2 },
+  { href: '/learner/voice-chain', label: 'Voice Chain', icon: MessagesSquare },
 ];
 
 export default function LearnerLayout({ children }: { children: React.ReactNode }) {
