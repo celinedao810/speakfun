@@ -1,4 +1,4 @@
--- Migration 028: mark items already past their class's current threshold as mastered.
+-- Migration 031: mark items already past their class's current threshold as mastered.
 -- is_committed is only recomputed when an item is practised, so after 026 lowered the
 -- structure threshold to 5, rows with 5-9 correct stayed "still learning".
 UPDATE public.learner_structure_mastery m
