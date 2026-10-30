@@ -122,11 +122,13 @@ export default function AnswerFlow({ claim: initialClaim, onExit, onSent }: Answ
         audioRef.current?.pause();
         setPhase('think');
       } else if (letter) {
+        recorder.release(); // not recording yet — close the mic while they listen again
         setWrongLetters(w => [...w, letter]);
         const tries = `${res.attemptsLeft} ${res.attemptsLeft === 1 ? 'try' : 'tries'} left`;
         setLetterNote(`Not “${letter.toUpperCase()}”. ${playsLeft > 0 ? `Listen to the last word again — ${tries}.` : `${tries[0].toUpperCase()}${tries.slice(1)}.`}`);
       }
     } catch (err) {
+      recorder.release();
       setError(err instanceof Error ? err.message : 'Something went wrong');
     } finally {
       setBusy(false);
@@ -149,6 +151,19 @@ export default function AnswerFlow({ claim: initialClaim, onExit, onSent }: Answ
   }, [recorder]);
 
   const thinkLeft = useCountdown(settings.thinkSeconds, phase === 'think' && !recorder.error, () => { void startRecording(); }, thinkRound);
+
+  // If the microphone hasn't started 3s after the countdown (iPhones can hold back a
+  // request that isn't part of a tap), offer a button: tapping it always works.
+  const [slowStart, setSlowStart] = useState(false);
+  useEffect(() => {
+    if (phase !== 'record' || recorder.state !== 'starting') { setSlowStart(false); return; }
+    const timer = window.setTimeout(() => setSlowStart(true), 3000);
+    return () => window.clearTimeout(timer);
+  }, [phase, recorder.state]);
+
+  // A mic opened in advance must not stay on once the message is no longer ours
+  const releaseMic = recorder.release;
+  useEffect(() => { if (phase === 'expired') releaseMic(); }, [phase, releaseMic]);
 
   // ---- Submit ------------------------------------------------------------------------
   const submit = useCallback(async () => {
@@ -191,6 +206,7 @@ export default function AnswerFlow({ claim: initialClaim, onExit, onSent }: Answ
 
   const retry = () => {
     recorder.discard();
+    recorder.prepare();
     setRejection(null);
     setError(null);
     setThinkRound(r => r + 1);
@@ -201,6 +217,7 @@ export default function AnswerFlow({ claim: initialClaim, onExit, onSent }: Answ
   const giveUp = async () => {
     setBusy(true);
     recorder.discard();
+    recorder.release();
     audioRef.current?.pause();
     await vcFetch('release', { messageId: claim.messageId }).catch(() => undefined);
     onExit();
@@ -210,6 +227,7 @@ export default function AnswerFlow({ claim: initialClaim, onExit, onSent }: Answ
     if (!window.confirm('Report this message as inappropriate? It will be removed from the game.')) return;
     setBusy(true);
     recorder.discard();
+    recorder.release();
     audioRef.current?.pause();
     await vcFetch('report', { messageId: claim.messageId }).catch(() => undefined);
     onExit();
@@ -278,7 +296,11 @@ export default function AnswerFlow({ claim: initialClaim, onExit, onSent }: Answ
           {/* Resumed after listening: move on without having to play it again */}
           {phase === 'listen' && heardOnceRef.current && (
             <button type="button" className={primaryBtn} disabled={playing}
-              onClick={() => { audioRef.current?.pause(); setPhase(letterKnown ? 'think' : 'letter'); }}>
+              onClick={() => {
+                audioRef.current?.pause();
+                if (letterKnown) recorder.prepare();
+                setPhase(letterKnown ? 'think' : 'letter');
+              }}>
               {letterKnown ? <><Mic className="w-4 h-4" />Continue to answer</> : 'Pick the letter'}
             </button>
           )}
@@ -302,10 +324,10 @@ export default function AnswerFlow({ claim: initialClaim, onExit, onSent }: Answ
           {playsLeft <= 0 && !letterNote && (
             <p className="text-xs text-muted-foreground">No plays left — pick the letter from memory, or show it.</p>
           )}
-          <LetterPad onPick={l => void pickLetter(l)} disabled={busy} wrong={wrongLetters} />
+          <LetterPad onPick={l => { recorder.prepare(); void pickLetter(l); }} disabled={busy} wrong={wrongLetters} />
           <div className="flex items-center gap-3">
             {letterNote && <p className="text-xs text-muted-foreground">{letterNote}</p>}
-            <button type="button" className={`${ghostBtn} ml-auto`} onClick={() => void pickLetter(null)} disabled={busy}>
+            <button type="button" className={`${ghostBtn} ml-auto`} onClick={() => { recorder.prepare(); void pickLetter(null); }} disabled={busy}>
               Show me the letter (−{VOICE_CHAIN.revealPenalty})
             </button>
           </div>
@@ -341,6 +363,13 @@ export default function AnswerFlow({ claim: initialClaim, onExit, onSent }: Answ
         <div className="space-y-2">
           <p className="text-center text-sm text-muted-foreground">Start with “<strong className="text-primary">{letter}</strong>”</p>
           <RecordingControls state={recorder.state} elapsed={recorder.elapsed} onStop={recorder.stop} />
+          {slowStart && recorder.state === 'starting' && (
+            <div className="flex justify-center">
+              <button type="button" className={primaryBtn} onClick={() => void recorder.start()}>
+                <Mic className="w-4 h-4" />Tap to start recording
+              </button>
+            </div>
+          )}
         </div>
       )}
 

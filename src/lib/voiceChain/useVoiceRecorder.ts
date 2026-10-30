@@ -61,6 +61,10 @@ async function toWav(blob: Blob): Promise<{ blob: Blob; base64: string; duration
 /**
  * MediaRecorder hook for Voice Chain: can be started programmatically (auto-start
  * after the think countdown) and stops itself at `maxSeconds`.
+ *
+ * iPhones only reliably grant the microphone when it is requested during a tap, so
+ * call `prepare()` from the tap that leads to an automatic start: the mic opens
+ * then, and `start()` later records on that already-open stream.
  */
 export function useVoiceRecorder(maxSeconds: number) {
   const [state, setState] = useState<RecorderState>('idle');
@@ -73,6 +77,10 @@ export function useVoiceRecorder(maxSeconds: number) {
   const startedAtRef = useRef(0);
   const timerRef = useRef<number | null>(null);
   const discardRef = useRef(false);
+  /** Microphone opened ahead of time by prepare(), waiting for start(). */
+  const preparedRef = useRef<Promise<MediaStream | null> | null>(null);
+  /** Bumped on every start(); a slower, older start() that resolves later gives up. */
+  const startTokenRef = useRef(0);
 
   const clearTimer = () => {
     if (timerRef.current) window.clearInterval(timerRef.current);
@@ -84,13 +92,45 @@ export function useVoiceRecorder(maxSeconds: number) {
     if (rec && rec.state !== 'inactive') rec.stop();
   }, []);
 
+  /** Opens the microphone now (call it synchronously inside a tap handler). */
+  const prepare = useCallback((): Promise<boolean> => {
+    if (!preparedRef.current) {
+      preparedRef.current = navigator.mediaDevices.getUserMedia({ audio: true }).catch(err => {
+        console.error('[voice-chain] Microphone failed:', err);
+        preparedRef.current = null;
+        setError('Microphone not available. Please allow microphone access and try again.');
+        return null;
+      });
+    }
+    return preparedRef.current.then(Boolean);
+  }, []);
+
+  /** Closes a microphone opened by prepare() that won't be used (e.g. wrong letter, replaying). */
+  const release = useCallback(() => {
+    const pending = preparedRef.current;
+    preparedRef.current = null;
+    void pending?.then(stream => stream?.getTracks().forEach(t => t.stop()));
+  }, []);
+
   const start = useCallback(async (): Promise<boolean> => {
     if (recorderRef.current) return false;
+    const token = ++startTokenRef.current;
     setError(null);
     setRecording(null);
     setState('starting');
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Use the microphone opened by prepare() if it's still live; otherwise ask now
+      const pending = preparedRef.current;
+      preparedRef.current = null;
+      const prepared = pending ? await pending : null;
+      const stream = prepared && prepared.getAudioTracks().some(t => t.readyState === 'live')
+        ? prepared
+        : await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (token !== startTokenRef.current || recorderRef.current) {
+        // A newer start() (e.g. the "tap to start" fallback) took over
+        stream.getTracks().forEach(t => t.stop());
+        return false;
+      }
       const mimeType = pickMimeType();
       const rec = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
       recorderRef.current = rec;
@@ -144,6 +184,7 @@ export function useVoiceRecorder(maxSeconds: number) {
       }, 200);
       return true;
     } catch (err) {
+      if (token !== startTokenRef.current) return false; // a newer start() is in charge
       console.error('[voice-chain] Recording failed:', err);
       recorderRef.current = null;
       setError('Microphone not available. Please allow microphone access and try again.');
@@ -169,7 +210,8 @@ export function useVoiceRecorder(maxSeconds: number) {
     discardRef.current = true;
     const rec = recorderRef.current;
     if (rec && rec.state !== 'inactive') rec.stop();
+    void preparedRef.current?.then(stream => stream?.getTracks().forEach(t => t.stop()));
   }, []);
 
-  return { state, elapsed, recording, error, start, stop, discard };
+  return { state, elapsed, recording, error, start, stop, discard, prepare, release };
 }
