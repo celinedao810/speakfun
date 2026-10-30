@@ -32,7 +32,7 @@ function shortDay(day: string) {
 }
 
 /**
- * My progress: today's numbers and streak, the user's recordings from the last 24h
+ * My progress: the streak, today's numbers, the user's recordings from the last 24h
  * (read-only), a one-row badge strip, and the last 7 days on demand.
  */
 export default function MyProgress({ badgeStats }: { badgeStats: BadgeStats | null }) {
@@ -53,7 +53,8 @@ export default function MyProgress({ badgeStats }: { badgeStats: BadgeStats | nu
 
   return (
     <div className="space-y-6">
-      <TodaySummary today={today} streak={badgeStats?.currentStreak ?? 0} longest={badgeStats?.longestStreak ?? 0} />
+      <StreakStrip streak={badgeStats?.currentStreak ?? 0} longest={badgeStats?.longestStreak ?? 0} />
+      <TodaySummary today={today} />
 
       {/* Recordings */}
       <section>
@@ -96,32 +97,38 @@ export default function MyProgress({ badgeStats }: { badgeStats: BadgeStats | nu
   );
 }
 
-/** Streak + today's three numbers in one compact card. */
-function TodaySummary({ today, streak, longest }: { today: DayStats; streak: number; longest: number }) {
+/** The daily streak, on its own so it isn't read as a label for today's numbers. */
+function StreakStrip({ streak, longest }: { streak: number; longest: number }) {
   return (
-    <div className="rounded-xl border border-border px-4 py-3">
-      <div className="flex items-center gap-2.5">
-        <span className={`w-8 h-8 shrink-0 rounded-full flex items-center justify-center ${streak > 0 ? 'bg-gradient-to-br from-amber-400 to-red-500 text-white' : 'bg-muted text-muted-foreground'}`}>
-          <Flame className="w-4 h-4" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-foreground whitespace-nowrap">
-            {streak > 0 ? `${streak}-day streak` : 'No streak yet'}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            {streak === 0 ? 'Speak today to start a streak'
-              : longest > streak ? `Longest: ${longest} days`
-              : 'Speak daily to keep it going'}
-          </p>
-        </div>
-        <span className="self-start text-xs text-muted-foreground">Today</span>
+    <div className="flex items-center gap-2.5 rounded-xl bg-primary/10 px-4 py-2.5">
+      <span className={`w-8 h-8 shrink-0 rounded-full flex items-center justify-center ${streak > 0 ? 'bg-gradient-to-br from-amber-400 to-red-500 text-white' : 'bg-muted text-muted-foreground'}`}>
+        <Flame className="w-4 h-4" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-semibold text-foreground whitespace-nowrap">
+          {streak > 0 ? `${streak}-day streak` : 'No streak yet'}
+        </p>
+        <p className="text-xs text-muted-foreground">
+          {streak === 0 ? 'Speak today to start a streak'
+            : longest > streak ? `Longest: ${longest} days`
+            : 'Speak daily to keep it going'}
+        </p>
       </div>
-      <div className="mt-3 grid grid-cols-3 divide-x divide-border text-center">
+    </div>
+  );
+}
+
+/** Today's three numbers. */
+function TodaySummary({ today }: { today: DayStats }) {
+  return (
+    <section>
+      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Today</p>
+      <div className="rounded-xl border border-border px-4 py-3 grid grid-cols-3 divide-x divide-border text-center">
         <Stat value={String(today.messagesSent)} label="messages" />
         <Stat value={formatSeconds(today.speakingSeconds)} label="speaking" />
         <Stat value={formatPoints(today.totalScore)} label="points" />
       </div>
-    </div>
+    </section>
   );
 }
 
