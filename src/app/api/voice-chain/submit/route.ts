@@ -173,7 +173,10 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Time’s up — this message is no longer yours to answer' }, { status: 410 });
       }
     } else {
-      const { error } = await svc.from('voice_chain_messages').insert({ ...fields, chain_id: id, chain_position: 1 });
+      // Replies get sender_id from the RPC's p_user; a starter has to set it here.
+      const { error } = await svc
+        .from('voice_chain_messages')
+        .insert({ ...fields, sender_id: userId, chain_id: id, chain_position: 1 });
       if (error) {
         await svc.storage.from(BUCKET).remove([audioPath]);
         throw new Error(error.message);
