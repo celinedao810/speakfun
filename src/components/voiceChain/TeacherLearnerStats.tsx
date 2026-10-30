@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
-import { formatSeconds } from '@/lib/voiceChain/client';
+import { formatPoints, formatSeconds } from '@/lib/voiceChain/client';
 import type { TeacherLearnerStats as LearnerStats } from '@/lib/voiceChain/types';
 import type { GameClass } from '@/app/api/games/classes/route';
 import FunLoading from './FunLoading';
@@ -95,7 +95,7 @@ export default function TeacherLearnerStats() {
                       </span>
                       <span className="text-right text-muted-foreground">{l.messagesSent}</span>
                       <span className="text-right text-muted-foreground hidden sm:block">{formatSeconds(l.speakingSeconds)}</span>
-                      <span className="text-right font-semibold text-foreground">{l.totalScore}</span>
+                      <span className="text-right font-semibold text-foreground">{formatPoints(l.totalScore)}</span>
                       <span className="text-right text-muted-foreground hidden sm:block">{l.activeDays}/{days}</span>
                     </button>
                     {isOpen && (
@@ -107,7 +107,7 @@ export default function TeacherLearnerStats() {
                           <div key={d.day} className="grid grid-cols-[5.5rem_minmax(0,1fr)] gap-2 text-xs text-muted-foreground">
                             <span>{new Date(`${d.day}T00:00:00`).toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })}</span>
                             <span>
-                              {d.messagesSent === 0 ? '—' : `${d.messagesSent} msg (${d.startersSent} started) · ${formatSeconds(d.speakingSeconds)} · ${d.totalScore} pts`}
+                              {d.messagesSent === 0 ? '—' : `${d.messagesSent} msg (${d.startersSent} started) · ${formatSeconds(d.speakingSeconds)} · ${formatPoints(d.totalScore)} pts`}
                             </span>
                           </div>
                         ))}

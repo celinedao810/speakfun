@@ -15,7 +15,7 @@ export interface ModeSettings {
   letterSeconds: number | null;
   /** Countdown after the letter is confirmed; recording then starts on its own. */
   thinkSeconds: number;
-  /** Score multiplier applied to the final total. */
+  /** Points added to the message total (still capped at MESSAGE_MAX). */
   bonus: number;
 }
 
@@ -37,7 +37,7 @@ export const VOICE_CHAIN = {
   /** Wrong letter guesses before the letter is revealed. */
   letterMissesBeforeReveal: 2,
   /** Points taken off when the letter had to be revealed. */
-  revealPenalty: 5,
+  revealPenalty: 0.5,
 
   retentionHours: 24,
   signedUrlSeconds: 10 * 60,
@@ -58,15 +58,15 @@ export const VOICE_CHAIN = {
       plays: 2,
       letterSeconds: null,
       thinkSeconds: 15,
-      bonus: 1,
+      bonus: 0,
     },
     realtalk: {
       label: 'Real talk',
-      description: '1 replay, 10s to pick the letter, 3s to think. +10% score bonus.',
+      description: '1 replay, 10s to pick the letter, 3s to think. +0.5 bonus point.',
       plays: 2,
       letterSeconds: 10,
       thinkSeconds: 3,
-      bonus: 1.1,
+      bonus: 0.5,
     },
   } satisfies Record<VoiceChainMode, ModeSettings>,
 } as const;
@@ -79,8 +79,9 @@ export const SCORE_CRITERIA = [
   { key: 'pronunciation', label: 'Pronunciation' },
 ] as const;
 
-/** Each criterion is scored 0–CRITERION_MAX; five criteria → 0–100. */
-export const CRITERION_MAX = 20;
+/** Each criterion scores 0, 0.5 or 1; five criteria → a message is worth 0–5. */
+export const CRITERION_MAX = 1;
+export const MESSAGE_MAX = 5;
 
 export function isMode(value: unknown): value is VoiceChainMode {
   return value === 'relaxed' || value === 'realtalk';

@@ -37,7 +37,7 @@ export const TOUR_STEPS: TourStep[] = [
     target: 'modes',
     icon: SlidersHorizontal,
     title: 'Pick your pace',
-    body: <><strong>Relaxed</strong> gives you more time to think. <strong>Real talk</strong> is faster, like a real conversation, and earns a +10% bonus.</>,
+    body: <><strong>Relaxed</strong> gives you more time to think. <strong>Real talk</strong> is faster, like a real conversation, and earns a +0.5 bonus point.</>,
   },
   {
     icon: Ear,
@@ -64,7 +64,7 @@ export const TOUR_STEPS: TourStep[] = [
     title: 'Get your score',
     body: (
       <>
-        Every message gets up to 100 points for:
+        Every message gets up to 5 points — 1 for each of:
         <span className="mt-2 flex flex-wrap gap-1.5">
           {SCORE_CRITERIA.map(c => (
             <span key={c.key} className="rounded-full bg-muted px-2 py-0.5 text-xs text-foreground">{c.label}</span>

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient, SupabaseClient, User } from '@supabase/supabase-js';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { todayUtc7 } from '@/lib/homework/generateWindow';
-import { CRITERION_MAX, VOICE_CHAIN } from './config';
+import { MESSAGE_MAX, VOICE_CHAIN } from './config';
 import type { ClaimView, DayStats, MyMessage, ReplyPreview, ScoreBreakdown, VoiceChainFeedback } from './types';
 import type { VoiceChainMode } from './config';
 
@@ -151,12 +151,15 @@ export function toDayStats(r: Record<string, unknown>): DayStats {
 // Scoring
 // ---------------------------------------------------------------------------
 
-/** Sum of criteria, with the mode bonus and letter-reveal penalty, clamped to 0–100. */
+/**
+ * Sum of the five criteria (0, 0.5 or 1 each), plus the mode bonus, minus the
+ * letter-reveal penalty — kept within 0–MESSAGE_MAX in half points.
+ */
 export function computeTotal(scores: ScoreBreakdown, mode: VoiceChainMode | null, letterRevealed: boolean): number {
   const raw = scores.coherence + scores.grammar + scores.wordChoice + scores.fluency + scores.pronunciation;
-  const bonus = mode ? VOICE_CHAIN.modes[mode].bonus : 1;
-  const total = Math.round(raw * bonus) - (letterRevealed ? VOICE_CHAIN.revealPenalty : 0);
-  return Math.max(0, Math.min(CRITERION_MAX * 5, total));
+  const bonus = mode ? VOICE_CHAIN.modes[mode].bonus : 0;
+  const total = raw + bonus - (letterRevealed ? VOICE_CHAIN.revealPenalty : 0);
+  return Math.max(0, Math.min(MESSAGE_MAX, Math.round(total * 2) / 2));
 }
 
 // ---------------------------------------------------------------------------
@@ -224,14 +227,15 @@ export function myMessageView(
     lastLetter: row.last_letter,
     mode: row.mode,
     letterRevealed: row.letter_revealed,
+    // NUMERIC columns may arrive as strings
     scores: {
-      coherence: row.score_coherence,
-      grammar: row.score_grammar,
-      wordChoice: row.score_word_choice,
-      fluency: row.score_fluency,
-      pronunciation: row.score_pronunciation,
+      coherence: Number(row.score_coherence),
+      grammar: Number(row.score_grammar),
+      wordChoice: Number(row.score_word_choice),
+      fluency: Number(row.score_fluency),
+      pronunciation: Number(row.score_pronunciation),
     },
-    total: row.score_total,
+    total: Number(row.score_total),
     feedback: row.feedback,
     repliedTo,
   };

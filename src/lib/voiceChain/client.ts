@@ -27,6 +27,12 @@ export function chainLabel(position: number): string {
   return `${position}${suffix} in its chain`;
 }
 
+/** Points with at most one decimal: 4, 3.5, 12.5. */
+export function formatPoints(points: number): string {
+  const rounded = Math.round(points * 10) / 10;
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+}
+
 export function formatSeconds(totalSeconds: number): string {
   const s = Math.round(totalSeconds);
   if (s < 60) return `${s}s`;

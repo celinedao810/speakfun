@@ -67,10 +67,10 @@ export const BADGES: BadgeDef[] = [
   { id: 'speaking-10h', group: 'speaking', tier: 'platinum', title: 'Golden voice', description: 'Speak for 10 hours in total', metric: 'speakingSeconds', goal: 10 * 60 * 60 },
 
   // Scores
-  { id: 'best-80', group: 'score', tier: 'silver', title: 'Smooth talker', description: 'Score 80+ on one message', metric: 'bestScore', goal: 80 },
-  { id: 'best-90', group: 'score', tier: 'gold', title: 'Silver tongue', description: 'Score 90+ on one message', metric: 'bestScore', goal: 90 },
-  { id: 'total-1000', group: 'score', tier: 'bronze', title: '1,000 points', description: 'Earn 1,000 points in total', metric: 'totalScore', goal: 1000 },
-  { id: 'total-10000', group: 'score', tier: 'platinum', title: '10,000 points', description: 'Earn 10,000 points in total', metric: 'totalScore', goal: 10000 },
+  { id: 'best-80', group: 'score', tier: 'silver', title: 'Smooth talker', description: 'Score 4 or more on one message', metric: 'bestScore', goal: 4 },
+  { id: 'best-90', group: 'score', tier: 'gold', title: 'Silver tongue', description: 'Score a perfect 5 on one message', metric: 'bestScore', goal: 5 },
+  { id: 'total-1000', group: 'score', tier: 'bronze', title: '50 points', description: 'Earn 50 points in total', metric: 'totalScore', goal: 50 },
+  { id: 'total-10000', group: 'score', tier: 'platinum', title: '500 points', description: 'Earn 500 points in total', metric: 'totalScore', goal: 500 },
 
   // Good listener: replies where the starting letter was found without "Show me the letter"
   { id: 'ears-10', group: 'ears', tier: 'bronze', title: 'Sharp ears', description: 'Find the starting letter by yourself in 10 replies', metric: 'sharpEars', goal: 10 },

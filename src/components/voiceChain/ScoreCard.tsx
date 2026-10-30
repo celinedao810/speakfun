@@ -2,13 +2,14 @@
 
 import React, { useState } from 'react';
 import { ChevronDown, ChevronUp, Lightbulb } from 'lucide-react';
-import { CRITERION_MAX, SCORE_CRITERIA, VOICE_CHAIN } from '@/lib/voiceChain/config';
+import { formatPoints } from '@/lib/voiceChain/client';
+import { CRITERION_MAX, MESSAGE_MAX, SCORE_CRITERIA, VOICE_CHAIN } from '@/lib/voiceChain/config';
 import type { MyMessage } from '@/lib/voiceChain/types';
 
+/** 1 = good (green), 0.5 = OK (amber), 0 = weak (red). */
 function barColor(value: number) {
-  const pct = value / CRITERION_MAX;
-  if (pct >= 0.75) return 'bg-emerald-500';
-  if (pct >= 0.5) return 'bg-primary';
+  if (value >= CRITERION_MAX) return 'bg-emerald-500';
+  if (value > 0) return 'bg-primary';
   return 'bg-destructive';
 }
 
@@ -29,7 +30,7 @@ export default function ScoreCard({ message, showNextLetter, defaultOpen = true 
       <div className="flex flex-wrap items-end gap-x-6 gap-y-2">
         <div>
           <p className="text-xs text-muted-foreground">Score</p>
-          <p className="text-3xl font-bold text-foreground">{message.total}<span className="text-base font-medium text-muted-foreground">/100</span></p>
+          <p className="text-3xl font-bold text-foreground">{formatPoints(message.total)}<span className="text-base font-medium text-muted-foreground"> / {MESSAGE_MAX}</span></p>
         </div>
         {showNextLetter && (
           <div>
@@ -40,7 +41,7 @@ export default function ScoreCard({ message, showNextLetter, defaultOpen = true 
         <div className="flex flex-wrap gap-1.5 text-xs">
           {message.mode === 'realtalk' && (
             <span className="px-2 py-0.5 rounded-full bg-primary/15 text-accent-foreground">
-              Real talk +{Math.round((VOICE_CHAIN.modes.realtalk.bonus - 1) * 100)}%
+              Real talk +{VOICE_CHAIN.modes.realtalk.bonus}
             </span>
           )}
           {message.letterRevealed && (
@@ -56,10 +57,10 @@ export default function ScoreCard({ message, showNextLetter, defaultOpen = true 
             <div key={c.key}>
               <div className="flex justify-between text-xs mb-1">
                 <span className="font-medium text-foreground">{c.label}</span>
-                <span className="text-muted-foreground">{value}/{CRITERION_MAX}</span>
+                <span className="text-muted-foreground">{formatPoints(value)} / {CRITERION_MAX}</span>
               </div>
               <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-                <div className={`h-full ${barColor(value)}`} style={{ width: `${(value / CRITERION_MAX) * 100}%` }} />
+                <div className={`h-full ${barColor(value)}`} style={{ width: `${Math.max(value / CRITERION_MAX, 0.06) * 100}%` }} />
               </div>
               {open && fb?.[c.key] && <p className="text-xs text-muted-foreground mt-1">{fb[c.key]}</p>}
             </div>

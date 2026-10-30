@@ -35,9 +35,10 @@ async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3, initialDelay =
   }
 }
 
+/** Snaps to 0, 0.5 or 1. */
 function clampScore(n: unknown): number {
   const v = typeof n === 'number' && Number.isFinite(n) ? n : 0;
-  return Math.max(0, Math.min(CRITERION_MAX, Math.round(v)));
+  return Math.max(0, Math.min(CRITERION_MAX, Math.round(v * 2) / 2));
 }
 
 function buildPrompt(previousTranscript?: string | null, requiredLetter?: string | null): string {
@@ -54,13 +55,16 @@ ${context}
 Do these steps:
 1. transcript: transcribe exactly what was said. Write numbers as words ("five", not "5"). Keep hesitation sounds (um, uh, er) where they occur. Do not correct grammar.
 2. inappropriate: true ONLY if the recording contains hate speech, harassment, sexual content, threats, or personal contact details (phone number, email, home address, social media handle). Otherwise false.
-3. Score each criterion from 0 to ${CRITERION_MAX} (whole numbers):
-   - coherence: ideas are logically connected and easy to follow${previousTranscript ? '; the reply clearly follows on from the previous message (an off-topic reply scores at most 6)' : ''}.
+3. Score each criterion as exactly 0, 0.5 or 1:
+   - 1 = good for this skill (roughly B2 or better): clear, with only minor slips.
+   - 0.5 = OK: understandable, but with noticeable problems.
+   - 0 = weak: hard to follow, many errors, or very little usable speech.
+   Criteria:
+   - coherence: ideas are logically connected and easy to follow${previousTranscript ? '; the reply clearly follows on from the previous message (an off-topic reply scores 0)' : ''}.
    - grammar: accuracy of tenses, agreement, articles, word order. Minor slips cost little; errors that confuse meaning cost more.
    - wordChoice: range and appropriateness of vocabulary and collocations for the situation.
-   - fluency: smooth delivery at a natural pace with few or short pauses. Each silence over 2 seconds lowers the score. Using most of the 45 seconds is rewarded; under 20 seconds of real speech scores at most 12.
+   - fluency: smooth delivery at a natural pace with few or short pauses. Long silences (over 2 seconds) lower the score. Under 20 seconds of real speech scores at most 0.5.
    - pronunciation: clear ending sounds (final consonants such as -s, -ed, -t, -k, -d), intelligibility and word stress. Do not penalise a natural accent that is easy to understand.
-   Calibration: 18–20 near-native; 14–17 good (B2); 10–13 understandable with frequent errors; 6–9 often hard to follow; 0–5 very little usable speech.
 4. feedback: one short, specific sentence in English per criterion (max 25 words each), quoting the learner's own words where useful. Plus "tip": one practical thing to try next time.
 5. endingSoundIssues: the words (max 6) where the learner dropped or blurred the final sound. Empty array if none.`;
 }

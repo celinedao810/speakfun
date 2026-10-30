@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { ChevronDown, ChevronRight, ChevronUp, Flame } from 'lucide-react';
-import { chainLabel, formatSeconds, vcFetch } from '@/lib/voiceChain/client';
+import { chainLabel, formatPoints, formatSeconds, vcFetch } from '@/lib/voiceChain/client';
 import type { BadgeStats } from '@/lib/voiceChain/badges';
 import type { DayStats, MyMessage } from '@/lib/voiceChain/types';
 import { BadgeStrip } from './Badges';
@@ -89,7 +89,7 @@ export default function MyProgress({ badgeStats }: { badgeStats: BadgeStats | nu
                   <div className="h-full bg-primary" style={{ width: `${(d.totalScore / maxScore) * 100}%` }} />
                 </div>
                 <span className="text-muted-foreground w-36 text-right">
-                  {d.messagesSent} msg · {formatSeconds(d.speakingSeconds)} · {d.totalScore} pts
+                  {d.messagesSent} msg · {formatSeconds(d.speakingSeconds)} · {formatPoints(d.totalScore)} pts
                 </span>
               </div>
             ))}
@@ -104,22 +104,26 @@ export default function MyProgress({ badgeStats }: { badgeStats: BadgeStats | nu
 function TodaySummary({ today, streak, longest }: { today: DayStats; streak: number; longest: number }) {
   return (
     <div className="rounded-xl border border-border px-4 py-3">
-      <div className="flex items-center gap-2">
-        <span className={`w-7 h-7 rounded-full flex items-center justify-center ${streak > 0 ? 'bg-gradient-to-br from-amber-400 to-red-500 text-white' : 'bg-muted text-muted-foreground'}`}>
+      <div className="flex items-center gap-2.5">
+        <span className={`w-8 h-8 shrink-0 rounded-full flex items-center justify-center ${streak > 0 ? 'bg-gradient-to-br from-amber-400 to-red-500 text-white' : 'bg-muted text-muted-foreground'}`}>
           <Flame className="w-4 h-4" />
         </span>
-        <p className="text-sm font-semibold text-foreground">
-          {streak > 0 ? `${streak}-day streak` : 'No streak yet'}
-        </p>
-        <p className="text-xs text-muted-foreground">
-          {streak > 0 ? (longest > streak ? `· longest ${longest}` : '· speak daily to keep it') : '· speak today to start one'}
-        </p>
-        <span className="ml-auto text-xs text-muted-foreground">Today</span>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold text-foreground whitespace-nowrap">
+            {streak > 0 ? `${streak}-day streak` : 'No streak yet'}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {streak === 0 ? 'Speak today to start a streak'
+              : longest > streak ? `Longest: ${longest} days`
+              : 'Speak daily to keep it going'}
+          </p>
+        </div>
+        <span className="self-start text-xs text-muted-foreground">Today</span>
       </div>
       <div className="mt-3 grid grid-cols-3 divide-x divide-border text-center">
         <Stat value={String(today.messagesSent)} label="messages" />
         <Stat value={formatSeconds(today.speakingSeconds)} label="speaking" />
-        <Stat value={String(today.totalScore)} label="points" />
+        <Stat value={formatPoints(today.totalScore)} label="points" />
       </div>
     </div>
   );
@@ -165,7 +169,7 @@ function MessageItem({ message: m }: { message: MyMessage }) {
             {timeOf(m.createdAt)} · {Math.round(m.durationSeconds)}s{m.chainPosition > 1 && ` · ${chainLabel(m.chainPosition)}`}
           </p>
         </div>
-        <span className="text-sm font-semibold text-foreground whitespace-nowrap">{m.total} pts</span>
+        <span className="text-sm font-semibold text-foreground whitespace-nowrap">{formatPoints(m.total)} pts</span>
       </div>
       {m.audioUrl && <Recording url={m.audioUrl} />}
       <p className="text-xs text-muted-foreground">

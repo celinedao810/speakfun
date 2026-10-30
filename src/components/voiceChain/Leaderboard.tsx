@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { Medal, Trophy } from 'lucide-react';
-import { formatSeconds, vcFetch } from '@/lib/voiceChain/client';
+import { formatPoints, formatSeconds, vcFetch } from '@/lib/voiceChain/client';
 import type { LeaderboardResponse, LeaderboardRow } from '@/lib/voiceChain/types';
 import FunLoading from './FunLoading';
 
@@ -80,7 +80,7 @@ function Row({ row }: { row: LeaderboardRow }) {
       </span>
       <span className="text-sm text-muted-foreground text-right">{row.messagesSent}</span>
       <span className="text-sm text-muted-foreground text-right hidden sm:block">{formatSeconds(row.speakingSeconds)}</span>
-      <span className="text-sm font-semibold text-foreground text-right">{row.totalScore}</span>
+      <span className="text-sm font-semibold text-foreground text-right">{formatPoints(row.totalScore)}</span>
     </li>
   );
 }
