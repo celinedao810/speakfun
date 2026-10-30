@@ -35,6 +35,8 @@ export interface ClaimView {
   playsLeft: number;
   /** The user picked this message up earlier and is coming back to it. */
   resumed: boolean;
+  /** The letters offered in the listening check (the right one plus easy-to-confuse ones). */
+  letterChoices: string[];
 }
 
 /** Who sent the related message. Other users' recordings are never shared on "My progress". */

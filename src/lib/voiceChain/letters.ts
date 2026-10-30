@@ -49,3 +49,48 @@ export function startsWithLetter(transcript: string, letter: string): { ok: bool
   }
   return { ok: false, heardWord };
 }
+
+// ---------------------------------------------------------------------------
+// Letter choices for the listening check
+// ---------------------------------------------------------------------------
+
+/** Letters easy to mix up with each one at the end of a word (by sound or spelling). */
+const CONFUSABLE: Record<string, string> = {
+  a: 'eoiuy', b: 'pdvm', c: 'kgsq', d: 'tbge', e: 'yiadt', f: 'vpsh', g: 'kcdj',
+  h: 'fkse', i: 'yeaj', j: 'gyih', k: 'cgqt', l: 'rnmw', m: 'nlbw', n: 'mlrg',
+  o: 'uawe', p: 'bftk', q: 'kcgu', r: 'lneh', s: 'zcxe', t: 'dkpe', u: 'oawy',
+  v: 'fbwz', w: 'vuoy', x: 'skzc', y: 'eiaw', z: 'sxvc',
+};
+/** Common last letters of English words, used to top up the choices. */
+const COMMON_ENDINGS = 'estdynrlgkhm';
+
+/** Small seeded random generator, so the same message always gets the same choices. */
+function seededRandom(seed: string) {
+  let h = 1779033703 ^ seed.length;
+  for (let i = 0; i < seed.length; i++) {
+    h = Math.imul(h ^ seed.charCodeAt(i), 3432918353);
+    h = (h << 13) | (h >>> 19);
+  }
+  return () => {
+    h = Math.imul(h ^ (h >>> 16), 2246822507);
+    h = Math.imul(h ^ (h >>> 13), 3266489909);
+    return ((h ^= h >>> 16) >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * The correct letter plus `count - 1` easy-to-confuse ones, shuffled.
+ * Deterministic per `seed` (the message id), so leaving and coming back shows the same choices.
+ */
+export function letterChoices(correct: string, seed: string, count = 6): string[] {
+  const answer = correct.toLowerCase();
+  const pool = [...(CONFUSABLE[answer] ?? ''), ...COMMON_ENDINGS].filter(l => l !== answer);
+  const distractors = [...new Set(pool)].slice(0, count - 1);
+  const choices = [answer, ...distractors];
+  const random = seededRandom(seed);
+  for (let i = choices.length - 1; i > 0; i--) {
+    const j = Math.floor(random() * (i + 1));
+    [choices[i], choices[j]] = [choices[j], choices[i]];
+  }
+  return choices;
+}

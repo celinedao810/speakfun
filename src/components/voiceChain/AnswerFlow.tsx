@@ -39,6 +39,9 @@ export default function AnswerFlow({ claim: initialClaim, onExit, onSent }: Answ
   const [playsLeft, setPlaysLeft] = useState<number>(initialClaim.playsLeft);
   const [playing, setPlaying] = useState(false);
   const [wrongLetters, setWrongLetters] = useState<string[]>([]);
+  /** Letter being checked, and the confirmed one (shown green for a moment). */
+  const [pendingLetter, setPendingLetter] = useState<string | null>(null);
+  const [correctLetter, setCorrectLetter] = useState<string | null>(null);
   const [letterNote, setLetterNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -110,17 +113,25 @@ export default function AnswerFlow({ claim: initialClaim, onExit, onSent }: Answ
   const pickLetter = async (letter: string | null) => {
     setBusy(true);
     setError(null);
+    setPendingLetter(letter);
+    // Shows the right letter in green for a moment before moving on to the countdown
+    const moveOn = async (right: string | null) => {
+      audioRef.current?.pause();
+      setPendingLetter(null);
+      setCorrectLetter(right);
+      await new Promise(resolve => setTimeout(resolve, 700));
+      setPhase('think');
+    };
     try {
       const res = await vcFetch<LetterResponse>('letter', letter ? { messageId: claim.messageId, letter } : { messageId: claim.messageId, giveUp: true });
       applyLetter(res);
       if (res.correct) {
         setLetterNote(`Correct — “${res.letter?.toUpperCase()}”!`);
-        audioRef.current?.pause();
-        setPhase('think');
+        await moveOn(res.letter);
       } else if (res.letterRevealed) {
+        if (letter) setWrongLetters(w => [...w, letter]);
         setLetterNote(`The letter was “${res.letter?.toUpperCase()}” (−${VOICE_CHAIN.revealPenalty} points).`);
-        audioRef.current?.pause();
-        setPhase('think');
+        await moveOn(res.letter);
       } else if (letter) {
         recorder.release(); // not recording yet — close the mic while they listen again
         setWrongLetters(w => [...w, letter]);
@@ -131,6 +142,7 @@ export default function AnswerFlow({ claim: initialClaim, onExit, onSent }: Answ
       recorder.release();
       setError(err instanceof Error ? err.message : 'Something went wrong');
     } finally {
+      setPendingLetter(null);
       setBusy(false);
     }
   };
@@ -324,7 +336,13 @@ export default function AnswerFlow({ claim: initialClaim, onExit, onSent }: Answ
           {playsLeft <= 0 && !letterNote && (
             <p className="text-xs text-muted-foreground">No plays left — pick the letter from memory, or show it.</p>
           )}
-          <LetterPad onPick={l => { recorder.prepare(); void pickLetter(l); }} disabled={busy} wrong={wrongLetters} />
+          <LetterPad
+            letters={claim.letterChoices}
+            onPick={l => { recorder.prepare(); void pickLetter(l); }}
+            pending={pendingLetter}
+            correct={correctLetter}
+            wrong={wrongLetters}
+          />
           <div className="flex items-center gap-3">
             {letterNote && <p className="text-xs text-muted-foreground">{letterNote}</p>}
             <button type="button" className={`${ghostBtn} ml-auto`} onClick={() => { recorder.prepare(); void pickLetter(null); }} disabled={busy}>

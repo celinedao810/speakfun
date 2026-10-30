@@ -3,6 +3,7 @@ import { createClient, SupabaseClient, User } from '@supabase/supabase-js';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { todayUtc7 } from '@/lib/homework/generateWindow';
 import { MESSAGE_MAX, VOICE_CHAIN } from './config';
+import { letterChoices } from './letters';
 import type { ClaimView, DayStats, MyMessage, ReplyPreview, ScoreBreakdown, VoiceChainFeedback } from './types';
 import type { VoiceChainMode } from './config';
 
@@ -199,6 +200,7 @@ export function claimView(row: MessageRow, senderNickname: string, audioUrl: str
     takesLeft: Math.max(0, VOICE_CHAIN.maxTakes - row.claim_takes),
     playsLeft: playsLeft(row),
     resumed: isResumedClaim(row),
+    letterChoices: letterChoices(row.last_letter, row.id),
   };
 }
 
