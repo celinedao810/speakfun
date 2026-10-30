@@ -11,6 +11,7 @@ import {
   LeaderboardEntry,
 } from '@/lib/types';
 import { itemKey } from '@/lib/homework/itemKeys';
+import { isMastered } from '@/lib/homework/isMastered';
 
 // ============================================================================
 // Row types (snake_case matching DB columns)
@@ -657,7 +658,8 @@ export async function batchUpdateVocabMastery(
     const prev = existingMap.get(itemKey(a.lessonId, a.vocabItemId));
     const newCorrect = (prev?.correct_count || 0) + a.correctDelta;
     const newIncorrect = (prev?.incorrect_count || 0) + a.incorrectDelta;
-    const isCommitted = newCorrect >= a.commitThreshold;
+    // Mastery is permanent: raising the threshold later must not un-master an item.
+    const isCommitted = isMastered(prev?.is_committed, newCorrect, a.commitThreshold);
     if (isCommitted && !prev?.is_committed) newlyCommittedCount++;
     return {
       learner_id: learnerId,
@@ -680,21 +682,6 @@ export async function batchUpdateVocabMastery(
     console.error('[batchUpdateVocabMastery] Supabase upsert error:', error.message, error.details, error.hint, { learnerId, classId, sampleRow: upsertRows[0] });
   }
   return { ok: !error, newlyCommittedCount };
-}
-
-export async function fetchCommittedVocabIds(
-  supabase: SupabaseClient,
-  learnerId: string,
-  classId: string
-): Promise<string[]> {
-  const { data, error } = await supabase
-    .from('learner_vocab_mastery')
-    .select('vocab_item_id')
-    .eq('learner_id', learnerId)
-    .eq('class_id', classId)
-    .eq('is_committed', true);
-  if (error || !data) return [];
-  return (data as { vocab_item_id: string }[]).map(r => r.vocab_item_id);
 }
 
 // ============================================================================
@@ -780,7 +767,8 @@ export async function batchUpdateStructureMastery(
     const prev = existingMap.get(itemKey(a.lessonId, a.structureItemId));
     const newCorrect = (prev?.correct_count || 0) + a.correctDelta;
     const newIncorrect = (prev?.incorrect_count || 0) + a.incorrectDelta;
-    const isCommitted = newCorrect >= a.commitThreshold;
+    // Mastery is permanent: raising the threshold later must not un-master an item.
+    const isCommitted = isMastered(prev?.is_committed, newCorrect, a.commitThreshold);
     if (isCommitted && !prev?.is_committed) newlyCommittedCount++;
     return {
       learner_id: learnerId,
