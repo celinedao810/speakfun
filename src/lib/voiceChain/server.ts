@@ -104,13 +104,17 @@ export async function nicknamesFor(svc: SupabaseClient, userIds: string[]): Prom
 }
 
 /** Short-lived signed URLs keyed by storage path. Purged or expired messages get none. */
-export async function signedUrls(svc: SupabaseClient, rows: Pick<MessageRow, 'audio_path' | 'expires_at'>[]): Promise<Map<string, string>> {
+export async function signedUrls(
+  svc: SupabaseClient,
+  rows: Pick<MessageRow, 'audio_path' | 'expires_at'>[],
+  seconds: number = VOICE_CHAIN.signedUrlSeconds,
+): Promise<Map<string, string>> {
   const now = Date.now();
   const paths = rows
     .filter(r => r.audio_path && new Date(r.expires_at).getTime() > now)
     .map(r => r.audio_path as string);
   if (paths.length === 0) return new Map();
-  const { data } = await svc.storage.from(BUCKET).createSignedUrls(paths, VOICE_CHAIN.signedUrlSeconds);
+  const { data } = await svc.storage.from(BUCKET).createSignedUrls(paths, seconds);
   const map = new Map<string, string>();
   for (const item of data ?? []) {
     if (item.path && item.signedUrl) map.set(item.path, item.signedUrl);

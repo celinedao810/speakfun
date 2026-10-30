@@ -103,6 +103,15 @@ function Tile({ icon, label, value }: { icon: React.ReactNode; label: string; va
   );
 }
 
+/** Audio player that says so when the file can't play here, instead of spinning forever. */
+function Recording({ url }: { url: string }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) {
+    return <p className="text-xs text-muted-foreground italic">This recording can’t be played on this device.</p>;
+  }
+  return <audio src={url} controls preload="metadata" onError={() => setFailed(true)} className="w-full h-9" />;
+}
+
 /** Nickname only — other people's recordings aren't shared here. */
 function Related({ label, preview }: { label: string; preview: ReplyPreview }) {
   return (
@@ -123,7 +132,7 @@ function MessageItem({ message: m }: { message: MyMessage }) {
         <span className="text-xs text-muted-foreground">{timeOf(m.createdAt)} · {Math.round(m.durationSeconds)}s · link #{m.chainPosition}</span>
         <span className="ml-auto text-sm font-semibold text-foreground">{m.total} pts</span>
       </div>
-      {m.audioUrl && <audio src={m.audioUrl} controls preload="none" className="w-full h-9" />}
+      {m.audioUrl && <Recording url={m.audioUrl} />}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
         <span>{STATUS_LABEL[m.status]}</span>
         <span>· next letter {m.lastLetter.toUpperCase()}</span>

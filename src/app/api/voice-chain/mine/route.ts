@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { VOICE_CHAIN } from '@/lib/voiceChain/config';
 import {
   errorResponse, MessageRow, myMessageView, nicknamesFor, requireUser, serviceClient, signedUrls,
 } from '@/lib/voiceChain/server';
@@ -36,7 +37,7 @@ export async function GET() {
 
     // Only the caller's own recordings get audio URLs; related messages show the nickname only.
     const [urls, names] = await Promise.all([
-      signedUrls(svc, mine),
+      signedUrls(svc, mine, VOICE_CHAIN.ownAudioUrlSeconds),
       nicknamesFor(svc, [...related.values()].map(r => r.sender_id)),
     ]);
     const preview = (r: Related | undefined): ReplyPreview | null =>

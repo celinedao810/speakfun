@@ -46,7 +46,7 @@ interface Utterance<T> {
 }
 
 /** Downsamples mono float frames to 16kHz and packs them as a base64 16-bit PCM WAV. */
-function encodeWavBase64(frames: Float32Array[], inputRate: number): string {
+export function encodeWavBase64(frames: Float32Array[], inputRate: number): string {
   const total = frames.reduce((n, f) => n + f.length, 0);
   const input = new Float32Array(total);
   let offset = 0;

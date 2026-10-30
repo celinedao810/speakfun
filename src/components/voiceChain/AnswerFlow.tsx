@@ -70,7 +70,7 @@ export default function AnswerFlow({ claim: initialClaim, onExit, onSent }: Answ
     // the server counts the play in parallel and stops it if none were left.
     audio.currentTime = 0;
     audio.play().then(() => setPlaying(true))
-      .catch(() => setError('Could not play the message. Check your sound and try again.'));
+      .catch(() => setError(e => e ?? 'Could not play the message. Check your sound and try again.'));
     setPlaysLeft(p => p - 1);
     vcFetch<{ allowed: boolean; playsLeft: number }>('play', { messageId: claim.messageId })
       .then(res => {
@@ -220,7 +220,13 @@ export default function AnswerFlow({ claim: initialClaim, onExit, onSent }: Answ
 
   return (
     <div className="space-y-5">
-      {claim.audioUrl && <audio ref={audioRef} src={claim.audioUrl} preload="auto" onEnded={onEnded} className="hidden" />}
+      {claim.audioUrl && (
+        <audio ref={audioRef} src={claim.audioUrl} preload="auto" onEnded={onEnded} className="hidden"
+          onError={() => {
+            setPlaying(false);
+            setError('This message can’t be played on your device — give it up and pick up another one.');
+          }} />
+      )}
 
       {/* Header */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">

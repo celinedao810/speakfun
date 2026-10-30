@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { encodeWavBase64 } from '@/lib/audio/useContinuousSpeech';
 
 export interface VoiceRecording {
   blob: Blob;
@@ -14,10 +15,13 @@ export type RecorderState = 'idle' | 'starting' | 'recording' | 'done';
 
 function pickMimeType(): string | undefined {
   if (typeof MediaRecorder === 'undefined') return undefined;
-  for (const type of ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg']) {
-    if (MediaRecorder.isTypeSupported(type)) return type;
-  }
-  return undefined;
+  // Apple browsers (all iOS browsers are WebKit) decode their own MP4/AAC most reliably;
+  // elsewhere WebM/Opus is the native format. Either way the take is converted to WAV below.
+  const apple = typeof navigator !== 'undefined' && navigator.vendor?.startsWith('Apple');
+  const order = apple
+    ? ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm', 'audio/ogg']
+    : ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg'];
+  return order.find(type => MediaRecorder.isTypeSupported(type));
 }
 
 function blobToBase64(blob: Blob): Promise<string> {
@@ -27,6 +31,31 @@ function blobToBase64(blob: Blob): Promise<string> {
     reader.onerror = () => reject(reader.error);
     reader.readAsDataURL(blob);
   });
+}
+
+/**
+ * Re-encodes a recording as 16 kHz mono WAV. Recorder output (especially WebM) often
+ * has no duration and doesn't play from a URL on iPhones; WAV plays in every browser
+ * and is a supported Gemini audio type.
+ */
+async function toWav(blob: Blob): Promise<{ blob: Blob; base64: string; durationSeconds: number }> {
+  const Ctx = window.AudioContext
+    ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  if (!Ctx) throw new Error('Web Audio not available');
+  const ctx = new Ctx();
+  try {
+    const buffer = await ctx.decodeAudioData(await blob.arrayBuffer());
+    const mono = new Float32Array(buffer.length);
+    for (let c = 0; c < buffer.numberOfChannels; c++) {
+      const data = buffer.getChannelData(c);
+      for (let i = 0; i < data.length; i++) mono[i] += data[i] / buffer.numberOfChannels;
+    }
+    const base64 = encodeWavBase64([mono], buffer.sampleRate);
+    const bytes = Uint8Array.from(atob(base64), ch => ch.charCodeAt(0));
+    return { blob: new Blob([bytes], { type: 'audio/wav' }), base64, durationSeconds: buffer.duration };
+  } finally {
+    void ctx.close();
+  }
 }
 
 /**
@@ -80,8 +109,27 @@ export function useVoiceRecorder(maxSeconds: number) {
         }
         const type = (rec.mimeType || mimeType || 'audio/webm').split(';')[0];
         const blob = new Blob(chunksRef.current, { type });
-        const base64 = await blobToBase64(blob);
-        setRecording({ blob, url: URL.createObjectURL(blob), base64, mimeType: type, durationSeconds });
+        let take: VoiceRecording;
+        try {
+          const wav = await toWav(blob);
+          take = {
+            blob: wav.blob,
+            url: URL.createObjectURL(wav.blob),
+            base64: wav.base64,
+            mimeType: 'audio/wav',
+            durationSeconds: Math.min(maxSeconds, wav.durationSeconds || durationSeconds),
+          };
+        } catch (err) {
+          // Couldn't convert: send the original recording rather than failing
+          console.warn('[voice-chain] WAV conversion failed, sending original audio:', err);
+          take = { blob, url: URL.createObjectURL(blob), base64: await blobToBase64(blob), mimeType: type, durationSeconds };
+        }
+        if (discardRef.current) {
+          URL.revokeObjectURL(take.url);
+          setState('idle');
+          return;
+        }
+        setRecording(take);
         setState('done');
       };
 
