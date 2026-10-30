@@ -8,7 +8,9 @@ import type { GameClass } from '@/app/api/games/classes/route';
 import { Loading } from './shared';
 
 const RANGES = [7, 14, 30];
-const selectClass = 'rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring';
+// Speaking and active days are hidden on phones (still shown in the per-day breakdown)
+const COLS = 'grid grid-cols-[minmax(0,1fr)_4rem_3.5rem] sm:grid-cols-[minmax(0,1fr)_4.5rem_5rem_4rem_5rem] gap-3 px-3 sm:px-4';
+const selectClass ='rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring';
 
 /** Teachers: Voice Chain activity of learners in their classes, by real name. */
 export default function TeacherLearnerStats() {
@@ -70,12 +72,12 @@ export default function TeacherLearnerStats() {
         : learners.length === 0 ? <p className="text-sm text-muted-foreground">No learners in this class yet.</p>
         : (
           <div className="rounded-xl border border-border overflow-hidden">
-            <div className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-3 px-4 py-2 bg-muted/50 border-b border-border text-xs text-muted-foreground font-medium">
+            <div className={`${COLS} py-2 bg-muted/50 border-b border-border text-xs text-muted-foreground font-medium`}>
               <span>Learner</span>
-              <span className="w-16 text-right">Messages</span>
-              <span className="w-20 text-right">Speaking</span>
-              <span className="w-16 text-right">Score</span>
-              <span className="w-16 text-right">Active days</span>
+              <span className="text-right">Messages</span>
+              <span className="text-right hidden sm:block">Speaking</span>
+              <span className="text-right">Score</span>
+              <span className="text-right hidden sm:block">Active days</span>
             </div>
             <ul className="divide-y divide-border">
               {learners.map(l => {
@@ -85,20 +87,24 @@ export default function TeacherLearnerStats() {
                     <button
                       type="button"
                       onClick={() => setExpanded(isOpen ? null : l.learnerId)}
-                      className="w-full grid grid-cols-[1fr_auto_auto_auto_auto] gap-3 px-4 py-3 text-sm text-left hover:bg-muted/50"
+                      className={`w-full ${COLS} py-3 text-sm text-left hover:bg-muted/50`}
                     >
-                      <span className="flex items-center gap-1.5 font-medium text-foreground truncate">
-                        {isOpen ? <ChevronDown className="w-3.5 h-3.5 shrink-0" /> : <ChevronRight className="w-3.5 h-3.5 shrink-0" />}{l.name}
+                      <span className="flex items-center gap-1.5 font-medium text-foreground min-w-0">
+                        {isOpen ? <ChevronDown className="w-3.5 h-3.5 shrink-0" /> : <ChevronRight className="w-3.5 h-3.5 shrink-0" />}
+                        <span className="break-words">{l.name}</span>
                       </span>
-                      <span className="w-16 text-right text-muted-foreground">{l.messagesSent}</span>
-                      <span className="w-20 text-right text-muted-foreground">{formatSeconds(l.speakingSeconds)}</span>
-                      <span className="w-16 text-right font-semibold text-foreground">{l.totalScore}</span>
-                      <span className="w-16 text-right text-muted-foreground">{l.activeDays}/{days}</span>
+                      <span className="text-right text-muted-foreground">{l.messagesSent}</span>
+                      <span className="text-right text-muted-foreground hidden sm:block">{formatSeconds(l.speakingSeconds)}</span>
+                      <span className="text-right font-semibold text-foreground">{l.totalScore}</span>
+                      <span className="text-right text-muted-foreground hidden sm:block">{l.activeDays}/{days}</span>
                     </button>
                     {isOpen && (
-                      <div className="px-4 pb-3 pl-9 space-y-1">
+                      <div className="px-3 sm:px-4 pb-3 sm:pl-9 space-y-1">
+                        <p className="sm:hidden text-xs text-muted-foreground pb-1">
+                          {formatSeconds(l.speakingSeconds)} speaking · active {l.activeDays}/{days} days
+                        </p>
                         {[...l.days].reverse().map(d => (
-                          <div key={d.day} className="grid grid-cols-[6rem_1fr] text-xs text-muted-foreground">
+                          <div key={d.day} className="grid grid-cols-[5.5rem_minmax(0,1fr)] gap-2 text-xs text-muted-foreground">
                             <span>{new Date(`${d.day}T00:00:00`).toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })}</span>
                             <span>
                               {d.messagesSent === 0 ? '—' : `${d.messagesSent} msg (${d.startersSent} started) · ${formatSeconds(d.speakingSeconds)} · ${d.totalScore} pts`}

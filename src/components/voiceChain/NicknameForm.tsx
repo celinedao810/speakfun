@@ -40,6 +40,7 @@ export default function NicknameForm({ current, onSaved, onCancel }: NicknameFor
       </div>
       <p className="text-xs text-muted-foreground">
         Other players only ever see this nickname — never your real name.
+        {current && ' Your scores, stats and leaderboard place stay with your account when you change it.'}
       </p>
       <div className="flex flex-wrap gap-2">
         <input

@@ -6,6 +6,9 @@ import { formatSeconds, vcFetch } from '@/lib/voiceChain/client';
 import type { LeaderboardResponse, LeaderboardRow } from '@/lib/voiceChain/types';
 import { Loading } from './shared';
 
+// Speaking time is hidden on phones so nicknames keep their room
+const COLS = 'grid grid-cols-[1.5rem_minmax(0,1fr)_3.5rem_3.5rem] sm:grid-cols-[1.5rem_minmax(0,1fr)_4.5rem_4.5rem_4rem] gap-3 items-center px-3 sm:px-5';
+
 function rankColor(rank: number): string {
   if (rank === 1) return 'text-amber-500';
   if (rank === 2) return 'text-muted-foreground/60';
@@ -36,7 +39,7 @@ export default function Leaderboard() {
 
   return (
     <div className="rounded-xl border border-border overflow-hidden">
-      <div className="flex items-center gap-2 px-5 py-4 border-b border-border">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 px-3 sm:px-5 py-4 border-b border-border">
         <Trophy className="w-4 h-4 text-amber-500" />
         <span className="text-sm font-semibold text-foreground">This week</span>
         <span className="text-xs text-muted-foreground">since Monday {weekLabel}</span>
@@ -46,12 +49,12 @@ export default function Leaderboard() {
         <p className="px-5 py-8 text-center text-sm text-muted-foreground/60">No messages this week yet. Be the first!</p>
       ) : (
         <>
-          <div className="grid grid-cols-[auto_1fr_auto_auto_auto] gap-3 items-center px-5 py-2 bg-muted/50 border-b border-border">
-            <span className="w-6" />
-            <span className="text-xs text-muted-foreground/60 font-medium">Nickname</span>
-            <span className="text-xs text-muted-foreground/60 font-medium text-right w-16">Messages</span>
-            <span className="text-xs text-muted-foreground/60 font-medium text-right w-16">Speaking</span>
-            <span className="text-xs text-muted-foreground/60 font-medium text-right w-14">Points</span>
+          <div className={`${COLS} py-2 bg-muted/50 border-b border-border text-xs text-muted-foreground/60 font-medium`}>
+            <span />
+            <span>Nickname</span>
+            <span className="text-right">Msgs</span>
+            <span className="text-right hidden sm:block">Speaking</span>
+            <span className="text-right">Points</span>
           </div>
           <ul className="divide-y divide-border">
             {data.rows.map(r => <Row key={r.rank} row={r} />)}
@@ -70,14 +73,14 @@ export default function Leaderboard() {
 
 function Row({ row }: { row: LeaderboardRow }) {
   return (
-    <li className={`grid grid-cols-[auto_1fr_auto_auto_auto] gap-3 items-center px-5 py-3 ${row.isMe ? 'bg-primary/10' : 'hover:bg-muted/50'}`}>
-      <div className="w-6 flex items-center justify-center"><RankIcon rank={row.rank} /></div>
+    <li className={`${COLS} py-3 ${row.isMe ? 'bg-primary/10' : 'hover:bg-muted/50'}`}>
+      <div className="flex items-center justify-center"><RankIcon rank={row.rank} /></div>
       <span className={`text-sm font-medium truncate ${row.isMe ? 'text-primary' : 'text-foreground'}`}>
         {row.nickname}{row.isMe && <span className="ml-1.5 text-xs text-primary/70">(you)</span>}
       </span>
-      <span className="text-sm text-muted-foreground text-right w-16">{row.messagesSent}</span>
-      <span className="text-sm text-muted-foreground text-right w-16">{formatSeconds(row.speakingSeconds)}</span>
-      <span className="text-sm font-semibold text-foreground text-right w-14">{row.totalScore}</span>
+      <span className="text-sm text-muted-foreground text-right">{row.messagesSent}</span>
+      <span className="text-sm text-muted-foreground text-right hidden sm:block">{formatSeconds(row.speakingSeconds)}</span>
+      <span className="text-sm font-semibold text-foreground text-right">{row.totalScore}</span>
     </li>
   );
 }
