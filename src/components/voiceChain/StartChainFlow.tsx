@@ -1,11 +1,12 @@
 "use client";
 
 import React, { useState } from 'react';
-import { Loader2, Mic, Send, Trash2 } from 'lucide-react';
+import { Mic, Send, Trash2 } from 'lucide-react';
 import { vcFetch } from '@/lib/voiceChain/client';
 import { VOICE_CHAIN } from '@/lib/voiceChain/config';
 import { useVoiceRecorder } from '@/lib/voiceChain/useVoiceRecorder';
 import type { MyMessage, SubmitResponse } from '@/lib/voiceChain/types';
+import PaperPlane from './PaperPlane';
 import RecordingControls from './RecordingControls';
 import ScoreCard from './ScoreCard';
 import { primaryBtn, secondaryBtn } from './shared';
@@ -13,10 +14,12 @@ import { primaryBtn, secondaryBtn } from './shared';
 interface StartChainFlowProps {
   startersLeft: number;
   onExit: () => void;
+  /** Called once the message is accepted. */
+  onSent?: () => void;
 }
 
 /** Records a new chain starter. The take can be discarded before sending, never edited after. */
-export default function StartChainFlow({ startersLeft, onExit }: StartChainFlowProps) {
+export default function StartChainFlow({ startersLeft, onExit, onSent }: StartChainFlowProps) {
   const recorder = useVoiceRecorder(VOICE_CHAIN.maxSeconds);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -35,6 +38,7 @@ export default function StartChainFlow({ startersLeft, onExit }: StartChainFlowP
       });
       if (res.accepted) {
         setResult(res.message);
+        onSent?.();
       } else {
         setError(res.error + (res.transcript ? ` We heard: “${res.transcript}”` : ''));
         recorder.discard();
@@ -49,7 +53,9 @@ export default function StartChainFlow({ startersLeft, onExit }: StartChainFlowP
   if (result) {
     return (
       <div className="space-y-4">
-        <p className="text-sm font-medium text-emerald-600">Your chain has started! The first person to pick it up will answer it.</p>
+        <p className="vc-fade-up flex items-center gap-2 text-sm font-medium text-emerald-600">
+          <Send className="w-4 h-4 shrink-0" />Delivered! Your chain has started — the first person to pick it up will answer it.
+        </p>
         <ScoreCard message={result} showNextLetter />
         <button type="button" className={primaryBtn} onClick={onExit}>Done</button>
       </div>
@@ -80,16 +86,17 @@ export default function StartChainFlow({ startersLeft, onExit }: StartChainFlowP
         </div>
       )}
 
-      {recorder.state === 'done' && recorder.recording && (
+      {sending && <PaperPlane />}
+
+      {recorder.state === 'done' && recorder.recording && !sending && (
         <div className="space-y-3">
           <audio src={recorder.recording.url} controls className="w-full h-10" />
           <p className="text-xs text-muted-foreground">Listen back if you like. Once sent, it can’t be changed.</p>
           <div className="flex flex-wrap gap-2">
-            <button type="button" className={primaryBtn} onClick={() => void send()} disabled={sending}>
-              {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-              {sending ? 'Scoring…' : 'Send'}
+            <button type="button" className={primaryBtn} onClick={() => void send()}>
+              <Send className="w-4 h-4" />Send
             </button>
-            <button type="button" className={secondaryBtn} onClick={recorder.discard} disabled={sending}>
+            <button type="button" className={secondaryBtn} onClick={recorder.discard}>
               <Trash2 className="w-4 h-4" />Record again
             </button>
           </div>

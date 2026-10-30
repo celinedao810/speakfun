@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { Medal, Trophy } from 'lucide-react';
 import { formatSeconds, vcFetch } from '@/lib/voiceChain/client';
 import type { LeaderboardResponse, LeaderboardRow } from '@/lib/voiceChain/types';
-import { Loading } from './shared';
+import FunLoading from './FunLoading';
 
 // Speaking time is hidden on phones so nicknames keep their room
 const COLS = 'grid grid-cols-[1.5rem_minmax(0,1fr)_3.5rem_3.5rem] sm:grid-cols-[1.5rem_minmax(0,1fr)_4.5rem_4.5rem_4rem] gap-3 items-center px-3 sm:px-5';
@@ -33,7 +33,7 @@ export default function Leaderboard() {
   }, []);
 
   if (error) return <p className="text-sm text-destructive">{error}</p>;
-  if (!data) return <Loading />;
+  if (!data) return <FunLoading context="leaderboard" />;
 
   const weekLabel = new Date(`${data.weekStart}T00:00:00`).toLocaleDateString([], { day: 'numeric', month: 'short' });
 

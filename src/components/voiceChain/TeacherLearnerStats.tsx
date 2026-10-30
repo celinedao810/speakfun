@@ -5,7 +5,7 @@ import { ChevronDown, ChevronRight } from 'lucide-react';
 import { formatSeconds } from '@/lib/voiceChain/client';
 import type { TeacherLearnerStats as LearnerStats } from '@/lib/voiceChain/types';
 import type { GameClass } from '@/app/api/games/classes/route';
-import { Loading } from './shared';
+import FunLoading from './FunLoading';
 
 const RANGES = [7, 14, 30];
 // Speaking and active days are hidden on phones (still shown in the per-day breakdown)
@@ -44,7 +44,7 @@ export default function TeacherLearnerStats() {
       .catch(err => setError(err instanceof Error ? err.message : 'Could not load stats'));
   }, [classId, days]);
 
-  if (classes === null) return <Loading />;
+  if (classes === null) return <FunLoading context="learners" />;
   if (classes.length === 0) return <p className="text-sm text-muted-foreground">Create a class to see your learners’ Voice Chain activity.</p>;
 
   return (
@@ -68,7 +68,7 @@ export default function TeacherLearnerStats() {
       </p>
 
       {error ? <p className="text-sm text-destructive">{error}</p>
-        : !learners ? <Loading />
+        : !learners ? <FunLoading context="learners" />
         : learners.length === 0 ? <p className="text-sm text-muted-foreground">No learners in this class yet.</p>
         : (
           <div className="rounded-xl border border-border overflow-hidden">

@@ -1,12 +1,13 @@
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Clock, Flag, Headphones, History, Loader2, Mic, Play, RotateCcw, X } from 'lucide-react';
+import { Clock, Flag, Headphones, History, Mic, Play, RotateCcw, Send, X } from 'lucide-react';
 import { vcFetch } from '@/lib/voiceChain/client';
 import { VOICE_CHAIN } from '@/lib/voiceChain/config';
 import { useVoiceRecorder } from '@/lib/voiceChain/useVoiceRecorder';
 import type { ClaimView, LetterResponse, MyMessage, SubmitResponse } from '@/lib/voiceChain/types';
 import LetterPad from './LetterPad';
+import PaperPlane from './PaperPlane';
 import RecordingControls from './RecordingControls';
 import ScoreCard from './ScoreCard';
 import { clock, ghostBtn, primaryBtn, secondaryBtn, useCountdown, useSecondsUntil } from './shared';
@@ -17,13 +18,15 @@ interface AnswerFlowProps {
   claim: ClaimView;
   /** `again` = pick up another message straight away. */
   onExit: (again?: boolean) => void;
+  /** Called once the answer is accepted. */
+  onSent?: () => void;
 }
 
 /**
  * Answering a picked-up message:
  * listen → pick the letter (listening check) → short think countdown → record (auto-starts) → scored.
  */
-export default function AnswerFlow({ claim: initialClaim, onExit }: AnswerFlowProps) {
+export default function AnswerFlow({ claim: initialClaim, onExit, onSent }: AnswerFlowProps) {
   const settings = VOICE_CHAIN.modes[initialClaim.mode];
   const [claim, setClaim] = useState(initialClaim);
   const letterKnown = claim.letterOk || claim.letterRevealed;
@@ -162,6 +165,7 @@ export default function AnswerFlow({ claim: initialClaim, onExit }: AnswerFlowPr
       });
       if (res.accepted) {
         setResult(res.message);
+        onSent?.();
         setPhase('result');
       } else {
         setRejection(res);
@@ -333,11 +337,7 @@ export default function AnswerFlow({ claim: initialClaim, onExit }: AnswerFlowPr
       )}
 
       {/* Scoring */}
-      {phase === 'scoring' && (
-        <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
-          <Loader2 className="w-4 h-4 animate-spin" />Listening to your answer…
-        </div>
-      )}
+      {phase === 'scoring' && <PaperPlane />}
 
       {/* Rejected */}
       {phase === 'rejected' && (
@@ -365,7 +365,9 @@ export default function AnswerFlow({ claim: initialClaim, onExit }: AnswerFlowPr
       {/* Result */}
       {phase === 'result' && result && (
         <div className="space-y-4">
-          <p className="text-sm font-medium text-emerald-600">Sent! Your answer is now waiting for the next person.</p>
+          <p className="vc-fade-up flex items-center gap-2 text-sm font-medium text-emerald-600">
+            <Send className="w-4 h-4" />Delivered! Your answer is now waiting for the next person.
+          </p>
           <ScoreCard message={result} showNextLetter />
           <div className="flex flex-wrap gap-2">
             <button type="button" className={primaryBtn} onClick={() => onExit(true)}>Pick up another</button>

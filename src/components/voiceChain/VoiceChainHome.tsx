@@ -1,18 +1,31 @@
 "use client";
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { ChevronDown, ChevronUp, MessagesSquare, Pencil } from 'lucide-react';
+import { Flame, HelpCircle, MessagesSquare, Pencil } from 'lucide-react';
 import { vcFetch } from '@/lib/voiceChain/client';
-import { VOICE_CHAIN } from '@/lib/voiceChain/config';
 import type { StatusResponse } from '@/lib/voiceChain/types';
+import { BadgeCelebration, useBadges } from './Badges';
+import FunLoading from './FunLoading';
 import Leaderboard from './Leaderboard';
 import MyDay from './MyDay';
 import NicknameForm from './NicknameForm';
 import PlayPanel from './PlayPanel';
+import QuickGuide, { TOUR_STEPS } from './QuickGuide';
 import TeacherLearnerStats from './TeacherLearnerStats';
-import { Loading } from './shared';
+import Tour from './Tour';
+import './voiceChain.css';
 
 type Tab = 'play' | 'day' | 'leaderboard' | 'learners';
+
+const TOUR_DONE = 'speakfun:voice-chain:tour-done';
+const GUIDE_OPEN = 'speakfun:voice-chain:guide-open';
+
+function readPref(key: string): string | null {
+  try { return localStorage.getItem(key); } catch { return null; }
+}
+function writePref(key: string, value: string) {
+  try { localStorage.setItem(key, value); } catch { /* storage blocked */ }
+}
 
 /** Voice Chain: an anonymous spoken word-chain for teachers and learners. */
 export default function VoiceChainHome({ role }: { role: 'teacher' | 'learner' }) {
@@ -20,6 +33,9 @@ export default function VoiceChainHome({ role }: { role: 'teacher' | 'learner' }
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>('play');
   const [editingName, setEditingName] = useState(false);
+  const [tourStep, setTourStep] = useState<number | null>(null);
+  const [guideOpen, setGuideOpen] = useState(true);
+  const badges = useBadges();
 
   const refresh = useCallback(() => {
     vcFetch<StatusResponse>('status')
@@ -37,6 +53,45 @@ export default function VoiceChainHome({ role }: { role: 'teacher' | 'learner' }
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [tab, refresh]);
 
+  // Fresh streak/badges whenever My day is opened
+  const checkBadges = badges.check;
+  useEffect(() => { if (tab === 'day') void checkBadges(); }, [tab, checkBadges]);
+
+  // The quick guide starts open until the tour has been seen once
+  useEffect(() => {
+    const saved = readPref(GUIDE_OPEN);
+    setGuideOpen(saved !== null ? saved === '1' : readPref(TOUR_DONE) !== '1');
+  }, []);
+
+  // First visit: run the tour once the Play screen (and its mailbox) is on screen
+  const autoTour = !!status?.nickname && tab === 'play' && !status.activeClaim && !editingName;
+  useEffect(() => {
+    if (!autoTour || readPref(TOUR_DONE) === '1') return;
+    const timer = window.setTimeout(() => setTourStep(s => s ?? 0), 600);
+    return () => window.clearTimeout(timer);
+  }, [autoTour]);
+
+  const startTour = (step: number) => {
+    setTab('play');
+    setEditingName(false);
+    setTourStep(step);
+  };
+
+  const closeTour = () => {
+    setTourStep(null);
+    if (readPref(TOUR_DONE) !== '1') {
+      writePref(TOUR_DONE, '1');
+      if (readPref(GUIDE_OPEN) === null) setGuideOpen(false);
+    }
+  };
+
+  const toggleGuide = () => {
+    setGuideOpen(o => {
+      writePref(GUIDE_OPEN, o ? '0' : '1');
+      return !o;
+    });
+  };
+
   const tabs: { id: Tab; label: string }[] = [
     { id: 'play', label: 'Play' },
     { id: 'day', label: 'My day' },
@@ -45,35 +100,49 @@ export default function VoiceChainHome({ role }: { role: 'teacher' | 'learner' }
   ];
 
   const needsNickname = status && !status.nickname && tab !== 'learners';
+  const streak = badges.stats?.currentStreak ?? 0;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <div className="flex items-center gap-2">
           <MessagesSquare className="w-5 h-5 text-primary" />
           <h1 className="text-lg font-semibold text-foreground">Voice Chain</h1>
         </div>
-        <div className="flex rounded-lg border border-border overflow-hidden">
+        <div data-tour="tabs" className="flex max-w-full rounded-lg border border-border overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {tabs.map(t => (
             <button key={t.id} type="button" onClick={() => setTab(t.id)}
-              className={`px-3 py-1.5 text-sm ${tab === t.id ? 'bg-primary text-primary-foreground font-medium' : 'text-muted-foreground hover:bg-muted'}`}>
+              className={`shrink-0 whitespace-nowrap px-3 py-1.5 text-sm ${tab === t.id ? 'bg-primary text-primary-foreground font-medium' : 'text-muted-foreground hover:bg-muted'}`}>
               {t.label}
             </button>
           ))}
         </div>
-        {status?.nickname && !editingName && (
-          <button type="button" onClick={() => setEditingName(true)}
-            className="ml-auto flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
-            Playing as <span className="font-medium text-foreground">{status.nickname}</span><Pencil className="w-3.5 h-3.5" />
+        <div className="ml-auto flex items-center gap-2">
+          {streak > 0 && (
+            <button type="button" onClick={() => setTab('day')} title={`${streak}-day streak`}
+              className="flex items-center gap-1 rounded-full bg-gradient-to-r from-amber-400 to-red-500 px-2.5 py-1 text-xs font-semibold text-white">
+              <Flame className="w-3.5 h-3.5" />{streak}
+            </button>
+          )}
+          <button type="button" onClick={() => startTour(0)} aria-label="Show the Voice Chain tour"
+            className="p-1.5 rounded-full text-muted-foreground hover:bg-muted hover:text-foreground">
+            <HelpCircle className="w-5 h-5" />
           </button>
-        )}
+          {status?.nickname && !editingName && (
+            <button type="button" data-tour="nickname" onClick={() => setEditingName(true)}
+              className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
+              <span className="hidden sm:inline">Playing as</span>
+              <span className="font-medium text-foreground">{status.nickname}</span><Pencil className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
       </div>
 
-      <Rules />
+      <QuickGuide open={guideOpen} onToggle={toggleGuide} onShowStep={startTour} />
 
       <div className="bg-card rounded-xl border border-border px-5 py-4">
         {error ? <p className="text-sm text-destructive">{error}</p>
-          : !status ? <Loading />
+          : !status ? <FunLoading context="home" />
           : editingName || needsNickname ? (
             <NicknameForm
               current={status.nickname}
@@ -81,44 +150,15 @@ export default function VoiceChainHome({ role }: { role: 'teacher' | 'learner' }
               onCancel={status.nickname ? () => setEditingName(false) : undefined}
             />
           )
-          : tab === 'play' ? <PlayPanel status={status} onChange={refresh} />
-          : tab === 'day' ? <MyDay />
+          : tab === 'play' ? <PlayPanel status={status} onChange={refresh} onSent={() => void badges.check()} />
+          : tab === 'day' ? <MyDay badgeStats={badges.stats} />
           : tab === 'leaderboard' ? <Leaderboard />
           : <TeacherLearnerStats />}
       </div>
-    </div>
-  );
-}
 
-const RULES_PREF = 'speakfun:voice-chain:rules-hidden';
-
-function Rules() {
-  const [open, setOpen] = useState(true);
-  useEffect(() => {
-    try { if (localStorage.getItem(RULES_PREF) === '1') setOpen(false); } catch { /* storage blocked */ }
-  }, []);
-  const toggle = () => {
-    setOpen(o => {
-      try { localStorage.setItem(RULES_PREF, o ? '1' : '0'); } catch { /* storage blocked */ }
-      return !o;
-    });
-  };
-
-  return (
-    <div className="rounded-xl border border-border bg-accent/40 px-5 py-3">
-      <button type="button" onClick={toggle} className="w-full flex items-center justify-between text-sm font-medium text-foreground">
-        How it works
-        {open ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-      </button>
-      {open && (
-        <ul className="mt-2 space-y-1 text-xs text-muted-foreground list-disc pl-4">
-          <li>Pick up a waiting voice message from anyone on SpeakFun. Each message goes to one person only — first come, first served.</li>
-          <li>Listen, then tap the <strong>last letter of the last word</strong> you heard. Your answer must start with that letter and continue the conversation.</li>
-          <li>Answer straight away, like a real conversation: up to {VOICE_CHAIN.maxSeconds} seconds. Your answer becomes the next message in the chain.</li>
-          <li>Every message is scored on coherence, grammar, word choice, fluency and pronunciation (100 points).</li>
-          <li>You can start {VOICE_CHAIN.startersPerDay} new chains a day. Recordings are deleted after 24 hours; only your time and scores are kept.</li>
-          <li>Other players only see your nickname.</li>
-        </ul>
+      {tourStep !== null && <Tour steps={TOUR_STEPS} startAt={tourStep} onClose={closeTour} />}
+      {badges.celebrating && tourStep === null && (
+        <BadgeCelebration badge={badges.celebrating} remaining={badges.remaining} onClose={badges.dismiss} />
       )}
     </div>
   );

@@ -5,7 +5,9 @@ import { ChevronDown, ChevronUp, Clock, MessageSquare, Star } from 'lucide-react
 import { formatSeconds, vcFetch } from '@/lib/voiceChain/client';
 import type { DayStats, MyMessage, ReplyPreview } from '@/lib/voiceChain/types';
 import ScoreCard from './ScoreCard';
-import { Loading } from './shared';
+import type { BadgeStats } from '@/lib/voiceChain/badges';
+import { BadgeGrid, StreakCard } from './Badges';
+import FunLoading from './FunLoading';
 
 const STATUS_LABEL: Record<MyMessage['status'], string> = {
   open: 'Waiting for an answer',
@@ -28,8 +30,8 @@ function shortDay(day: string) {
   return new Date(`${day}T00:00:00`).toLocaleDateString([], { weekday: 'short' });
 }
 
-/** Today's tiles, the last 7 days, and the user's own recordings from the last 24h (read-only). */
-export default function MyDay() {
+/** Streak, today's tiles, badges, the last 7 days, and the user's own recordings from the last 24h (read-only). */
+export default function MyDay({ badgeStats }: { badgeStats: BadgeStats | null }) {
   const [days, setDays] = useState<DayStats[] | null>(null);
   const [messages, setMessages] = useState<MyMessage[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -44,13 +46,15 @@ export default function MyDay() {
   }, []);
 
   if (error) return <p className="text-sm text-destructive">{error}</p>;
-  if (!days || !messages) return <Loading />;
+  if (!days || !messages) return <FunLoading context="stats" />;
 
   const today = days[days.length - 1];
   const maxScore = Math.max(1, ...days.map(d => d.totalScore));
 
   return (
     <div className="space-y-6">
+      {badgeStats && <StreakCard stats={badgeStats} />}
+
       <div className="grid grid-cols-3 gap-2">
         <Tile icon={<MessageSquare className="w-4 h-4" />} label="Messages today" value={String(today.messagesSent)} />
         <Tile icon={<Clock className="w-4 h-4" />} label="Speaking time" value={formatSeconds(today.speakingSeconds)} />
@@ -73,6 +77,8 @@ export default function MyDay() {
           ))}
         </div>
       </div>
+
+      {badgeStats && <BadgeGrid stats={badgeStats} />}
 
       <div>
         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Your recordings (kept for 24 hours)</p>
