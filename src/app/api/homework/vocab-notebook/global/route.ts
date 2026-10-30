@@ -5,6 +5,7 @@ import {
   fetchClassHomeworkSettings,
 } from '@/lib/supabase/queries/homework';
 import { NotebookEntry } from '../route';
+import { isMastered } from '@/lib/homework/isMastered';
 
 export interface CourseNotebook {
   courseId: string;
@@ -176,6 +177,7 @@ export async function GET() {
 
       for (const item of ex.vocabItems) {
         const mastery = getMastery(ex.lessonId, item.id);
+        const threshold = classSettingsMap.get(courseClassMap.get(courseId) ?? '') ?? 7;
         const entry: NotebookEntry = {
           vocabItemId: item.id,
           word: item.word,
@@ -185,7 +187,7 @@ export async function GET() {
           lessonId: ex.lessonId,
           correctCount: mastery?.correct_count ?? 0,
           incorrectCount: mastery?.incorrect_count ?? 0,
-          isCommitted: mastery?.is_committed ?? false,
+          isCommitted: isMastered(mastery?.is_committed, mastery?.correct_count ?? 0, threshold),
           lastSeenAt: mastery?.last_seen_at ?? undefined,
           committedAt: mastery?.committed_at ?? undefined,
         };

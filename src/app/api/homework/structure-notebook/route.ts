@@ -6,6 +6,7 @@ import {
   fetchClassHomeworkSettings,
 } from '@/lib/supabase/queries/homework';
 import { itemKey } from '@/lib/homework/itemKeys';
+import { isMastered } from '@/lib/homework/isMastered';
 
 export interface StructureNotebookEntry {
   structureItemId: string;
@@ -89,7 +90,7 @@ export async function GET(request: NextRequest) {
           lessonId: ex.lessonId,
           correctCount: mastery?.correctCount ?? 0,
           incorrectCount: mastery?.incorrectCount ?? 0,
-          isCommitted: mastery?.isCommitted ?? false,
+          isCommitted: isMastered(mastery?.isCommitted, mastery?.correctCount ?? 0, commitThreshold),
           lastSeenAt: mastery?.lastSeenAt,
           lastAttemptCorrect: mastery?.lastAttemptCorrect,
           committedAt: mastery?.committedAt,
