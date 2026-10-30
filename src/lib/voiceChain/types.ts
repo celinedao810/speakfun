@@ -35,6 +35,8 @@ export interface ClaimView {
   playsLeft: number;
   /** The user picked this message up earlier and is coming back to it. */
   resumed: boolean;
+  /** False while it's still a closed envelope (held, not yet opened). */
+  opened: boolean;
   /** The letters offered in the listening check (the right one plus easy-to-confuse ones). */
   letterChoices: string[];
 }

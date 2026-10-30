@@ -31,7 +31,7 @@ export const TOUR_STEPS: TourStep[] = [
     target: 'mailbox',
     icon: Mail,
     title: 'Check your mailbox',
-    body: <>Tap the mailbox — or shake your phone — to get the next waiting message. First come, first served: each message goes to one person only.</>,
+    body: <>Tap the mailbox — or shake your phone — to get the next waiting message. First come, first served: each message goes to one person only. Not ready? An unopened envelope goes back to the mailbox and can come to you again.</>,
   },
   {
     target: 'modes',

@@ -27,7 +27,9 @@ export const VOICE_CHAIN = {
 
   startersPerDay: 2,
 
-  /** How long a picked-up message stays reserved for the recipient. */
+  /** How long an envelope found in the mailbox is held, unopened, before it goes back (no penalty). */
+  envelopeHoldSeconds: 60,
+  /** Time to start answering, counted from opening the envelope. */
   claimSeconds: 2 * 60,
   /** Extra time after the claim ends during which a submitted take is still accepted (AI scoring time). */
   claimGraceSeconds: 2 * 60,

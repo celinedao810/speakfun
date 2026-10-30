@@ -44,6 +44,8 @@ export interface MessageRow {
   claim_takes: number;
   /** Added in migration 029. */
   claim_plays?: number;
+  /** Added in migration 032; null while the envelope is unopened. */
+  claim_opened_at?: string | null;
   created_at: string;
   expires_at: string;
   purged_at: string | null;
@@ -178,7 +180,8 @@ export function playsLeft(row: MessageRow): number {
  * A brand-new claim was made moments ago and nothing has happened on it yet.
  */
 export function isResumedClaim(row: MessageRow): boolean {
-  const ageMs = Date.now() - new Date(row.claimed_at ?? Date.now()).getTime();
+  if (!row.claim_opened_at) return false; // still a closed envelope
+  const ageMs = Date.now() - new Date(row.claim_opened_at).getTime();
   return ageMs > 5000 || (row.claim_plays ?? 0) > 0 || row.claim_letter_attempts > 0
     || row.claim_letter_ok || row.claim_letter_revealed || row.claim_takes > 0;
 }
@@ -200,6 +203,7 @@ export function claimView(row: MessageRow, senderNickname: string, audioUrl: str
     takesLeft: Math.max(0, VOICE_CHAIN.maxTakes - row.claim_takes),
     playsLeft: playsLeft(row),
     resumed: isResumedClaim(row),
+    opened: !!row.claim_opened_at,
     letterChoices: letterChoices(row.last_letter, row.id),
   };
 }
@@ -254,13 +258,19 @@ export async function releaseStale(svc: SupabaseClient) {
 
 /** Gives a claim back to the pool and makes sure this user is never offered it again. */
 export async function releaseClaim(svc: SupabaseClient, messageId: string, userId: string, status: 'open' | 'removed' = 'open') {
-  await svc.from('voice_chain_skips').upsert({ message_id: messageId, user_id: userId }, { onConflict: 'message_id,user_id' });
+  // Putting back an envelope you never opened isn't turning it down: no skip, it can come back to you
+  const { data: current } = await svc
+    .from('voice_chain_messages').select('claim_opened_at')
+    .eq('id', messageId).eq('claimed_by', userId).eq('status', 'claimed').maybeSingle();
+  if (current && (current.claim_opened_at || status === 'removed')) {
+    await svc.from('voice_chain_skips').upsert({ message_id: messageId, user_id: userId }, { onConflict: 'message_id,user_id' });
+  }
   const { data, error } = await svc
     .from('voice_chain_messages')
     .update({
       status,
       reported_by: status === 'removed' ? userId : null,
-      claimed_by: null, claim_mode: null, claimed_at: null, claim_expires_at: null,
+      claimed_by: null, claim_mode: null, claimed_at: null, claim_expires_at: null, claim_opened_at: null,
       claim_letter_attempts: 0, claim_letter_ok: false, claim_letter_revealed: false, claim_takes: 0, claim_plays: 0,
     })
     .eq('id', messageId)

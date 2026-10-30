@@ -23,6 +23,7 @@ export async function POST(request: NextRequest) {
     const { data, error } = await svc.rpc('voice_chain_claim_next', {
       p_user: auth.user.id,
       p_mode: body.mode,
+      p_hold_seconds: VOICE_CHAIN.envelopeHoldSeconds,
       p_claim_seconds: VOICE_CHAIN.claimSeconds,
       p_grace_seconds: VOICE_CHAIN.claimGraceSeconds,
     });

@@ -9,11 +9,14 @@ import type { ClaimView, StatusResponse } from '@/lib/voiceChain/types';
 import AnswerFlow from './AnswerFlow';
 import Mailbox, { MailboxState } from './Mailbox';
 import StartChainFlow from './StartChainFlow';
-import { secondaryBtn } from './shared';
+import { secondaryBtn, useSecondsUntil } from './shared';
 
 const MODE_PREF = 'speakfun:voice-chain:mode';
 /** Keep the mailbox shaking at least this long, so checking feels like something happened. */
 const MIN_CHECK_MS = 1100;
+
+const NO_TIME = new Date(0).toISOString();
+const BACK_IN_MAILBOX = 'That envelope went back to the mailbox — tap to check again.';
 
 const EMPTY_LINES = [
   'No mail yet — maybe start a chain and make the first move?',
@@ -31,11 +34,16 @@ interface PlayPanelProps {
 
 export default function PlayPanel({ status, onChange, onSent }: PlayPanelProps) {
   const [mode, setMode] = useState<VoiceChainMode>('relaxed');
-  const [claim, setClaim] = useState<ClaimView | null>(status.activeClaim);
+  // An opened message you're coming back to resumes the answer screen; an unopened
+  // one is still an envelope in the mailbox.
+  const held = status.activeClaim;
+  const [claim, setClaim] = useState<ClaimView | null>(held?.opened ? held : null);
   const [starting, setStarting] = useState(false);
-  const [mailbox, setMailbox] = useState<MailboxState>('idle');
-  const [found, setFound] = useState<ClaimView | null>(null);
+  const [mailbox, setMailbox] = useState<MailboxState>(held && !held.opened ? 'found' : 'idle');
+  const [found, setFound] = useState<ClaimView | null>(held && !held.opened ? held : null);
+  const [opening, setOpening] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
   const emptyLineRef = useRef(EMPTY_LINES[0]);
 
   useEffect(() => {
@@ -50,12 +58,32 @@ export default function PlayPanel({ status, onChange, onSent }: PlayPanelProps) 
     try { localStorage.setItem(MODE_PREF, m); } catch { /* storage blocked */ }
   };
 
-  // Resume a claim held from an earlier visit
+  // Resume a message held from an earlier visit: opened → answer screen, unopened → envelope
   const activeClaimId = status.activeClaim?.messageId;
   useEffect(() => {
-    if (status.activeClaim) setClaim(c => c ?? status.activeClaim);
+    const active = status.activeClaim;
+    if (!active) return;
+    if (active.opened) {
+      setClaim(c => c ?? active);
+    } else if (!claim) {
+      setFound(active);
+      setMailbox('found');
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeClaimId]);
+
+  // An unopened envelope goes back to the mailbox when its hold runs out (no penalty)
+  const holdLeft = useSecondsUntil(found?.claimExpiresAt ?? NO_TIME);
+  useEffect(() => {
+    if (mailbox !== 'found' || !found || opening) return;
+    // Timed to the real deadline (holdLeft rounds down, so it reads 0 a moment early)
+    const timer = window.setTimeout(() => {
+      setFound(null);
+      setMailbox('idle');
+      setInfo(BACK_IN_MAILBOX);
+    }, Math.max(0, new Date(found.claimExpiresAt).getTime() - Date.now()));
+    return () => window.clearTimeout(timer);
+  }, [mailbox, found, opening]);
 
   // Back to a resting mailbox a few seconds after finding it empty
   useEffect(() => {
@@ -68,6 +96,7 @@ export default function PlayPanel({ status, onChange, onSent }: PlayPanelProps) 
     if (mailbox === 'checking') return;
     setMailbox('checking');
     setNote(null);
+    setInfo(null);
     try {
       const [res] = await Promise.all([
         vcFetch<{ claim: ClaimView | null }>('claim', { mode }),
@@ -76,8 +105,8 @@ export default function PlayPanel({ status, onChange, onSent }: PlayPanelProps) 
       if (!res.claim) {
         emptyLineRef.current = EMPTY_LINES[Math.floor(Math.random() * EMPTY_LINES.length)];
         setMailbox('empty');
-      } else if (res.claim.resumed) {
-        // Already holding this one from before: go straight back to it
+      } else if (res.claim.opened) {
+        // Already opened this one before: go straight back to it
         setMailbox('idle');
         setClaim(res.claim);
       } else {
@@ -93,11 +122,33 @@ export default function PlayPanel({ status, onChange, onSent }: PlayPanelProps) 
 
   const shake = useShake(() => { void check(); }, !claim && !starting && mailbox === 'idle');
 
-  const openEnvelope = () => {
+  // Opening starts the time to answer
+  const openEnvelope = async () => {
+    if (!found || opening) return;
+    setOpening(true);
+    try {
+      const res = await vcFetch<{ claim: ClaimView }>('open', { messageId: found.messageId });
+      setClaim(res.claim);
+      setFound(null);
+      setMailbox('idle');
+    } catch (err) {
+      setFound(null);
+      setMailbox('idle');
+      setInfo(err instanceof Error ? err.message : BACK_IN_MAILBOX);
+    } finally {
+      setOpening(false);
+    }
+  };
+
+  // Not now: the envelope goes back, and can come to you again later
+  const putBack = async () => {
     if (!found) return;
-    setClaim(found);
+    const id = found.messageId;
     setFound(null);
     setMailbox('idle');
+    setInfo('Put back — it can come to you again later.');
+    await vcFetch('release', { messageId: id }).catch(() => undefined);
+    onChange();
   };
 
   if (claim) {
@@ -153,15 +204,20 @@ export default function PlayPanel({ status, onChange, onSent }: PlayPanelProps) 
         <Mailbox
           state={mailbox}
           onCheck={() => void check()}
-          onOpen={openEnvelope}
+          onOpen={() => void openEnvelope()}
           senderNickname={found?.senderNickname}
+          holdLeft={found ? holdLeft : undefined}
+          onPutBack={() => void putBack()}
+          opening={opening}
           emptyLine={emptyLineRef.current}
           shake={shake.permission}
           onEnableShake={() => void shake.enable()}
         />
         {note && <p className="text-sm text-destructive text-center">{note}</p>}
+        {info && mailbox === 'idle' && <p className="text-sm text-muted-foreground text-center">{info}</p>}
         <p className="text-xs text-muted-foreground text-center mt-1">
-          When you get a message, it’s yours for {Math.round(VOICE_CHAIN.claimSeconds / 60)} minutes — open it and answer straight away.
+          Open an envelope within a minute, then you have {Math.round(VOICE_CHAIN.claimSeconds / 60)} minutes to start your answer.
+          Didn’t open it? It goes back to the mailbox and can come to you again.
         </p>
       </div>
 

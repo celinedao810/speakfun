@@ -3,6 +3,7 @@
 import React from 'react';
 import { Heart, Smartphone } from 'lucide-react';
 import FunLoading from './FunLoading';
+import { clock } from './shared';
 
 export type MailboxState = 'idle' | 'checking' | 'found' | 'empty';
 
@@ -17,10 +18,18 @@ interface MailboxProps {
   /** Shake support: 'granted' shows the hint, 'needs-permission' shows the enable chip. */
   shake: 'unsupported' | 'needs-permission' | 'granted' | 'denied';
   onEnableShake: () => void;
+  /** Seconds left to open the envelope before it goes back to the mailbox. */
+  holdLeft?: number;
+  /** Puts the unopened envelope back, with no penalty. */
+  onPutBack?: () => void;
+  /** True while the envelope is being opened. */
+  opening?: boolean;
 }
 
 /** A floating mailbox: tap (or shake) to check for mail, then tap the envelope to open it. */
-export default function Mailbox({ state, onCheck, onOpen, senderNickname, emptyLine, shake, onEnableShake }: MailboxProps) {
+export default function Mailbox({
+  state, onCheck, onOpen, senderNickname, emptyLine, shake, onEnableShake, holdLeft, onPutBack, opening,
+}: MailboxProps) {
   const open = state === 'found' || state === 'empty';
 
   return (
@@ -103,7 +112,14 @@ export default function Mailbox({ state, onCheck, onOpen, senderNickname, emptyL
         {state === 'found' && (
           <>
             <p className="vc-fade-up text-sm font-semibold text-foreground">You’ve got mail from {senderNickname ?? 'someone'}!</p>
-            <p className="text-xs text-muted-foreground">Tap the envelope to open it</p>
+            <p className="text-xs text-muted-foreground">
+              {opening ? 'Opening…' : <>Tap the envelope to open it{holdLeft !== undefined && <> · within <span className="font-medium tabular-nums">{clock(holdLeft)}</span></>}</>}
+            </p>
+            {onPutBack && !opening && (
+              <button type="button" onClick={onPutBack} className="mt-1 text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground">
+                Not now — put it back
+              </button>
+            )}
           </>
         )}
         {state === 'empty' && <p className="vc-fade-up text-sm text-muted-foreground max-w-xs">{emptyLine}</p>}
