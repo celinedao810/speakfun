@@ -40,13 +40,13 @@ export default function Leaderboard() {
         <span className="text-xs text-muted-foreground">since Monday {weekLabel}</span>
       </div>
 
-      {/* Longest chain this week: just the count, never the content */}
+      {/* Longest chain still going this week (full length): just the count, never the content */}
       <div className="flex items-center gap-3 px-3 sm:px-5 py-3 border-b border-border bg-accent/40">
         <span className="w-9 h-9 shrink-0 rounded-full bg-primary/15 text-primary flex items-center justify-center">
           <Link2 className="w-4 h-4" />
         </span>
         <div className="min-w-0">
-          <p className="text-xs text-muted-foreground">Longest chain this week</p>
+          <p className="text-xs text-muted-foreground">Longest chain</p>
           {data.longestChain > 1 ? (
             <p className="text-sm text-foreground">
               <span className="text-lg font-bold">{data.longestChain}</span> messages passed on
