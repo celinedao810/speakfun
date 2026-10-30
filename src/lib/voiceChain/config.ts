@@ -28,7 +28,7 @@ export const VOICE_CHAIN = {
   startersPerDay: 2,
 
   /** How long a picked-up message stays reserved for the recipient. */
-  claimSeconds: 5 * 60,
+  claimSeconds: 2 * 60,
   /** Extra time after the claim ends during which a submitted take is still accepted (AI scoring time). */
   claimGraceSeconds: 2 * 60,
   /** Recording attempts per picked-up message (rejected takes count). */

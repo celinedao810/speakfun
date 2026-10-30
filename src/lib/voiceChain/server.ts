@@ -41,6 +41,8 @@ export interface MessageRow {
   claim_letter_ok: boolean;
   claim_letter_revealed: boolean;
   claim_takes: number;
+  /** Added in migration 029. */
+  claim_plays?: number;
   created_at: string;
   expires_at: string;
   purged_at: string | null;
@@ -157,6 +159,22 @@ export function computeTotal(scores: ScoreBreakdown, mode: VoiceChainMode | null
 // View mapping
 // ---------------------------------------------------------------------------
 
+/** Plays the recipient has left for their claimed message. */
+export function playsLeft(row: MessageRow): number {
+  const mode = row.claim_mode ?? 'relaxed';
+  return Math.max(0, VOICE_CHAIN.modes[mode].plays - (row.claim_plays ?? 0));
+}
+
+/**
+ * True when the user already picked this message up earlier (they left and came back).
+ * A brand-new claim was made moments ago and nothing has happened on it yet.
+ */
+export function isResumedClaim(row: MessageRow): boolean {
+  const ageMs = Date.now() - new Date(row.claimed_at ?? Date.now()).getTime();
+  return ageMs > 5000 || (row.claim_plays ?? 0) > 0 || row.claim_letter_attempts > 0
+    || row.claim_letter_ok || row.claim_letter_revealed || row.claim_takes > 0;
+}
+
 export function claimView(row: MessageRow, senderNickname: string, audioUrl: string | null): ClaimView {
   const letterKnown = row.claim_letter_ok || row.claim_letter_revealed;
   return {
@@ -172,6 +190,8 @@ export function claimView(row: MessageRow, senderNickname: string, audioUrl: str
     letter: letterKnown ? row.last_letter : null,
     letterAttemptsLeft: Math.max(0, VOICE_CHAIN.letterMissesBeforeReveal - row.claim_letter_attempts),
     takesLeft: Math.max(0, VOICE_CHAIN.maxTakes - row.claim_takes),
+    playsLeft: playsLeft(row),
+    resumed: isResumedClaim(row),
   };
 }
 
@@ -233,7 +253,7 @@ export async function releaseClaim(svc: SupabaseClient, messageId: string, userI
       status,
       reported_by: status === 'removed' ? userId : null,
       claimed_by: null, claim_mode: null, claimed_at: null, claim_expires_at: null,
-      claim_letter_attempts: 0, claim_letter_ok: false, claim_letter_revealed: false, claim_takes: 0,
+      claim_letter_attempts: 0, claim_letter_ok: false, claim_letter_revealed: false, claim_takes: 0, claim_plays: 0,
     })
     .eq('id', messageId)
     .eq('claimed_by', userId)

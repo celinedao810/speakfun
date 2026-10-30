@@ -80,9 +80,7 @@ export default function PlayPanel({ status, onChange }: PlayPanelProps) {
       <div className="space-y-3">
         <div className="flex items-center gap-2">
           <Inbox className="w-4 h-4 text-primary" />
-          <p className="text-sm font-semibold text-foreground">
-            {status.openCount === 0 ? 'No messages waiting' : `${status.openCount} ${status.openCount === 1 ? 'message' : 'messages'} waiting for an answer`}
-          </p>
+          <p className="text-sm font-semibold text-foreground">Answer someone’s message</p>
         </div>
         <div className="grid sm:grid-cols-2 gap-2">
           {(Object.keys(VOICE_CHAIN.modes) as VoiceChainMode[]).map(m => {
@@ -102,9 +100,10 @@ export default function PlayPanel({ status, onChange }: PlayPanelProps) {
           })}
         </div>
         <p className="text-xs text-muted-foreground">
-          Once you pick up a message it’s yours for {Math.round(VOICE_CHAIN.claimSeconds / 60)} minutes — answer it like a real conversation.
+          Pick a mode, then tap below to get the next waiting message, if there is one. Once you pick it up,
+          you have {Math.round(VOICE_CHAIN.claimSeconds / 60)} minutes to start your answer — like a real conversation.
         </p>
-        <button type="button" className={primaryBtn} onClick={() => void pickUp()} disabled={busy || status.openCount === 0}>
+        <button type="button" className={primaryBtn} onClick={() => void pickUp()} disabled={busy}>
           {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <PhoneIncoming className="w-4 h-4" />}Pick up a message
         </button>
         {note && <p className="text-sm text-muted-foreground">{note}</p>}

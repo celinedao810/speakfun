@@ -97,14 +97,12 @@ function Tile({ icon, label, value }: { icon: React.ReactNode; label: string; va
   );
 }
 
-function Preview({ label, preview }: { label: string; preview: ReplyPreview }) {
+/** Nickname only — other people's recordings aren't shared here. */
+function Related({ label, preview }: { label: string; preview: ReplyPreview }) {
   return (
-    <div className="space-y-1">
-      <p className="text-xs text-muted-foreground">{label} <span className="font-medium text-foreground">{preview.nickname}</span></p>
-      {preview.audioUrl
-        ? <audio src={preview.audioUrl} controls preload="none" className="w-full h-9" />
-        : <p className="text-xs text-muted-foreground italic">Recording no longer available</p>}
-    </div>
+    <p className="text-xs text-muted-foreground">
+      {label} <span className="font-medium text-foreground">{preview.nickname}</span>
+    </p>
   );
 }
 
@@ -125,8 +123,8 @@ function MessageItem({ message: m }: { message: MyMessage }) {
         <span>· next letter {m.lastLetter.toUpperCase()}</span>
         <span>· deleted in {hoursLeft(m.expiresAt)}</span>
       </div>
-      {m.repliedTo && <Preview label="You answered" preview={m.repliedTo} />}
-      {m.reply && <Preview label="Answered by" preview={m.reply} />}
+      {m.repliedTo && <Related label="You answered" preview={m.repliedTo} />}
+      {m.reply && <Related label="Answered by" preview={m.reply} />}
       <button type="button" onClick={() => setOpen(o => !o)} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
         {open ? <><ChevronUp className="w-3.5 h-3.5" />Hide score details</> : <><ChevronDown className="w-3.5 h-3.5" />Score details</>}
       </button>

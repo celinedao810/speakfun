@@ -31,11 +31,15 @@ export interface ClaimView {
   letter: string | null;
   letterAttemptsLeft: number;
   takesLeft: number;
+  /** Plays of the message left (counted on the server, so leaving and coming back doesn't reset it). */
+  playsLeft: number;
+  /** The user picked this message up earlier and is coming back to it. */
+  resumed: boolean;
 }
 
+/** Who sent the related message. Other users' recordings are never shared on "My day". */
 export interface ReplyPreview {
   nickname: string;
-  audioUrl: string | null;
   durationSeconds: number;
 }
 
@@ -73,7 +77,6 @@ export interface DayStats {
 
 export interface StatusResponse {
   nickname: string | null;
-  openCount: number;
   startersLeft: number;
   activeClaim: ClaimView | null;
   today: DayStats;

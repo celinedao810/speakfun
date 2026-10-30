@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Clock, Flag, Headphones, Loader2, Mic, Play, RotateCcw, X } from 'lucide-react';
+import { Clock, Flag, Headphones, History, Loader2, Mic, Play, RotateCcw, X } from 'lucide-react';
 import { vcFetch } from '@/lib/voiceChain/client';
 import { VOICE_CHAIN } from '@/lib/voiceChain/config';
 import { useVoiceRecorder } from '@/lib/voiceChain/useVoiceRecorder';
@@ -28,8 +28,12 @@ export default function AnswerFlow({ claim: initialClaim, onExit }: AnswerFlowPr
   const [claim, setClaim] = useState(initialClaim);
   const letterKnown = claim.letterOk || claim.letterRevealed;
 
-  const [phase, setPhase] = useState<Phase>('listen');
-  const [playsLeft, setPlaysLeft] = useState<number>(settings.plays);
+  // Coming back without plays left and without the letter: go straight to picking it from memory.
+  const [phase, setPhase] = useState<Phase>(
+    !letterKnown && initialClaim.playsLeft <= 0 ? 'letter' : 'listen',
+  );
+  // Counted on the server, so it survives leaving and coming back.
+  const [playsLeft, setPlaysLeft] = useState<number>(initialClaim.playsLeft);
   const [playing, setPlaying] = useState(false);
   const [wrongLetters, setWrongLetters] = useState<string[]>([]);
   const [letterNote, setLetterNote] = useState<string | null>(null);
@@ -40,7 +44,8 @@ export default function AnswerFlow({ claim: initialClaim, onExit }: AnswerFlowPr
   const [thinkRound, setThinkRound] = useState(0);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const heardOnceRef = useRef(false);
+  // Already listened before leaving? Then finishing a replay doesn't move the flow on by itself.
+  const heardOnceRef = useRef(initialClaim.playsLeft < settings.plays);
   const recorder = useVoiceRecorder(VOICE_CHAIN.maxSeconds);
   const claimLeft = useSecondsUntil(claim.claimExpiresAt);
 
@@ -58,11 +63,26 @@ export default function AnswerFlow({ claim: initialClaim, onExit }: AnswerFlowPr
   const play = () => {
     const audio = audioRef.current;
     if (!audio || playing || playsLeft <= 0) return;
+    // Start playback inside the tap itself (iOS blocks audio started after an await);
+    // the server counts the play in parallel and stops it if none were left.
     audio.currentTime = 0;
-    audio.play().then(() => {
-      setPlaying(true);
-      setPlaysLeft(p => p - 1);
-    }).catch(() => setError('Could not play the message. Check your sound and try again.'));
+    audio.play().then(() => setPlaying(true))
+      .catch(() => setError('Could not play the message. Check your sound and try again.'));
+    setPlaysLeft(p => p - 1);
+    vcFetch<{ allowed: boolean; playsLeft: number }>('play', { messageId: claim.messageId })
+      .then(res => {
+        setPlaysLeft(res.playsLeft);
+        if (!res.allowed) {
+          audio.pause();
+          setPlaying(false);
+        }
+      })
+      .catch(err => {
+        audio.pause();
+        setPlaying(false);
+        const msg = err instanceof Error ? err.message : 'Something went wrong';
+        if (/no longer yours/i.test(msg)) { setError(msg); setPhase('expired'); }
+      });
   };
 
   const onEnded = () => {
@@ -100,7 +120,8 @@ export default function AnswerFlow({ claim: initialClaim, onExit }: AnswerFlowPr
         setPhase('think');
       } else if (letter) {
         setWrongLetters(w => [...w, letter]);
-        setLetterNote(`Not “${letter.toUpperCase()}”. Listen to the last word again — ${res.attemptsLeft} ${res.attemptsLeft === 1 ? 'try' : 'tries'} left.`);
+        const tries = `${res.attemptsLeft} ${res.attemptsLeft === 1 ? 'try' : 'tries'} left`;
+        setLetterNote(`Not “${letter.toUpperCase()}”. ${playsLeft > 0 ? `Listen to the last word again — ${tries}.` : `${tries[0].toUpperCase()}${tries.slice(1)}.`}`);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong');
@@ -209,22 +230,47 @@ export default function AnswerFlow({ claim: initialClaim, onExit }: AnswerFlowPr
         )}
       </div>
 
+      {/* Coming back to a message picked up earlier */}
+      {claim.resumed && (phase === 'listen' || phase === 'letter' || phase === 'think') && (
+        <div className="flex gap-2 rounded-lg bg-accent px-3 py-2.5 text-xs text-accent-foreground">
+          <History className="w-4 h-4 shrink-0" />
+          <p>
+            <strong>Welcome back.</strong> This is the message from {claim.senderNickname} you picked up earlier
+            in {settings.label} mode — not a new one. The clock kept running while you were away.{' '}
+            {playsLeft > 0
+              ? `You can still play it ${playsLeft} more ${playsLeft === 1 ? 'time' : 'times'}.`
+              : 'You’ve used all your plays, so you can’t listen to it again.'}
+            {letter && ` Your letter is “${letter}”.`}
+          </p>
+        </div>
+      )}
+
       {!claim.audioUrl && phase !== 'expired' && (
         <p className="text-sm text-destructive">This recording is no longer available. Give it up and pick another one.</p>
       )}
 
       {/* Listen */}
-      {(phase === 'listen' || phase === 'letter') && claim.audioUrl && (
+      {(phase === 'listen' || (phase === 'letter' && playsLeft > 0)) && claim.audioUrl && (
         <div className="flex flex-wrap items-center gap-3">
-          <button type="button" onClick={play} disabled={playing || playsLeft <= 0} className={phase === 'listen' ? primaryBtn : secondaryBtn}>
-            {playing ? <><Headphones className="w-4 h-4 animate-pulse" />Playing…</>
-              : phase === 'listen' ? <><Play className="w-4 h-4" />Play message</>
-              : <><RotateCcw className="w-4 h-4" />Replay</>}
-          </button>
+          {playsLeft > 0 && (
+            <button type="button" onClick={play} disabled={playing}
+              className={phase === 'listen' && !heardOnceRef.current ? primaryBtn : secondaryBtn}>
+              {playing ? <><Headphones className="w-4 h-4 animate-pulse" />Playing…</>
+                : heardOnceRef.current ? <><RotateCcw className="w-4 h-4" />Replay</>
+                : <><Play className="w-4 h-4" />Play message</>}
+            </button>
+          )}
           <span className="text-xs text-muted-foreground">
-            {playsLeft} {playsLeft === 1 ? 'play' : 'plays'} left
+            {playsLeft > 0 ? `${playsLeft} ${playsLeft === 1 ? 'play' : 'plays'} left` : 'No plays left'}
           </span>
-          {phase === 'listen' && (
+          {/* Resumed after listening: move on without having to play it again */}
+          {phase === 'listen' && heardOnceRef.current && (
+            <button type="button" className={primaryBtn} disabled={playing}
+              onClick={() => { audioRef.current?.pause(); setPhase(letterKnown ? 'think' : 'letter'); }}>
+              {letterKnown ? <><Mic className="w-4 h-4" />Continue to answer</> : 'Pick the letter'}
+            </button>
+          )}
+          {phase === 'listen' && !heardOnceRef.current && (
             <p className="w-full text-xs text-muted-foreground">
               Listen carefully to the <strong>last word</strong> — your answer must start with its last letter and continue the conversation.
             </p>
@@ -241,6 +287,9 @@ export default function AnswerFlow({ claim: initialClaim, onExit }: AnswerFlowPr
               <span className={`text-xs font-medium ${letterTimeLeft <= 3 ? 'text-destructive' : 'text-muted-foreground'}`}>{letterTimeLeft}s</span>
             )}
           </div>
+          {playsLeft <= 0 && !letterNote && (
+            <p className="text-xs text-muted-foreground">No plays left — pick the letter from memory, or show it.</p>
+          )}
           <LetterPad onPick={l => void pickLetter(l)} disabled={busy} wrong={wrongLetters} />
           <div className="flex items-center gap-3">
             {letterNote && <p className="text-xs text-muted-foreground">{letterNote}</p>}

@@ -187,11 +187,10 @@ export async function POST(request: NextRequest) {
     const { data: saved, error: readError } = await svc.from('voice_chain_messages').select('*').eq('id', id).single();
     if (readError) throw new Error(readError.message);
     const row = saved as MessageRow;
-    const urls = await signedUrls(svc, parent ? [row, parent] : [row]);
+    const urls = await signedUrls(svc, [row]);
     const repliedTo = parent
       ? {
           nickname: (await nicknamesFor(svc, [parent.sender_id])).get(parent.sender_id) ?? 'Someone',
-          audioUrl: parent.audio_path ? urls.get(parent.audio_path) ?? null : null,
           durationSeconds: Number(parent.duration_seconds),
         }
       : null;

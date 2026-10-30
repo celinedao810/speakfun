@@ -6,7 +6,7 @@ import type { ReplyPreview } from '@/lib/voiceChain/types';
 
 /**
  * GET /api/voice-chain/mine — the caller's messages from the last 24h, for review
- * (read-only), each with the message it answered and the reply it received.
+ * (read-only), each with who it answered and who replied (nicknames only).
  */
 export async function GET() {
   const auth = await requireUser();
@@ -29,22 +29,18 @@ export async function GET() {
       ...mine.map(m => m.answered_by),
     ].filter((id): id is string => !!id);
     const { data: relatedData } = relatedIds.length
-      ? await svc.from('voice_chain_messages').select('*').in('id', relatedIds)
+      ? await svc.from('voice_chain_messages').select('id, sender_id, duration_seconds').in('id', relatedIds)
       : { data: [] };
-    const related = new Map(((relatedData ?? []) as MessageRow[]).map(r => [r.id, r]));
+    type Related = Pick<MessageRow, 'id' | 'sender_id' | 'duration_seconds'>;
+    const related = new Map(((relatedData ?? []) as Related[]).map(r => [r.id, r]));
 
+    // Only the caller's own recordings get audio URLs; related messages show the nickname only.
     const [urls, names] = await Promise.all([
-      signedUrls(svc, [...mine, ...related.values()]),
+      signedUrls(svc, mine),
       nicknamesFor(svc, [...related.values()].map(r => r.sender_id)),
     ]);
-    const preview = (r: MessageRow | undefined): ReplyPreview | null =>
-      r
-        ? {
-            nickname: names.get(r.sender_id) ?? 'Someone',
-            audioUrl: r.audio_path ? urls.get(r.audio_path) ?? null : null,
-            durationSeconds: Number(r.duration_seconds),
-          }
-        : null;
+    const preview = (r: Related | undefined): ReplyPreview | null =>
+      r ? { nickname: names.get(r.sender_id) ?? 'Someone', durationSeconds: Number(r.duration_seconds) } : null;
 
     const messages = mine.map(m =>
       myMessageView(

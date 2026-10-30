@@ -27,7 +27,15 @@ export default function VoiceChainHome({ role }: { role: 'teacher' | 'learner' }
       .catch(err => setError(err instanceof Error ? err.message : 'Could not load Voice Chain'));
   }, []);
 
-  useEffect(() => { refresh(); }, [refresh]);
+  // Reload whenever the Play tab is shown or the app comes back to the foreground,
+  // so a message picked up earlier is resumed instead of showing the pick-up screen.
+  useEffect(() => {
+    if (tab !== 'play') return;
+    refresh();
+    const onVisible = () => { if (document.visibilityState === 'visible') refresh(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [tab, refresh]);
 
   const tabs: { id: Tab; label: string }[] = [
     { id: 'play', label: 'Play' },

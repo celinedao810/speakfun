@@ -16,11 +16,8 @@ export async function GET() {
     // Cheap housekeeping: frees timed-out claims and purges a few expired recordings.
     await purgeExpired(svc, 20).catch(err => console.error('[voice-chain/status] purge failed:', err));
 
-    const minExpiry = new Date(Date.now() + (VOICE_CHAIN.claimSeconds + VOICE_CHAIN.claimGraceSeconds) * 1000).toISOString();
-    const [nickname, openRes, startersRes, claimRes, today] = await Promise.all([
+    const [nickname, startersRes, claimRes, today] = await Promise.all([
       getNickname(svc, userId),
-      svc.from('voice_chain_messages').select('id', { count: 'exact', head: true })
-        .eq('status', 'open').neq('sender_id', userId).gt('expires_at', minExpiry),
       svc.from('voice_chain_messages').select('id', { count: 'exact', head: true })
         .eq('sender_id', userId).eq('day', todayUtc7()).eq('chain_position', 1),
       svc.from('voice_chain_messages').select('*').eq('claimed_by', userId).eq('status', 'claimed')
@@ -30,7 +27,6 @@ export async function GET() {
 
     const body: StatusResponse = {
       nickname,
-      openCount: openRes.count ?? 0,
       startersLeft: Math.max(0, VOICE_CHAIN.startersPerDay - (startersRes.count ?? 0)),
       activeClaim: claimRes.data ? await buildClaimView(svc, claimRes.data as MessageRow) : null,
       today,
