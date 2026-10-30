@@ -118,6 +118,8 @@ export interface LeaderboardResponse {
   rows: LeaderboardRow[];
   /** The caller's row when they're outside the top list. */
   me: LeaderboardRow | null;
+  /** Messages in the longest chain with a message sent this week (0 if none). */
+  longestChain: number;
 }
 
 export interface TeacherLearnerStats {

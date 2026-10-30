@@ -1,7 +1,7 @@
 "use client";
 
 import React from 'react';
-import { Medal, Trophy } from 'lucide-react';
+import { Link2, Medal, Trophy } from 'lucide-react';
 import { formatPoints, formatSeconds } from '@/lib/voiceChain/client';
 import { useVcData } from '@/lib/voiceChain/useVcData';
 import type { LeaderboardResponse, LeaderboardRow } from '@/lib/voiceChain/types';
@@ -38,6 +38,23 @@ export default function Leaderboard() {
         <Trophy className="w-4 h-4 text-amber-500" />
         <span className="text-sm font-semibold text-foreground">This week</span>
         <span className="text-xs text-muted-foreground">since Monday {weekLabel}</span>
+      </div>
+
+      {/* Longest chain this week: just the count, never the content */}
+      <div className="flex items-center gap-3 px-3 sm:px-5 py-3 border-b border-border bg-accent/40">
+        <span className="w-9 h-9 shrink-0 rounded-full bg-primary/15 text-primary flex items-center justify-center">
+          <Link2 className="w-4 h-4" />
+        </span>
+        <div className="min-w-0">
+          <p className="text-xs text-muted-foreground">Longest chain this week</p>
+          {data.longestChain > 1 ? (
+            <p className="text-sm text-foreground">
+              <span className="text-lg font-bold">{data.longestChain}</span> messages passed on
+            </p>
+          ) : (
+            <p className="text-sm text-foreground">No replies yet — answer a message to start a chain!</p>
+          )}
+        </div>
       </div>
 
       {data.rows.length === 0 ? (
