@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { Medal, Trophy } from 'lucide-react';
-import { formatPoints, formatSeconds, vcFetch } from '@/lib/voiceChain/client';
+import { formatPoints, formatSeconds } from '@/lib/voiceChain/client';
+import { useVcData } from '@/lib/voiceChain/useVcData';
 import type { LeaderboardResponse, LeaderboardRow } from '@/lib/voiceChain/types';
 import FunLoading from './FunLoading';
 
@@ -23,14 +24,8 @@ function RankIcon({ rank }: { rank: number }) {
 
 /** This week's leaderboard across SpeakFun — nicknames only. */
 export default function Leaderboard() {
-  const [data, setData] = useState<LeaderboardResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    vcFetch<LeaderboardResponse>('leaderboard')
-      .then(setData)
-      .catch(err => setError(err instanceof Error ? err.message : 'Could not load the leaderboard'));
-  }, []);
+  // Shown from cache when coming back to this tab, refreshed in the background
+  const { data, error } = useVcData<LeaderboardResponse>('leaderboard');
 
   if (error) return <p className="text-sm text-destructive">{error}</p>;
   if (!data) return <FunLoading context="leaderboard" />;

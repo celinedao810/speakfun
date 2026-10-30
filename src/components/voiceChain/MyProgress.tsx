@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { ChevronDown, ChevronRight, ChevronUp, Flame } from 'lucide-react';
-import { chainLabel, formatPoints, formatSeconds, vcFetch } from '@/lib/voiceChain/client';
+import { chainLabel, formatPoints, formatSeconds } from '@/lib/voiceChain/client';
+import { useVcData } from '@/lib/voiceChain/useVcData';
 import type { BadgeStats } from '@/lib/voiceChain/badges';
 import type { DayStats, MyMessage } from '@/lib/voiceChain/types';
 import { BadgeStrip } from './Badges';
@@ -35,19 +36,14 @@ function shortDay(day: string) {
  * (read-only), a one-row badge strip, and the last 7 days on demand.
  */
 export default function MyProgress({ badgeStats }: { badgeStats: BadgeStats | null }) {
-  const [days, setDays] = useState<DayStats[] | null>(null);
-  const [messages, setMessages] = useState<MyMessage[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  // Shown from cache when coming back to this tab, refreshed in the background
+  const stats = useVcData<{ days: DayStats[] }>('stats?days=7');
+  const mine = useVcData<{ messages: MyMessage[] }>('mine');
   const [historyOpen, setHistoryOpen] = useState(false);
 
-  useEffect(() => {
-    Promise.all([
-      vcFetch<{ days: DayStats[] }>('stats?days=7'),
-      vcFetch<{ messages: MyMessage[] }>('mine'),
-    ])
-      .then(([s, m]) => { setDays(s.days); setMessages(m.messages); })
-      .catch(err => setError(err instanceof Error ? err.message : 'Could not load your progress'));
-  }, []);
+  const days = stats.data?.days ?? null;
+  const messages = mine.data?.messages ?? null;
+  const error = stats.error ?? mine.error;
 
   if (error) return <p className="text-sm text-destructive">{error}</p>;
   if (!days || !messages) return <FunLoading context="stats" />;

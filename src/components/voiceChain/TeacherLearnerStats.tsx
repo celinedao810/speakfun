@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { formatPoints, formatSeconds } from '@/lib/voiceChain/client';
+import { useVcData } from '@/lib/voiceChain/useVcData';
 import type { TeacherLearnerStats as LearnerStats } from '@/lib/voiceChain/types';
 import type { GameClass } from '@/app/api/games/classes/route';
 import FunLoading from './FunLoading';
@@ -12,13 +13,14 @@ const RANGES = [7, 14, 30];
 const COLS = 'grid grid-cols-[minmax(0,1fr)_4rem_3.5rem] sm:grid-cols-[minmax(0,1fr)_4.5rem_5rem_4rem_5rem] gap-3 px-3 sm:px-4';
 const selectClass ='rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring';
 
+// The teacher's classes rarely change; remembered for the page's lifetime so the tab opens instantly
+let cachedClasses: GameClass[] | null = null;
+
 /** Teachers: Voice Chain activity of learners in their classes, by real name. */
 export default function TeacherLearnerStats() {
-  const [classes, setClasses] = useState<GameClass[] | null>(null);
-  const [classId, setClassId] = useState<string | null>(null);
+  const [classes, setClasses] = useState<GameClass[] | null>(cachedClasses);
+  const [classId, setClassId] = useState<string | null>(cachedClasses?.[0]?.id ?? null);
   const [days, setDays] = useState(7);
-  const [learners, setLearners] = useState<LearnerStats[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
 
   useEffect(() => {
@@ -26,23 +28,18 @@ export default function TeacherLearnerStats() {
       .then(r => (r.ok ? r.json() : { classes: [] }))
       .then(({ classes: all }: { classes: GameClass[] }) => {
         const mine = all.filter(c => c.role === 'teacher');
+        cachedClasses = mine;
         setClasses(mine);
-        setClassId(mine[0]?.id ?? null);
+        setClassId(id => (id && mine.some(c => c.id === id) ? id : mine[0]?.id ?? null));
       });
   }, []);
 
-  useEffect(() => {
-    if (!classId) return;
-    setLearners(null);
-    setError(null);
-    fetch(`/api/voice-chain/teacher-stats?classId=${encodeURIComponent(classId)}&days=${days}`)
-      .then(async r => {
-        const data = await r.json().catch(() => ({}));
-        if (!r.ok) throw new Error(data.error || 'Could not load stats');
-        setLearners(data.learners);
-      })
-      .catch(err => setError(err instanceof Error ? err.message : 'Could not load stats'));
-  }, [classId, days]);
+  // Shown from cache when coming back, refreshed in the background
+  const stats = useVcData<{ learners: LearnerStats[] }>(
+    classId ? `teacher-stats?classId=${encodeURIComponent(classId)}&days=${days}` : null,
+  );
+  const learners = stats.data?.learners ?? null;
+  const error = stats.error;
 
   if (classes === null) return <FunLoading context="learners" />;
   if (classes.length === 0) return <p className="text-sm text-muted-foreground">Create a class to see your learners’ Voice Chain activity.</p>;

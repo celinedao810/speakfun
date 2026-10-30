@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Flame, HelpCircle, MessagesSquare, Pencil } from 'lucide-react';
 import { vcFetch } from '@/lib/voiceChain/client';
+import { invalidateVc } from '@/lib/voiceChain/useVcData';
 import type { StatusResponse } from '@/lib/voiceChain/types';
 import { BadgeCelebration, useBadges } from './Badges';
 import FunLoading from './FunLoading';
@@ -150,7 +151,7 @@ export default function VoiceChainHome({ role }: { role: 'teacher' | 'learner' }
               onCancel={status.nickname ? () => setEditingName(false) : undefined}
             />
           )
-          : tab === 'play' ? <PlayPanel status={status} onChange={refresh} onSent={() => void badges.check()} />
+          : tab === 'play' ? <PlayPanel status={status} onChange={refresh} onSent={() => { invalidateVc(['mine', 'stats', 'leaderboard']); void badges.check(); }} />
           : tab === 'progress' ? <MyProgress badgeStats={badges.stats} />
           : tab === 'leaderboard' ? <Leaderboard />
           : <TeacherLearnerStats />}

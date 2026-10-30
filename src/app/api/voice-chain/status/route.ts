@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { after, NextResponse } from 'next/server';
 import { VOICE_CHAIN } from '@/lib/voiceChain/config';
 import {
   buildClaimView, errorResponse, getNickname, getTodayStats, MessageRow, purgeExpired, requireUser, serviceClient, todayUtc7,
@@ -13,8 +13,9 @@ export async function GET() {
 
   try {
     const svc = serviceClient();
-    // Cheap housekeeping: frees timed-out claims and purges a few expired recordings.
-    await purgeExpired(svc, 20).catch(err => console.error('[voice-chain/status] purge failed:', err));
+    // Housekeeping (free timed-out claims, purge a few expired recordings) runs after the
+    // response is sent, so it never slows the Play screen. Nothing below depends on it.
+    after(() => purgeExpired(svc, 20).catch(err => console.error('[voice-chain/status] purge failed:', err)));
 
     const [nickname, startersRes, claimRes, today] = await Promise.all([
       getNickname(svc, userId),
