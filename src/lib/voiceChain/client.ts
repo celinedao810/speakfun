@@ -19,6 +19,14 @@ export async function vcPut<T>(path: string, body: unknown): Promise<T> {
   return data as T;
 }
 
+/** "2nd in its chain", "3rd in its chain"…; empty for a chain starter (position 1). */
+export function chainLabel(position: number): string {
+  if (position <= 1) return '';
+  const tens = position % 100;
+  const suffix = tens >= 11 && tens <= 13 ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' } as Record<number, string>)[position % 10] ?? 'th';
+  return `${position}${suffix} in its chain`;
+}
+
 export function formatSeconds(totalSeconds: number): string {
   const s = Math.round(totalSeconds);
   if (s < 60) return `${s}s`;

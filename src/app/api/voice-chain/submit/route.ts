@@ -65,7 +65,12 @@ export async function POST(request: NextRequest) {
         .eq('status', 'claimed')
         .maybeSingle();
       parent = data as MessageRow | null;
-      if (!parent || new Date(parent.claim_expires_at as string).getTime() < Date.now()) {
+      // A take that started before the claim ended may arrive a little later (recording + upload);
+      // allow the same grace as voice_chain_submit_reply, otherwise it is thrown away before scoring.
+      const deadline = parent
+        ? new Date(parent.claim_expires_at as string).getTime() + VOICE_CHAIN.claimGraceSeconds * 1000
+        : 0;
+      if (!parent || deadline < Date.now()) {
         return NextResponse.json({ error: 'Time’s up — this message is no longer yours to answer' }, { status: 410 });
       }
       if (!parent.claim_letter_ok && !parent.claim_letter_revealed) {

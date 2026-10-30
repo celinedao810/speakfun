@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Clock, Flag, Headphones, History, Mic, Play, RotateCcw, Send, X } from 'lucide-react';
-import { vcFetch } from '@/lib/voiceChain/client';
+import { chainLabel, vcFetch } from '@/lib/voiceChain/client';
 import { VOICE_CHAIN } from '@/lib/voiceChain/config';
 import { useVoiceRecorder } from '@/lib/voiceChain/useVoiceRecorder';
 import type { ClaimView, LetterResponse, MyMessage, SubmitResponse } from '@/lib/voiceChain/types';
@@ -231,7 +231,9 @@ export default function AnswerFlow({ claim: initialClaim, onExit, onSent }: Answ
       {/* Header */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <p className="text-sm font-semibold text-foreground">Message from {claim.senderNickname}</p>
-        <span className="text-xs text-muted-foreground">Link #{claim.chainPosition} · {Math.round(claim.durationSeconds)}s</span>
+        <span className="text-xs text-muted-foreground">
+          {claim.chainPosition > 1 ? chainLabel(claim.chainPosition) : 'Starts a new chain'} · {Math.round(claim.durationSeconds)}s
+        </span>
         <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">{settings.label}</span>
         {phase !== 'result' && phase !== 'expired' && (
           <span className={`ml-auto flex items-center gap-1 text-xs ${claimLeft < 60 ? 'text-destructive' : 'text-muted-foreground'}`}>

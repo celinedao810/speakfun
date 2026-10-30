@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { ChevronDown, ChevronUp, Clock, MessageSquare, Star } from 'lucide-react';
-import { formatSeconds, vcFetch } from '@/lib/voiceChain/client';
+import { chainLabel, formatSeconds, vcFetch } from '@/lib/voiceChain/client';
 import type { DayStats, MyMessage, ReplyPreview } from '@/lib/voiceChain/types';
 import ScoreCard from './ScoreCard';
 import type { BadgeStats } from '@/lib/voiceChain/badges';
@@ -129,7 +129,9 @@ function MessageItem({ message: m }: { message: MyMessage }) {
         <span className="text-sm font-medium text-foreground">
           {m.isStarter ? 'Started a chain' : `Answered with “${m.requiredLetter?.toUpperCase()}”`}
         </span>
-        <span className="text-xs text-muted-foreground">{timeOf(m.createdAt)} · {Math.round(m.durationSeconds)}s · link #{m.chainPosition}</span>
+        <span className="text-xs text-muted-foreground">
+          {timeOf(m.createdAt)} · {Math.round(m.durationSeconds)}s{m.chainPosition > 1 && ` · ${chainLabel(m.chainPosition)}`}
+        </span>
         <span className="ml-auto text-sm font-semibold text-foreground">{m.total} pts</span>
       </div>
       {m.audioUrl && <Recording url={m.audioUrl} />}
