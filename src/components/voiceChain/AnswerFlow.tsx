@@ -75,9 +75,11 @@ export default function AnswerFlow({ claim: initialClaim, onExit, onSent }: Answ
     audio.play().then(() => setPlaying(true))
       .catch(() => setError(e => e ?? 'Could not play the message. Check your sound and try again.'));
     setPlaysLeft(p => p - 1);
-    vcFetch<{ allowed: boolean; playsLeft: number }>('play', { messageId: claim.messageId })
+    vcFetch<{ allowed: boolean; playsLeft: number; claimExpiresAt: string }>('play', { messageId: claim.messageId })
       .then(res => {
         setPlaysLeft(res.playsLeft);
+        // Listening doesn't use up answer time: the server added the message's length back
+        if (res.claimExpiresAt) setClaim(c => ({ ...c, claimExpiresAt: res.claimExpiresAt }));
         if (!res.allowed) {
           audio.pause();
           setPlaying(false);
@@ -149,7 +151,8 @@ export default function AnswerFlow({ claim: initialClaim, onExit, onSent }: Answ
 
   const letterTimeLeft = useCountdown(
     settings.letterSeconds,
-    phase === 'letter' && settings.letterSeconds !== null && !busy,
+    // Paused while the message is (re)playing; a fresh countdown starts when it ends
+    phase === 'letter' && settings.letterSeconds !== null && !busy && !playing,
     () => { void pickLetter(null); },
   );
 
@@ -320,6 +323,9 @@ export default function AnswerFlow({ claim: initialClaim, onExit, onSent }: Answ
             <p className="w-full text-xs text-muted-foreground">
               Listen carefully to the <strong>last word</strong> — your answer must start with its last letter and continue the conversation.
             </p>
+          )}
+          {playsLeft > 0 && (
+            <p className="w-full text-[11px] text-muted-foreground">The clock doesn’t count the time the message is playing.</p>
           )}
         </div>
       )}

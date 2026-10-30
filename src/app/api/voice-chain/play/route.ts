@@ -4,7 +4,9 @@ import { errorResponse, MessageRow, playsLeft, requireUser, serviceClient } from
 /**
  * POST /api/voice-chain/play { messageId }
  * Uses one play of the picked-up message. Counted on the server so leaving and
- * coming back doesn't give extra plays. Returns { allowed, playsLeft }.
+ * coming back doesn't give extra plays. Listening time doesn't count against the
+ * claim: each play pushes claim_expires_at back by the message's length.
+ * Returns { allowed, playsLeft, claimExpiresAt }.
  */
 export async function POST(request: NextRequest) {
   const auth = await requireUser();
@@ -28,21 +30,25 @@ export async function POST(request: NextRequest) {
     }
 
     const left = playsLeft(row);
-    if (left <= 0) return NextResponse.json({ allowed: false, playsLeft: 0 });
+    const expiresAt = row.claim_expires_at as string;
+    if (left <= 0) return NextResponse.json({ allowed: false, playsLeft: 0, claimExpiresAt: expiresAt });
 
     const used = row.claim_plays ?? 0;
+    const extended = new Date(new Date(expiresAt).getTime() + Math.ceil(Number(row.duration_seconds)) * 1000).toISOString();
     const { data: updated, error } = await svc
       .from('voice_chain_messages')
-      .update({ claim_plays: used + 1 })
+      .update({ claim_plays: used + 1, claim_expires_at: extended })
       .eq('id', row.id)
       .eq('claimed_by', auth.user.id)
       .eq('claim_plays', used)
       .select('id');
     if (error) throw new Error(error.message);
     // Lost a race with another play request from the same user: treat as not allowed.
-    if (!updated?.length) return NextResponse.json({ allowed: false, playsLeft: Math.max(0, left - 1) });
+    if (!updated?.length) {
+      return NextResponse.json({ allowed: false, playsLeft: Math.max(0, left - 1), claimExpiresAt: expiresAt });
+    }
 
-    return NextResponse.json({ allowed: true, playsLeft: left - 1 });
+    return NextResponse.json({ allowed: true, playsLeft: left - 1, claimExpiresAt: extended });
   } catch (err) {
     return errorResponse('play', err);
   }
