@@ -13,6 +13,8 @@ export interface VoiceRecording {
 
 export type RecorderState = 'idle' | 'starting' | 'recording' | 'done';
 
+const NOTHING_RECORDED = 'We couldn’t hear anything from your microphone. Tap “Record again” to try once more.';
+
 function pickMimeType(): string | undefined {
   if (typeof MediaRecorder === 'undefined') return undefined;
   // Apple browsers (all iOS browsers are WebKit) decode their own MP4/AAC most reliably;
@@ -123,9 +125,10 @@ export function useVoiceRecorder(maxSeconds: number) {
       const pending = preparedRef.current;
       preparedRef.current = null;
       const prepared = pending ? await pending : null;
-      const stream = prepared && prepared.getAudioTracks().some(t => t.readyState === 'live')
-        ? prepared
-        : await navigator.mediaDevices.getUserMedia({ audio: true });
+      // iOS can leave an early-opened mic "live" but muted (silent): only reuse a working one
+      const usable = prepared?.getAudioTracks().some(t => t.readyState === 'live' && !t.muted);
+      if (prepared && !usable) prepared.getTracks().forEach(t => t.stop());
+      const stream = usable && prepared ? prepared : await navigator.mediaDevices.getUserMedia({ audio: true });
       if (token !== startTokenRef.current || recorderRef.current) {
         // A newer start() (e.g. the "tap to start" fallback) took over
         stream.getTracks().forEach(t => t.stop());
@@ -138,12 +141,24 @@ export function useVoiceRecorder(maxSeconds: number) {
       discardRef.current = false;
 
       rec.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data); };
+      rec.onerror = e => {
+        // The recorder stops itself after an error; onstop keeps whatever was captured
+        console.error('[voice-chain] Recorder error:', e);
+      };
+      // The mic was cut off (call, Siri, screen lock…): finish the take with what we have
+      stream.getAudioTracks().forEach(t => t.addEventListener('ended', () => stop()));
       rec.onstop = async () => {
         clearTimer();
         stream.getTracks().forEach(t => t.stop());
         recorderRef.current = null;
         const durationSeconds = Math.min(maxSeconds, (performance.now() - startedAtRef.current) / 1000);
-        if (discardRef.current || chunksRef.current.length === 0) {
+        if (discardRef.current) {
+          setState('idle');
+          return;
+        }
+        if (chunksRef.current.length === 0) {
+          console.warn('[voice-chain] Recording ended with no audio data');
+          setError(NOTHING_RECORDED);
           setState('idle');
           return;
         }

@@ -386,7 +386,18 @@ export default function AnswerFlow({ claim: initialClaim, onExit, onSent }: Answ
       {phase === 'record' && (
         <div className="space-y-2">
           <p className="text-center text-sm text-muted-foreground">Start with “<strong className="text-primary">{letter}</strong>”</p>
-          <RecordingControls state={recorder.state} elapsed={recorder.elapsed} onStop={recorder.stop} />
+          {(recorder.state === 'starting' || recorder.state === 'recording') && (
+            <RecordingControls state={recorder.state} elapsed={recorder.elapsed} onStop={recorder.stop} />
+          )}
+          {/* The take ended with nothing to send (e.g. iOS cut the mic off): nothing was used up */}
+          {recorder.state === 'idle' && (
+            <div className="flex flex-col items-center gap-3 py-2 text-center">
+              <p className="text-sm text-destructive">{recorder.error ?? 'The recording stopped before we got any sound.'}</p>
+              <button type="button" className={primaryBtn} onClick={() => void startRecording()}>
+                <Mic className="w-4 h-4" />Record again
+              </button>
+            </div>
+          )}
           {slowStart && recorder.state === 'starting' && (
             <div className="flex justify-center">
               <button type="button" className={primaryBtn} onClick={() => void recorder.start()}>
