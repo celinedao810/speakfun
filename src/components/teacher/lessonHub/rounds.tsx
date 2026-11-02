@@ -157,8 +157,18 @@ export const hasAnswers = (p: PronPart) =>
 /** "In|tơ|nét" → equal syllable boxes; otherwise CAPITAL runs are the stressed syllable. */
 export function RhythmLine({ s }: { s: string }) {
   if (s.includes('|')) return <>{s.split('|').map((x, i) => <span key={i} className="syl">{x}</span>)}</>;
+  if (IPA_SPAN.test(s)) return <IpaText text={s} />;
   const parts = s.split(/([A-Z]{2,})/);
   return <>{parts.map((x, i) => i % 2 ? <b key={i}>{x}</b> : x)}</>;
+}
+
+/** A transcription between slashes, e.g. /kən jə ˈsend/ (no space just inside either slash). */
+const IPA_SPAN = /(\/[^\s/](?:[^/]*[^\s/])?\/)/;
+
+/** Text with every /transcription/ set in the IPA font: the mono and serif faces lack symbols like ɪ ŋ ʊ ː. */
+export function IpaText({ text }: { text: string }) {
+  const parts = text.split(new RegExp(IPA_SPAN.source, 'g'));
+  return <>{parts.map((x, i) => i % 2 ? <span key={i} className="ipa">{x}</span> : x)}</>;
 }
 
 /** One stress attempt: the syllable at `at` in capitals and highlighted, e.g. com-PU-ter. */
@@ -174,7 +184,7 @@ export function ExplainExamples({ ex, cls }: { ex?: string | string[]; cls: stri
   const a = Array.isArray(ex) ? ex : [ex];
   const w = Math.max(...a.map(x => x.length)) + 4;
   return <div className={`${cls}s`} style={{ '--ew': `${w}ch` } as React.CSSProperties}>
-    {a.map((x, i) => <span key={i} className={cls}>{x}</span>)}</div>;
+    {a.map((x, i) => <span key={i} className={cls}><IpaText text={x} /></span>)}</div>;
 }
 
 /** Grid sizing for showWord choices: as many columns as the longest option list, as wide as the longest option. */
@@ -209,7 +219,7 @@ export function YouGlishLink({ link, className = 'clisten', children }: { link: 
 
 function PronPartView({ p }: { p: PronPart }) {
   const { dlg } = useHub();
-  const label = p.label ? <div className="partlabel">{p.label}</div> : null;
+  const label = p.label ? <div className="partlabel"><IpaText text={p.label} /></div> : null;
   switch (p.kind) {
     case 'reveal': return <>{label}
       {p.chips && <Bank items={p.chips} className="ipa" />}
@@ -228,10 +238,10 @@ function PronPartView({ p }: { p: PronPart }) {
       <div className="rules2">{p.rules.map((g, i) => (
         <div key={i}><h5>{g.ending}</h5>
           {g.rows.map((r, j) => <div key={j} className="rr"><span className="rs ipa">{r.sound}</span>
-            <span className="rx">{r.after} <i>— {r.ex}</i></span></div>)}</div>
+            <span className="rx"><IpaText text={r.after} /> <i>— {r.ex}</i></span></div>)}</div>
       ))}</div></>;
     case 'passage': return <>{label}<div className="prose" style={{ marginTop: '.4rem' }}><p><MarkedPassage text={p.text} marks={p.marks} /></p></div></>;
-    case 'text': return <>{label}<p className="how" style={{ marginTop: '.2rem' }}>{p.text}</p></>;
+    case 'text': return <>{label}<p className="how" style={{ marginTop: '.2rem' }}><IpaText text={p.text} /></p></>;
     case 'choice': if (p.showWord) return <>{label}{p.items.map((x, i) => (
       <div key={i} className="choice-row hw" style={choiceDims(p.items)}>
         <span className="cn">{i + 1}</span>
@@ -271,7 +281,7 @@ function PronPartView({ p }: { p: PronPart }) {
     case 'columns': return <>{label}
       {p.link && <p style={{ margin: '.2rem 0 .6rem' }}><YouGlishLink link={p.link} className="ylink">Listen ▸ {p.linkLabel || 'YouGlish'}</YouGlishLink></p>}
       <div className="cols2">{p.cols.map((c, i) => (
-        <div key={i}><h5>{c.h}</h5><div className="cn2">{c.note}</div>
+        <div key={i}><h5>{c.h}</h5><div className="cn2"><IpaText text={c.note} /></div>
           {c.lines.map((l, j) => <div key={j} className="cl"><RhythmLine s={l} /></div>)}</div>
       ))}</div>
       {p.foot && <p className="how" style={{ marginTop: '1rem' }}>{p.foot}</p>}</>;
@@ -291,7 +301,7 @@ function PronPartView({ p }: { p: PronPart }) {
 
 function ExplainList({ items }: { items: ExplainItem[] }) {
   return <div className="expl">{items.map((x, i) => (
-    <div key={i} className="ei"><div className="eh">{x.h}</div>{x.t && <div className="et">{x.t}</div>}
+    <div key={i} className="ei"><div className="eh"><IpaText text={x.h} /></div>{x.t && <div className="et"><IpaText text={x.t} /></div>}
       <ExplainExamples ex={x.ex} cls="eex" /></div>
   ))}</div>;
 }
@@ -373,8 +383,8 @@ export function PlanPhases({ t }: { t: Topic }) {
             <div className="clock"><b>{r.min}{'′'}</b>{label}
               {ph === 'class' && <span className="talk">{each ? `~${each.toFixed(0)}′ talking` : '0′ talking'}</span>}</div>
             <div>
-              <h4>{r.title} {r.ctx && <span className={`ctx ${r.ctx}`}>{ctxLabel}</span>}</h4>
-              {r.how && <p className="how">{sub(r.how, hub)}</p>}
+              <h4><IpaText text={r.title} /> {r.ctx && <span className={`ctx ${r.ctx}`}>{ctxLabel}</span>}</h4>
+              {r.how && <p className="how"><IpaText text={sub(r.how, hub)} /></p>}
               {r.say && <p className="say">{'“'}{r.say}{'”'}</p>}
               <RoundBody t={t} r={r} />
             </div>

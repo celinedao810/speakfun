@@ -9,9 +9,11 @@
 .e4it{
   --ink:#17242B; --paper:#E7E9E3; --card:#F7F8F4;
   --mark:#DCE64B; --teal:#2E6C66; --muted:#6B7874; --rule:#C6CAC1;
-  --sans:var(--e4it-font-sans),"Bricolage Grotesque","Archivo",system-ui,sans-serif;
-  --serif:var(--e4it-font-serif),"Newsreader",Georgia,serif;
-  --mono:var(--e4it-font-mono),"DM Mono",ui-monospace,monospace;
+  /* the IPA font comes second in every stack: a stray IPA symbol the main face lacks (ˈ ə ŋ)
+     then comes from the same font everywhere. Whole /transcriptions/ are set in .ipa (IpaText). */
+  --sans:var(--e4it-font-sans),"Bricolage Grotesque",var(--e4it-font-ipa),"Archivo",system-ui,sans-serif;
+  --serif:var(--e4it-font-serif),"Newsreader",var(--e4it-font-ipa),Georgia,serif;
+  --mono:var(--e4it-font-mono),"DM Mono",var(--e4it-font-ipa),ui-monospace,monospace;
 }
 .e4it *{box-sizing:border-box}
 .e4it{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.5}

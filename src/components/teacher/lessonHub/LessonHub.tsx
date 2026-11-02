@@ -5,7 +5,7 @@ import { Bricolage_Grotesque, DM_Mono, Newsreader, Noto_Sans } from 'next/font/g
 import type { Hub, Topic } from '@/lib/lessonHub/types';
 import { dueRound, fmtClock, isPron, planFor, talkTime } from '@/lib/lessonHub/engine';
 import { DlgState, HubProvider } from './shared';
-import { PlanPhases, Rail, ShapeStrip, SoundNotes } from './rounds';
+import { IpaText, PlanPhases, Rail, ShapeStrip, SoundNotes } from './rounds';
 import PresentMode from './PresentMode';
 import './e4it.css';
 
@@ -239,7 +239,7 @@ function TopicView({ hub, t, back, onPresent, rail }: {
       <div className="thead">
         <div className="kicker">{pron ? `Pronunciation · session ${t.order}` : `${t.track} · topic ${t.order}`}</div>
         <h2>{t.title}</h2>
-        <p className="says">{t.says}</p>
+        <p className="says"><IpaText text={t.says} /></p>
         {!pron && <div className="ticket"><b>This topic runs on</b>{t.anchor}</div>}
         {!pron && <ShapeStrip t={t} />}
         <div className="facts">

@@ -4,7 +4,7 @@ import React, { useEffect, useLayoutEffect, useRef } from 'react';
 import type { ExplainItem, Hub, StressWord, Structure, Topic } from '@/lib/lessonHub/types';
 import { allMoves, chunk, dialoguePages, isPron, pairRows, promptAnswer, promptOrder, sub } from '@/lib/lessonHub/engine';
 import { ExampleLines, GapLine, HintRows, MarkedPassage, Slots, Toggle, useHub } from './shared';
-import { ExplainExamples, RhythmLine, StressTry, VoicedLegend, YouGlishLink, choiceDims, toggleReveal } from './rounds';
+import { ExplainExamples, IpaText, RhythmLine, StressTry, VoicedLegend, YouGlishLink, choiceDims, toggleReveal } from './rounds';
 import FlowSketch from './FlowSketch';
 
 /* One round becomes one or more slides. Nothing scrolls: anything too long for a
@@ -108,7 +108,7 @@ function speakingSlides(t: Topic, hub: Hub): Slide[] {
 
 function pronSlides(t: Topic): Slide[] {
   const S: Slide[] = [];
-  S.push({ kicker: `Pronunciation · session ${t.order}`, title: t.title, body: <p className="sl-says">{t.says}</p> });
+  S.push({ kicker: `Pronunciation · session ${t.order}`, title: t.title, body: <p className="sl-says"><IpaText text={t.says} /></p> });
   (t.rounds || []).forEach(r => {
     const K = r.title;
     if (r.game) {
@@ -147,14 +147,14 @@ function pronSlides(t: Topic): Slide[] {
             <div className="sl-rules">{p.rules.map((g, k) => (
               <div key={k}><h3>{g.ending}</h3>
                 {g.rows.map((r2, j) => <div key={j} className="rr"><span className="rs ipa">{r2.sound}</span>
-                  <span className="rx">{r2.after}<i>{r2.ex}</i></span></div>)}</div>
+                  <span className="rx"><IpaText text={r2.after} /><i>{r2.ex}</i></span></div>)}</div>
             ))}</div></> });
           break;
         case 'passage':
           add({ title: T, answers: !!p.marks, body: <p className="sl-prose"><MarkedPassage text={p.text} marks={p.marks} /></p> });
           break;
         case 'text':
-          add({ title: r.phase === 'after' ? 'Homework' : T, body: <p className="sl-prose">{p.text}</p> });
+          add({ title: r.phase === 'after' ? 'Homework' : T, body: <p className="sl-prose"><IpaText text={p.text} /></p> });
           break;
         case 'choice':
           chunk(p.items, 12).forEach((g, i, a) => add({ title: T, part: partOf(i, a), answers: true, revealCount: g.length, body:
@@ -167,7 +167,7 @@ function pronSlides(t: Topic): Slide[] {
           add({ title: T, body: <>
             {p.link && <p style={{ margin: '0 0 2vh' }}><YouGlishLink link={p.link} className="ylink">Listen ▸ {p.linkLabel || 'YouGlish'}</YouGlishLink></p>}
             <div className="sl-cols">{p.cols.map((c, k) => (
-              <div key={k}><h3>{c.h}</h3><div className="scn">{c.note}</div>
+              <div key={k}><h3>{c.h}</h3><div className="scn"><IpaText text={c.note} /></div>
                 {c.lines.map((l, j) => <div key={j} className="scl"><RhythmLine s={l} /></div>)}</div>
             ))}</div>
             {p.foot && <p className="sl-why" style={{ marginTop: '3vh' }}>{p.foot}</p>}</> });
@@ -260,7 +260,7 @@ function ChoiceRows({ items, offset, showWord, dims }: {
 
 function SlideExplain({ items }: { items: ExplainItem[] }) {
   return <div className="sl-expl">{items.map((x, k) => (
-    <div key={k} className="sei"><div className="seh">{x.h}</div>{x.t && <div className="set">{x.t}</div>}
+    <div key={k} className="sei"><div className="seh"><IpaText text={x.h} /></div>{x.t && <div className="set"><IpaText text={x.t} /></div>}
       <ExplainExamples ex={x.ex} cls="seex" /></div>
   ))}</div>;
 }
@@ -381,8 +381,8 @@ export default function PresentMode({ t, slide, setSlide, onExit }: {
       </div>
       <div className={`slbody${showHint ? ' hinted' : ''}`}>
         <div className="slmain" ref={mainRef}>
-          <h2 className="sltitle">{s.title}{s.part && <> <span className="slof">{s.part[0]}/{s.part[1]}</span></>}</h2>
-          {s.tell && <p className="sltell">{sub(s.tell, hub)}</p>}
+          <h2 className="sltitle"><IpaText text={s.title} />{s.part && <> <span className="slof">{s.part[0]}/{s.part[1]}</span></>}</h2>
+          {s.tell && <p className="sltell"><IpaText text={sub(s.tell, hub)} /></p>}
           {s.body}
         </div>
         {showHint && <aside className="slhint"><div className="hinthd">Frames from this lesson</div>
