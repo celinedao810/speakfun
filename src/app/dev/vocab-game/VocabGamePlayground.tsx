@@ -69,6 +69,7 @@ export default function VocabGamePlayground() {
           onComplete={(score, wrongVocabIds, attempts, wordResults) =>
             setResult({ score, wrongVocabIds, attempts, wordResults })
           }
+          onAiUnavailable={message => alert(message)}
         />
       )}
     </div>

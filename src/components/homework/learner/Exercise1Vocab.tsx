@@ -3,7 +3,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { CheckCircle, Loader2, Mic, Square } from 'lucide-react';
 import { VocabAttemptAudit, VocabExerciseItem } from '@/lib/types';
-import { matchVocabFromCandidates } from '@/lib/ai/aiClient';
+import { matchVocabFromCandidates, isAiUnavailable } from '@/lib/ai/aiClient';
 import { useContinuousSpeech } from '@/lib/audio/useContinuousSpeech';
 import { itemKey } from '@/lib/homework/itemKeys';
 
@@ -11,6 +11,8 @@ interface Exercise1VocabProps {
   vocabPool: VocabExerciseItem[];
   /** wrongVocabKeys are "lessonId:vocabId" keys (see itemKey), not bare IDs. */
   onComplete: (score: number, wrongVocabKeys: string[], attempts: VocabAttemptAudit[], wordResults: WordResult[]) => void;
+  /** The AI can't score at all (e.g. out of credits): the game stops and nothing is saved. */
+  onAiUnavailable: (message: string) => void;
 }
 
 export interface WordResult {
@@ -38,7 +40,7 @@ const LAUNCH_WINDOW_MS = 60_000;
 const X_SLOTS = [4, 36, 68] as const;  // % left for left / center / right
 const SLOT_JITTER = 2;                  // ±2% random offset per block
 
-export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1VocabProps) {
+export default function Exercise1Vocab({ vocabPool, onComplete, onAiUnavailable }: Exercise1VocabProps) {
   const N = vocabPool.length;
   const launchInterval = N > 1 ? LAUNCH_WINDOW_MS / N : LAUNCH_WINDOW_MS;
   // 0.5× speed = 2× fall time; clamped so blocks are never faster than 16s or slower than 50s
@@ -72,6 +74,8 @@ export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1Vocab
   const [frameHeightPx, setFrameHeightPx] = useState(280);
   const onCompleteRef = useRef(onComplete);
   onCompleteRef.current = onComplete;
+  const onAiUnavailableRef = useRef(onAiUnavailable);
+  onAiUnavailableRef.current = onAiUnavailable;
 
   useEffect(() => {
     const el = frameRef.current;
@@ -281,6 +285,15 @@ export default function Exercise1Vocab({ vocabPool, onComplete }: Exercise1Vocab
         setMatchFlash({ word: matchedBlock.vocabItem.word, pts: result.pointsEarned });
         setTimeout(() => setMatchFlash(null), 1400);
       }))
+      .catch(err => {
+        if (!isAiUnavailable(err) || completeFiredRef.current) return;
+        // Nothing can be scored, so stop the game rather than let every word fall as a miss
+        completeFiredRef.current = true;
+        sessionDoneRef.current = true;
+        stopMicRef.current();
+        if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+        onAiUnavailableRef.current(err.message);
+      })
       .finally(() => {
         pendingCountRef.current--;
         setPendingCount(c => c - 1);

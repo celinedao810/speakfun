@@ -87,6 +87,7 @@ export async function scoreVoiceMessage({
         ],
       },
       config: {
+        thinkingConfig: { thinkingBudget: 512 }, // some reasoning for grading; unbounded thinking is billed as output
         responseMimeType: 'application/json',
         responseSchema: {
           type: Type.OBJECT,

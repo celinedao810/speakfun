@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { CheckCircle, AlertCircle, RotateCcw, ChevronRight, MicOff } from 'lucide-react';
 import { VocabExerciseItem, StructureExerciseItem, FreeTalkScoringResult } from '@/lib/types';
-import { scoreFreeTalk, generateAnswerGuide } from '@/lib/ai/aiClient';
+import { scoreFreeTalk, generateAnswerGuide, isAiUnavailable } from '@/lib/ai/aiClient';
 import AudioRecorder, { AudioRecorderHandle } from '@/components/AudioRecorder';
 import { itemKey } from '@/lib/homework/itemKeys';
 
@@ -17,11 +17,13 @@ interface Exercise3FreeTalkProps {
   durationMins?: number;
   deductedPointsPerError?: number;
   onComplete: (score: number) => void;
+  /** The AI can't score at all (e.g. out of credits): the exercise stops and nothing is saved. */
+  onAiUnavailable: (message: string) => void;
 }
 
 type Phase = 'READY' | 'SCORING' | 'FEEDBACK';
 
-export default function Exercise3FreeTalk({ vocabWords, structures, topic, durationMins = 2, deductedPointsPerError = 0.1, onComplete }: Exercise3FreeTalkProps) {
+export default function Exercise3FreeTalk({ vocabWords, structures, topic, durationMins = 2, deductedPointsPerError = 0.1, onComplete, onAiUnavailable }: Exercise3FreeTalkProps) {
   const RECORD_DURATION = durationMins * 60;
   const [phase, setPhase] = useState<Phase>('READY');
   const [timeLeft, setTimeLeft] = useState(RECORD_DURATION);
@@ -33,6 +35,7 @@ export default function Exercise3FreeTalk({ vocabWords, structures, topic, durat
   const [attemptHistory, setAttemptHistory] = useState<{ attempt: number; score: number }[]>([]);
   const [answerGuide, setAnswerGuide] = useState<string[] | null>(null);
   const [guideLoading, setGuideLoading] = useState(false);
+  const [scoreError, setScoreError] = useState(false);
 
   const recorderRef = useRef<AudioRecorderHandle>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -75,6 +78,7 @@ export default function Exercise3FreeTalk({ vocabWords, structures, topic, durat
   const handleRecordingComplete = useCallback(async (base64: string) => {
     if (timerRef.current) clearInterval(timerRef.current);
     setRecordingUrl(`data:audio/webm;base64,${base64}`);
+    setScoreError(false);
     setPhase('SCORING');
 
     try {
@@ -89,10 +93,15 @@ export default function Exercise3FreeTalk({ vocabWords, structures, topic, durat
       setAttemptHistory(prev => [...prev, { attempt: prev.length + 1, score: r.score }]);
       setResult(r);
       setPhase('FEEDBACK');
-    } catch {
+    } catch (err) {
+      if (isAiUnavailable(err)) {
+        onAiUnavailable(err instanceof Error ? err.message : '');
+        return;
+      }
+      setScoreError(true);
       setPhase('READY');
     }
-  }, [vocabWords, structures, topic]);
+  }, [vocabWords, structures, topic, onAiUnavailable]);
 
   const handleReRecord = () => {
     setResult(null);
@@ -226,6 +235,9 @@ export default function Exercise3FreeTalk({ vocabWords, structures, topic, durat
               <div className="w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse" />
               <span className="text-sm font-medium">Recording...</span>
             </div>
+          )}
+          {scoreError && !isRecording && (
+            <p className="text-xs text-destructive mb-1">Couldn&apos;t score that recording. Please try again.</p>
           )}
           <AudioRecorder
             ref={recorderRef}

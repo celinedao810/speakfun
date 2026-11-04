@@ -10,6 +10,7 @@ import {
   scoreFreeTalk,
   generateFreeTalkTopic,
   generateAnswerGuide,
+  AI_UNAVAILABLE,
 } from '@/lib/services/geminiService';
 
 export const maxDuration = 60;
@@ -104,6 +105,9 @@ export async function POST(request: NextRequest) {
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Scoring failed';
     console.error('[ai/homework-score] Error:', message);
+    if (message.startsWith(AI_UNAVAILABLE)) {
+      return NextResponse.json({ error: message.slice(AI_UNAVAILABLE.length + 2), code: AI_UNAVAILABLE }, { status: 503 });
+    }
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

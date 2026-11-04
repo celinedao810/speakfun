@@ -7,9 +7,20 @@ import {
 } from "@/lib/types";
 import { matchSpokenWords } from "@/lib/homework/matchSpokenWord";
 
+/** Prefix on errors thrown when the Gemini account itself can't serve requests (no credits). */
+export const AI_UNAVAILABLE = 'AI_UNAVAILABLE';
+
+/**
+ * Thinking budgets. Gemini 2.5 Flash thinks on every request unless told otherwise, and the
+ * hidden thought tokens are billed as output. Routine checks need none; grading needs a little.
+ */
+const NO_THINKING = { thinkingBudget: 0 };
+const LIGHT_THINKING = { thinkingBudget: 512 };
+
 /**
  * Robust execution wrapper with exponential backoff for API calls.
- * Handles 429 (Quota) and 5xx (Server) errors.
+ * Handles 429 (Quota) and 5xx (Server) errors. A 402 (prepaid credits used up) is not
+ * retried: it won't clear until someone tops up the account.
  */
 async function safeExecute<T>(fn: () => Promise<T>, maxRetries = 4, initialDelay = 2000): Promise<T> {
   let delay = initialDelay;
@@ -18,6 +29,9 @@ async function safeExecute<T>(fn: () => Promise<T>, maxRetries = 4, initialDelay
       return await fn();
     } catch (error: any) {
       const errorMsg = error?.message || '';
+      if (error?.status === 402 || /prepayment credits/i.test(errorMsg)) {
+        throw new Error(`${AI_UNAVAILABLE}: AI scoring is unavailable right now. Please try again later.`);
+      }
       const isQuotaError = error?.status === 429 || errorMsg.includes('429') || errorMsg.includes('RESOURCE_EXHAUSTED') || errorMsg.includes('Resource exhausted');
       const isServerError = error?.status >= 500 || errorMsg.includes('500');
 
@@ -1326,6 +1340,7 @@ Step 4: Give brief feedback in Vietnamese (1 sentence).`
         ]
       },
       config: {
+        thinkingConfig: NO_THINKING,
         responseMimeType: 'application/json',
         responseSchema: {
           type: Type.OBJECT,
@@ -1391,6 +1406,7 @@ If there is no clear speech — silence, breathing, coughing, typing, background
         ]
       },
       config: {
+        thinkingConfig: NO_THINKING,
         temperature: 0,
         responseMimeType: 'application/json',
         responseSchema: {
@@ -1452,6 +1468,7 @@ Give feedback in Vietnamese.`
         ]
       },
       config: {
+        thinkingConfig: NO_THINKING,
         responseMimeType: 'application/json',
         responseSchema: {
           type: Type.OBJECT,
@@ -1534,6 +1551,7 @@ Step 8: correctedSentence = empty string if grammarCorrect=true, otherwise write
         ]
       },
       config: {
+        thinkingConfig: LIGHT_THINKING,
         responseMimeType: 'application/json',
         responseSchema: {
           type: Type.OBJECT,
@@ -1684,6 +1702,7 @@ Steps:
         ]
       },
       config: {
+        thinkingConfig: LIGHT_THINKING,
         responseMimeType: 'application/json',
         responseSchema: {
           type: Type.OBJECT,
@@ -1744,6 +1763,7 @@ Rules:
 - Bad examples (avoid): questions that only make sense if you force certain words in ("How do you optimize user-friendly features?"), too technical, too abstract or unnatural
 
 Return only the question text, no quotes, no explanation, no extra formatting.`,
+      config: { thinkingConfig: NO_THINKING },
     });
     return (response.text || '').trim();
   });
@@ -1790,6 +1810,7 @@ Rules:
 
 Return ONLY a JSON array of strings (one per step). No object wrapper, just the array.`,
       config: {
+        thinkingConfig: NO_THINKING,
         responseMimeType: 'application/json',
         responseSchema: {
           type: Type.ARRAY,

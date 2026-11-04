@@ -3,12 +3,14 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { CheckCircle, XCircle, Mic, Loader2 } from 'lucide-react';
 import { StructureExerciseItem, StructureScoringResult } from '@/lib/types';
-import { scoreOwnSentence } from '@/lib/ai/aiClient';
+import { scoreOwnSentence, isAiUnavailable } from '@/lib/ai/aiClient';
 import AudioRecorder, { AudioRecorderHandle } from '@/components/AudioRecorder';
 
 interface Exercise2StructureProps {
   structures: StructureExerciseItem[];
   onComplete: (score: number, structureResults: StructureResult[]) => void;
+  /** The AI can't score at all (e.g. out of credits): the exercise stops and nothing is saved. */
+  onAiUnavailable: (message: string) => void;
 }
 
 export interface StructureResult {
@@ -22,7 +24,7 @@ export interface StructureResult {
 
 const FALL_DURATION_MS = 25000; // 25 seconds
 
-export default function Exercise2Structure({ structures, onComplete }: Exercise2StructureProps) {
+export default function Exercise2Structure({ structures, onComplete, onAiUnavailable }: Exercise2StructureProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [progress, setProgress] = useState(0);
   const [structureResults, setStructureResults] = useState<(StructureResult | null)[]>(() => Array(structures.length).fill(null));
@@ -36,6 +38,7 @@ export default function Exercise2Structure({ structures, onComplete }: Exercise2
   const structureResultsArrRef = useRef<(StructureResult | null)[]>(Array(structures.length).fill(null));
   const pendingCountRef = useRef(0);   // how many AI calls still in-flight
   const allAnsweredRef = useRef(false); // true once the last structure is passed
+  const abortedRef = useRef(false);     // AI unavailable — never report completion
 
   const recorderRef = useRef<AudioRecorderHandle>(null);
   const animFrameRef = useRef<number | null>(null);
@@ -61,6 +64,7 @@ export default function Exercise2Structure({ structures, onComplete }: Exercise2
 
   // Helper: call onComplete with all accumulated data
   const fireOnComplete = useCallback(() => {
+    if (abortedRef.current) return;
     onComplete(
       totalScoreRef.current,
       structureResultsArrRef.current.map((r, i) =>
@@ -126,7 +130,15 @@ export default function Exercise2Structure({ structures, onComplete }: Exercise2
           return updated;
         });
       })
-      .catch(() => {
+      .catch(err => {
+        if (isAiUnavailable(err)) {
+          // Don't record an unscored answer as wrong — stop the exercise instead
+          if (abortedRef.current) return;
+          abortedRef.current = true;
+          if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+          onAiUnavailable(err.message);
+          return;
+        }
         const sResult: StructureResult = { item: capturedStructure, pointsEarned: 0, isCorrect: false };
         structureResultsArrRef.current[capturedIndex] = sResult;
         setStructureResults(prev => {
@@ -141,7 +153,7 @@ export default function Exercise2Structure({ structures, onComplete }: Exercise2
           fireOnComplete();
         }
       });
-  }, [currentIndex, currentStructure, advanceToNext, fireOnComplete]);
+  }, [currentIndex, currentStructure, advanceToNext, fireOnComplete, onAiUnavailable]);
 
   // Falling block animation
   useEffect(() => {

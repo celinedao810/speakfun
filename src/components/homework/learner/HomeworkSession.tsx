@@ -25,7 +25,11 @@ type SessionPhase =
   | 'EX3'
   | 'SUBMITTING'
   | 'SCORECARD'
-  | 'ERROR';
+  | 'ERROR'
+  | 'AI_DOWN';
+
+/** Used when the AI can't write today's free-talk question, so Task 3 never waits forever. */
+const FALLBACK_TOPIC = "Talk about what you worked on this week and what's next.";
 
 interface HomeworkSessionProps {
   window: HomeworkWindow;
@@ -370,7 +374,7 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
             pool.map(v => v.word),
             structuresToUse.slice(0, structureLimit).map(s => s.pattern),
             profile?.preferences?.role || profile?.job_title || undefined,
-          ).then(t => { if (t) setFreeTalkTopic(t); }).catch(() => {});
+          ).then(t => setFreeTalkTopic(t || FALLBACK_TOPIC)).catch(() => setFreeTalkTopic(FALLBACK_TOPIC));
         }
 
         if (existingSubmission?.allCompleted && existingSubmission?.submittedAt) {
@@ -442,9 +446,21 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
       vocabPool.map(v => v.word),
       structurePool.map(s => s.pattern),
       learnerRole || undefined,
-    ).then(t => { if (t) setFreeTalkTopic(t); }).catch(() => {});
+    ).then(t => setFreeTalkTopic(t || FALLBACK_TOPIC)).catch(() => setFreeTalkTopic(FALLBACK_TOPIC));
     setPhase('EX2_SUMMARY');
   }, [autoSave, vocabPool, structurePool, learnerRole]);
+
+  // Every word is mastered and no new lesson has exercises yet: Task 1 has nothing to test
+  const handleEx1Empty = useCallback(async () => {
+    await autoSave({ ex1Score: 0, ex1Completed: true, wrongVocabIds: [], sessionState: { vocabAttempts: [] } });
+    setPhase('EX2');
+  }, [autoSave]);
+
+  // The AI account can't score (e.g. out of credits). Leave the task unsaved so it can be redone.
+  const handleAiUnavailable = useCallback((message: string) => {
+    setError(message || 'AI scoring is unavailable right now. Please try again later.');
+    setPhase('AI_DOWN');
+  }, []);
 
   const handleEx3Complete = useCallback(async (score: number, attempts: StructureAttemptAudit[] = []) => {
     setEx3bScore(score);
@@ -551,11 +567,38 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
     );
   }
 
+  if (phase === 'AI_DOWN') {
+    return (
+      <div className="bg-amber-50 rounded-2xl border border-amber-200 p-6 flex flex-col items-center gap-3">
+        <AlertCircle className="w-8 h-8 text-amber-600" />
+        <p className="text-sm text-amber-900 font-medium text-center">{error}</p>
+        <p className="text-xs text-amber-800 text-center">Your answers for this task weren&apos;t saved, so you can do it again later.</p>
+        <button onClick={onDone} className="text-sm text-muted-foreground hover:text-foreground transition">
+          Go back
+        </button>
+      </div>
+    );
+  }
+
+  if (phase === 'EX1' && vocabPool.length === 0) {
+    return (
+      <div className="bg-emerald-50 rounded-2xl border border-emerald-200 p-6 flex flex-col items-center gap-3 text-center">
+        <CheckCircle className="w-8 h-8 text-emerald-600" />
+        <p className="text-sm text-emerald-900 font-medium">You&apos;ve mastered every word from your lessons so far 🎉</p>
+        <p className="text-xs text-emerald-800">New words appear here when your teacher adds the next lesson. Carry on with the structures.</p>
+        <button onClick={handleEx1Empty} className="mt-1 px-5 py-2 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition">
+          Continue
+        </button>
+      </div>
+    );
+  }
+
   if (phase === 'EX1') {
     return (
       <Exercise1Vocab
         vocabPool={vocabPool}
         onComplete={handleEx1Complete}
+        onAiUnavailable={handleAiUnavailable}
       />
     );
   }
@@ -575,6 +618,7 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
       <Exercise2Structure
         structures={structurePool}
         onComplete={handleEx2Complete}
+        onAiUnavailable={handleAiUnavailable}
       />
     );
   }
@@ -598,6 +642,7 @@ export default function HomeworkSession({ window: hw, classId, existingSubmissio
         durationMins={ex3DurationMins}
         deductedPointsPerError={ex3DeductedPointsPerError}
         onComplete={(score) => handleEx3Complete(score, [])}
+        onAiUnavailable={handleAiUnavailable}
       />
     );
   }

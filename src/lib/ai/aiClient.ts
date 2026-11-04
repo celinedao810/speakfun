@@ -10,6 +10,12 @@ import type {
   PronunciationResult, LiveEvaluationResult, AISuggestion, VocabClipMatch,
 } from '@/lib/services/geminiService';
 
+import { AI_UNAVAILABLE } from '@/lib/services/geminiService';
+
+/** True when the API reports the AI account can't serve requests (e.g. out of credits). */
+export const isAiUnavailable = (err: unknown): boolean =>
+  (err as { code?: string } | null)?.code === AI_UNAVAILABLE;
+
 async function post<T>(url: string, body: Record<string, unknown>): Promise<T> {
   const res = await fetch(url, {
     method: 'POST',
@@ -18,7 +24,7 @@ async function post<T>(url: string, body: Record<string, unknown>): Promise<T> {
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(err.error || `Request failed: ${res.status}`);
+    throw Object.assign(new Error(err.error || `Request failed: ${res.status}`), { code: err.code });
   }
   return res.json();
 }
@@ -178,7 +184,11 @@ export async function matchVocabFromCandidates(
     candidates: candidates.map(({ word, ipa }) => ({ word, ipa })),
     audioBase64,
     timerMode,
-  }).catch(() => null);
+  }).catch(err => {
+    // An outage must reach the caller; any other failure just means no match for this clip
+    if (isAiUnavailable(err)) throw err;
+    return null;
+  });
   if (!res) return [];
 
   if (process.env.NODE_ENV === 'development') {
