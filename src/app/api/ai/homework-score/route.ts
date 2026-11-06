@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient as createServerClient } from '@/lib/supabase/server';
+import { createClient } from '@supabase/supabase-js';
+import { findStructureFrame } from '@/lib/homework/structureFrame';
 import {
   scoreVocabGuess,
   matchVocabFromCandidates,
@@ -54,11 +56,21 @@ export async function POST(request: NextRequest) {
     }
 
     if (type === 'own-sentence') {
-      const { structurePattern, audioBase64, timerMode, exampleSentence } = body;
+      const { structurePattern, audioBase64, timerMode, exampleSentence, lessonId } = body;
       if (!structurePattern || !audioBase64) {
         return NextResponse.json({ error: 'structurePattern and audioBase64 are required' }, { status: 400 });
       }
-      const result = await scoreOwnSentence(structurePattern, audioBase64, timerMode ?? false, exampleSentence);
+      // The frame with its [slot] brackets, so the copy check knows which words are meant to be repeated
+      let frame: string | null = null;
+      if (typeof lessonId === 'string' && lessonId) {
+        try {
+          const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+          frame = await findStructureFrame(admin, lessonId, structurePattern);
+        } catch (err) {
+          console.error('[ai/homework-score] Frame lookup failed:', err);
+        }
+      }
+      const result = await scoreOwnSentence(frame ?? structurePattern, audioBase64, timerMode ?? false, exampleSentence, !!frame);
       return NextResponse.json(result);
     }
 

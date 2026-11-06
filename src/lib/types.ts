@@ -644,6 +644,7 @@ export interface StructureScoringResult {
   transcription?: string;
   correctedSentence?: string;
   penaltiesApplied: number;
+  copiedExample?: boolean;   // own sentence only: it repeated the example, so it scored 0
 }
 
 export interface ConversationScoringResult {

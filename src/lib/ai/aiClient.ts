@@ -225,8 +225,9 @@ export const scoreOwnSentence = (
   audioBase64: string,
   timerMode: boolean,
   exampleSentence?: string,
+  lessonId?: string,
 ): Promise<StructureScoringResult> =>
-  post('/api/ai/homework-score', { type: 'own-sentence', structurePattern, audioBase64, timerMode, exampleSentence });
+  post('/api/ai/homework-score', { type: 'own-sentence', structurePattern, audioBase64, timerMode, exampleSentence, lessonId });
 
 export const scoreReadingPassage = (
   readingPassage: string,

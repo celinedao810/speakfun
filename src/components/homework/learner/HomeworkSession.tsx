@@ -172,6 +172,9 @@ function Ex2Summary({
             {r.transcription && (
               <p className="mt-1.5 ml-7 text-xs text-muted-foreground italic">"{r.transcription}"</p>
             )}
+            {r.copiedExample && r.item.exampleSentence && (
+              <p className="mt-1 ml-7 text-xs text-slate-500">Example: "{r.item.exampleSentence}"</p>
+            )}
             {!r.isCorrect && r.correctedSentence && (
               <p className="mt-1 ml-7 text-xs text-green-700 font-medium">✓ {r.correctedSentence}</p>
             )}

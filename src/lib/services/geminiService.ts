@@ -1507,20 +1507,35 @@ Give feedback in Vietnamese.`
 
 /**
  * Evaluates a learner's own sentence using a target grammar structure.
- * Points: 3pt max, minus 0.5pt per grammar/pronunciation error.
+ * Points: 3pt max, minus 0.5pt per grammar/pronunciation error; 0 if it repeats the example.
  * timerMode parameter kept for backward compatibility but no longer affects scoring.
+ * hasSlots: structurePattern carries its [slot] brackets (see findStructureFrame).
  */
+export const COPIED_EXAMPLE_FEEDBACK = 'Bạn cần tự tạo câu của mình, không được đọc lại câu mẫu.';
+
 export const scoreOwnSentence = async (
   structurePattern: string,
   audioBase64: string,
   timerMode: boolean,
   exampleSentence?: string,
+  hasSlots = false,
 ): Promise<StructureScoringResult> => {
   return safeExecute(async () => {
     const ai = new GoogleGenAI({ apiKey: getApiKey() });
     const basePoints = 3;
-    const exampleLine = exampleSentence
-      ? `\nExample sentence shown to learner (they must NOT copy this): "${exampleSentence}"\n`
+    const slotNote = hasSlots
+      ? 'The words in [brackets] are slots the learner fills with their own content; every other word of the structure is fixed.'
+      : 'The words of the structure are fixed; the content the example adds around them (names, things, details) is the slot content the learner should replace with their own.';
+    const copyCheck = exampleSentence
+      ? `
+Example sentence shown to the learner: "${exampleSentence}"
+
+Example copy check (set copiedExample):
+${slotNote}
+The learner is SUPPOSED to repeat the fixed words of the structure, so a sentence that matches the example everywhere except the slots is NOT a copy — it is exactly what the exercise asks for.
+Judge only the slot content. copiedExample=true only if every slot is filled with the same content as the example (ignore a/an/the, contractions like I'd / I would, filler words, and small transcription differences).
+If at least one slot holds the learner's own content (a different feature, data, person, place, reason…), copiedExample=false — even if the rest of the sentence is word for word the same as the example.
+`
       : '';
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
@@ -1529,15 +1544,9 @@ export const scoreOwnSentence = async (
           {
             text: `Evaluate this learner-generated English sentence for a speaking exercise.
 
-Target grammar structure: "${structurePattern}"${exampleLine}
+Target grammar structure: "${structurePattern}"
 Base points: ${basePoints} (subtract 0.5 per error, 0 if grammatically incorrect)
-
-IMPORTANT — example copy check (do this FIRST):
-Only flag as copied if the transcription is essentially the same sentence as the example — i.e., the learner read it word-for-word or changed only 1–2 words while keeping the rest of the sentence identical.
-Do NOT flag as copied just because the learner reused some common words, shared the same topic, or used a similar sentence opening. As long as the learner clearly composed a different sentence overall, it is original.
-If flagged as copied: set grammarCorrect=false, pointsEarned=0, correctedSentence="", feedback="Bạn cần tự tạo câu của mình, không được đọc lại câu mẫu."
-
-Only if the transcription is an original sentence (not a near-identical copy of the example):
+${copyCheck}
 Step 1: Transcribe what was said.
 Step 2: Check if the sentence uses the target structure correctly (grammarCorrect).
 Step 3: Check if the sentence makes sense (makesSense).
@@ -1564,12 +1573,27 @@ Step 8: correctedSentence = empty string if grammarCorrect=true, otherwise write
             penaltiesApplied: { type: Type.NUMBER },
             feedback: { type: Type.STRING },
             correctedSentence: { type: Type.STRING },
+            copiedExample: { type: Type.BOOLEAN },
           },
-          required: ['transcription', 'grammarCorrect', 'makesSense', 'pronunciationScore', 'pointsEarned', 'penaltiesApplied', 'feedback', 'correctedSentence'],
+          required: ['transcription', 'grammarCorrect', 'makesSense', 'pronunciationScore', 'pointsEarned', 'penaltiesApplied', 'feedback', 'correctedSentence', 'copiedExample'],
         },
       },
     });
     const result = JSON.parse(response.text || '{}');
+    if (exampleSentence && result.copiedExample === true) {
+      return {
+        structureItemId: '',  // Set by caller
+        step: 'OWN_SENTENCE' as const,
+        pronunciationScore: result.pronunciationScore || 0,
+        grammarCorrect: false,
+        pointsEarned: 0,
+        feedback: COPIED_EXAMPLE_FEEDBACK,
+        transcription: result.transcription || '',
+        correctedSentence: '',
+        penaltiesApplied: 0,
+        copiedExample: true,
+      };
+    }
     return {
       structureItemId: '',  // Set by caller
       step: 'OWN_SENTENCE' as const,

@@ -20,6 +20,7 @@ export interface StructureResult {
   feedback?: string;
   transcription?: string;
   correctedSentence?: string;
+  copiedExample?: boolean;
 }
 
 const FALL_DURATION_MS = 25000; // 25 seconds
@@ -106,7 +107,7 @@ export default function Exercise2Structure({ structures, onComplete, onAiUnavail
 
     // Fire AI call in background
     pendingCountRef.current++;
-    scoreOwnSentence(capturedStructure.pattern, base64, false, capturedStructure.exampleSentence)
+    scoreOwnSentence(capturedStructure.pattern, base64, false, capturedStructure.exampleSentence, capturedStructure.lessonId)
       .then((result: StructureScoringResult) => {
         result.structureItemId = capturedStructure.id;
         const pts = result.pointsEarned;
@@ -120,6 +121,7 @@ export default function Exercise2Structure({ structures, onComplete, onAiUnavail
           feedback: result.feedback,
           transcription: result.transcription,
           correctedSentence: result.correctedSentence,
+          copiedExample: result.copiedExample,
         };
         structureResultsArrRef.current[capturedIndex] = sResult;
 
