@@ -3,8 +3,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Bricolage_Grotesque, DM_Mono, Newsreader, Noto_Sans } from 'next/font/google';
 import type { Hub, Topic } from '@/lib/lessonHub/types';
-import { dueRound, fmtClock, isPron, planFor, talkTime } from '@/lib/lessonHub/engine';
-import { DlgState, HubProvider } from './shared';
+import { dueRound, fmtClock, isInterview, isPron, planFor, talkTime } from '@/lib/lessonHub/engine';
+import { DlgState, HubClass, HubProvider } from './shared';
 import { IpaText, PlanPhases, Rail, ShapeStrip, SoundNotes } from './rounds';
 import PresentMode from './PresentMode';
 import './e4it.css';
@@ -24,9 +24,11 @@ export interface LessonHubNav {
 // Scroll-spy threshold: the original 140px plus SpeakFun's 64px header.
 const SPY_OFFSET = 204;
 
-export default function LessonHub({ hub, topics, initialTopicId, onNavigate }: {
+export default function LessonHub({ hub, topics, classes, initialTopicId, onNavigate }: {
   hub: Hub;
   topics: Topic[];
+  /** The teacher's classes, for the interview links to the selection screen. */
+  classes?: HubClass[];
   initialTopicId?: string | null;
   onNavigate?: (nav: LessonHubNav) => void;
 }) {
@@ -84,7 +86,7 @@ export default function LessonHub({ hub, topics, initialTopicId, onNavigate }: {
   const fonts = `${sans.variable} ${serif.variable} ${mono.variable} ${ipa.variable}`;
 
   return (
-    <HubProvider value={{ hub, topic, dlg, setDlg }}>
+    <HubProvider value={{ hub, topic, dlg, setDlg, classes }}>
       <div className={`e4it ${fonts}`}>
         <div className="bar">
           <button type="button" className="code" onClick={() => go('hub')}>
@@ -161,7 +163,9 @@ function HubView({ hub, topics, track, setTrack, open }: {
           <tr key={t.id} className="open" onClick={() => open(t.id)}>
             <td className="tnum">{t.order}</td>
             <td><div className="tt">{t.title}</div><div className="tmeet">{t.meeting}</div><div className="tanchor">{t.anchor}</div></td>
-            <td className="tcount">{isPron(t)
+            <td className="tcount">{isInterview(t)
+              ? <>interview<br />{(t.frameworks ?? []).map(f => f.id).join(' · ')}</>
+              : isPron(t)
               ? `${t.rounds!.filter(r => r.phase === 'class').length} rounds`
               : <>{t.vocabulary?.length ?? 0} words<br />{t.structures?.length ?? 0} frames</>}</td>
           </tr>
@@ -233,19 +237,25 @@ function TopicView({ hub, t, back, onPresent, rail }: {
 }) {
   const P = planFor(t, hub);
   const pron = isPron(t);
+  const iv = isInterview(t);
+  const frames = (t.frameworks ?? []).reduce((n, f) => n + f.steps.reduce((m, s) => m + s.frames.length, 0), 0);
   return (
     <>
       <button type="button" className="back" onClick={back}>{pron ? 'Back to pronunciation sessions' : `Back to ${t.track} topics`}</button>
       <div className="thead">
-        <div className="kicker">{pron ? `Pronunciation · session ${t.order}` : `${t.track} · topic ${t.order}`}</div>
+        <div className="kicker">{pron ? `Pronunciation · session ${t.order}` : `${t.track} · ${iv ? 'interview prep' : 'topic'} ${t.order}`}</div>
         <h2>{t.title}</h2>
-        <p className="says"><IpaText text={t.says} /></p>
-        {!pron && <div className="ticket"><b>This topic runs on</b>{t.anchor}</div>}
-        {!pron && <ShapeStrip t={t} />}
+        {t.says && <p className="says"><IpaText text={t.says} /></p>}
+        {iv && t.goal && <div className="ticket"><b>Learners leave with</b>{t.goal}</div>}
+        {!pron && !iv && <div className="ticket"><b>This topic runs on</b>{t.anchor}</div>}
+        {!pron && !iv && <ShapeStrip t={t} />}
+        {iv && <div className="shape">{(t.frameworks ?? []).map(f => <span key={f.id}>{f.id} · {f.name}</span>)}</div>}
         <div className="facts">
-          <span>{t.cefr}</span>
+          {t.cefr && <span>{t.cefr}</span>}
           {pron
             ? <span>{P.filter(r => r.phase === 'class').length} rounds</span>
+            : iv
+            ? <><span>{t.frameworks?.length ?? 0} frameworks</span><span>{frames} frames</span></>
             : <><span>{t.vocabulary?.length ?? 0} words</span><span>{t.structures?.length ?? 0} frames</span></>}
           <span>~{Math.round(talkTime(P, hub))} min speaking each</span>
         </div>

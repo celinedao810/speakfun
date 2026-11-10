@@ -2,9 +2,10 @@
 
 import React, { useState } from 'react';
 import type { Dialogue, ExplainItem, PlanRound, PronPart, StressWord, Topic } from '@/lib/lessonHub/types';
-import { isPron, pairRows, phaseOrder, planFor, promptAnswer, promptOrder, sceneList, schedule, share, sub } from '@/lib/lessonHub/engine';
+import { isInterview, isPron, pairRows, phaseOrder, planFor, promptAnswer, promptOrder, sceneList, schedule, share, sub } from '@/lib/lessonHub/engine';
 import { ExampleLines, GapLine, HintRows, MarkedPassage, Slots, Toggle, openYouGlish, useHub } from './shared';
 import FlowSketch from './FlowSketch';
+import { InterviewRoundBody } from './interviewRounds';
 
 const Bank = ({ items, className }: { items: string[]; className?: string }) => (
   <div className="bank">{items.map((q, i) => <span key={i} className={className}>{q}</span>)}</div>
@@ -339,6 +340,7 @@ function PronBody({ r }: { r: PlanRound }) {
 
 function RoundBody({ t, r }: { t: Topic; r: PlanRound }) {
   if (r.parts || r.game) return <PronBody r={r} />;
+  if (isInterview(t) && r.uses !== 'leadIn' && r.uses !== 'homework') return <InterviewRoundBody t={t} r={r} />;
   switch (r.uses) {
     case 'leadIn': return <Bank items={t.leadIn || []} />;
     case 'prep': return <>

@@ -64,7 +64,9 @@ export interface WordForm { s: string; ipa: string; g: string }
 
 export type RoundUses =
   | 'context' | 'vocabTable' | 'vocabulary' | 'structures' | 'prompts' | 'dialogue'
-  | 'speaking' | 'homework' | 'leadIn' | 'prep' | 'reading';
+  | 'speaking' | 'homework' | 'leadIn' | 'prep' | 'reading'
+  // interview segments
+  | 'questionBank' | `framework:${string}`;
 
 export interface PlanRound {
   phase: Phase;
@@ -91,6 +93,80 @@ export interface Hub {
   tracks: string[];
   soon: Record<string, [number, string][]>;
   rules: ClassRules;
+  /** Interview question bank per track, shared by every interview topic in that track. */
+  interviewBanks?: Record<string, InterviewBank>;
+}
+
+/* ---------------- interview prep ---------------- */
+
+export interface IntakeField { key: string; label: string; required?: boolean }
+export interface BankSlot { name: string; fromIntake?: string }
+export interface BankQuestion {
+  id: string;                 // permanent once learners have picked it
+  text: string;               // [slot] markers make it a template
+  mandatory?: boolean;
+  slots?: BankSlot[];
+  framework?: string;         // only in groups without a framework of their own
+}
+export interface BankGroup { id: string; name: string; framework?: string; questions: BankQuestion[] }
+export interface BankRound { id: string; name: string; pick: number; usesIntake?: boolean; groups: BankGroup[] }
+export interface InterviewBank { intake: IntakeField[]; rounds: BankRound[] }
+
+export interface Frame { structure: string; example: string; alternative?: string | null }
+export interface FrameworkStep { name: string; purpose?: string; frames: Frame[] }
+export interface Framework {
+  id: string;                 // F1…F7, unique across the track
+  name: string;
+  flow: string;
+  length?: string;
+  why?: string;
+  notes?: string[];
+  modelQuestion?: string;     // a question id in the track's bank
+  steps: FrameworkStep[];
+  modelAnswer: { persona?: string; paragraphs: string[] };
+  buildOwn?: string;
+}
+
+export interface Segment {
+  title: string;
+  min?: number;
+  phase?: Phase;              // 'class' unless given
+  group?: Group;              // 'whole' unless given ('solo' for homework)
+  uses: RoundUses;            // leadIn | questionBank | framework:<id> | homework
+  how?: string;
+  tell?: string;
+  say?: string;
+}
+
+export type IntakeValues = Record<string, string>;
+/** text: the question as it was when picked, shown if the bank later drops it. */
+export interface QuestionPick {
+  questionId: string;
+  slotValues?: Record<string, string>;
+  pickedAt?: string;
+  round?: string;
+  text?: string;
+}
+export interface CustomQuestion {
+  id: string;
+  round: string;
+  kind: 'requested' | 'follow-up';
+  text: string;
+  framework?: string;
+  parentId?: string;          // follow-ups in the technical round: the picked question they follow
+}
+/** One record per class × learner × track, kept for the whole interview series. Teacher-only data. */
+export interface InterviewSelection {
+  classId: string;
+  learnerId: string;
+  track: string;
+  intake: IntakeValues;
+  intakeUpdatedAt: string | null;
+  /** The intake changed after slots were filled from it; cleared when the teacher has checked. */
+  intakeChanged: boolean;
+  picks: QuestionPick[];
+  custom: CustomQuestion[];
+  updatedAt: string | null;
 }
 
 export interface VocabItem { word: string; pos: string; definition: string; example: string; ipa?: string | null }
@@ -120,8 +196,12 @@ export interface FlowStep {
 }
 export interface Flow { title?: string; steps: FlowStep[] }
 
+export type TopicKind = 'speaking' | 'pronunciation' | 'interview';
+
 export interface Topic {
   id: string;
+  /** Only interview topics carry it; the others are told apart by `rounds`. */
+  kind?: TopicKind;
   track: string;
   order: number;
   title: string;
@@ -130,6 +210,10 @@ export interface Topic {
   cefr: string;
   taughtOn?: string;
   says: string;
+  // interview topics
+  goal?: string;
+  segments?: Segment[];
+  frameworks?: Framework[];
   // speaking topics
   context?: string | string[];
   reading?: { title: string; passage: string[] };

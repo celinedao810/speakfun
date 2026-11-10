@@ -1,11 +1,42 @@
 // Pure lesson-hub logic, ported from the hub HTML script.
 
-import type { Group, Hub, Move, PlanRound, Scene, Structure, Topic } from './types';
+import type { Group, Hub, Move, PlanRound, Scene, Structure, Topic, TopicKind } from './types';
 
-/** Speaking topics share the hub's plan. Pronunciation sessions carry their own rounds. */
-export const isPron = (t: Topic | null | undefined) => !!(t && t.rounds);
+/**
+ * Speaking topics share the hub's plan. Pronunciation sessions carry their own rounds.
+ * Interview topics carry segments, read as rounds here.
+ */
+export const isInterview = (t: Topic | null | undefined) => !!(t && t.kind === 'interview');
+export const isPron = (t: Topic | null | undefined) => !!(t && t.rounds && !isInterview(t));
+export const topicKind = (t: Topic): TopicKind => isInterview(t) ? 'interview' : isPron(t) ? 'pronunciation' : 'speaking';
+
+export const segmentPlan = (t: Topic): PlanRound[] => (t.segments || []).map(s => ({
+  phase: s.phase || 'class',
+  title: s.title,
+  min: s.min ?? 0,
+  group: s.group || (s.uses === 'homework' ? 'solo' : 'whole'),
+  uses: s.uses,
+  how: s.how, tell: s.tell, say: s.say,
+}));
+
 export const planFor = (t: Topic | null | undefined, hub: Hub): PlanRound[] =>
-  (t && t.rounds) ? t.rounds : hub.plan;
+  isInterview(t) ? segmentPlan(t!) : (t && t.rounds) ? t.rounds : hub.plan;
+
+/** "framework:F1" → the topic's F1. */
+export const segmentFramework = (t: Topic, uses?: string) =>
+  uses?.startsWith('framework:') ? (t.frameworks || []).find(f => f.id === uses.slice('framework:'.length)) ?? null : null;
+
+/**
+ * The topic whose homework is the project pitch shows the intake fields: it teaches the framework
+ * that answers the mandatory question of the round that uses the intake (F3 for Developer).
+ */
+export function pitchFramework(t: Topic, hub: Hub): string | null {
+  const bank = hub.interviewBanks?.[t.track];
+  const round = bank?.rounds.find(r => r.usesIntake);
+  const g = round?.groups.find(x => x.questions.some(q => q.mandatory));
+  const fw = g ? (g.framework ?? g.questions.find(q => q.mandatory)?.framework) : null;
+  return fw && (t.frameworks || []).some(f => f.id === fw) ? fw : null;
+}
 
 /**
  * Phases in teaching order. Postgres JSONB doesn't keep object key order ("after"

@@ -4,7 +4,7 @@
 // Unknown extra fields are allowed so the format can grow.
 
 import { z } from 'zod';
-import type { Hub, Topic } from './types';
+import type { Hub, InterviewBank, Topic } from './types';
 
 const str = z.string();
 const nonEmpty = z.string().trim().min(1);
@@ -111,6 +111,63 @@ export const pronTopicSchema = z.looseObject({
   soundNotes: z.array(str).optional(),
 });
 
+/* ---------------- interview topics ---------------- */
+
+const frame = z.looseObject({ structure: nonEmpty, example: nonEmpty, alternative: str.nullable().optional() });
+const frameworkStep = z.looseObject({
+  name: nonEmpty, purpose: str.optional(),
+  frames: z.array(frame).min(1, 'every step needs at least one frame'),
+});
+const framework = z.looseObject({
+  id: nonEmpty, name: nonEmpty, flow: nonEmpty,
+  length: str.optional(), why: str.optional(), notes: z.array(str).optional(), modelQuestion: str.optional(),
+  steps: z.array(frameworkStep).min(1, 'a framework needs at least one step'),
+  modelAnswer: z.looseObject({ persona: str.optional(), paragraphs: z.array(nonEmpty).min(1, 'the model answer needs at least one paragraph') }),
+  buildOwn: str.optional(),
+});
+const segment = z.looseObject({
+  title: nonEmpty,
+  min: z.number().min(0).optional(),
+  phase: nonEmpty.optional(),
+  group: z.enum(['whole', 'teacher', 'solo']).optional(),
+  uses: nonEmpty,
+  how: str.optional(), tell: str.optional(), say: str.optional(),
+});
+
+export const interviewTopicSchema = z.looseObject({
+  id: topicBase.id,
+  kind: z.literal('interview'),
+  track: nonEmpty,
+  order: z.number().int(),
+  title: nonEmpty,
+  cefr: str.optional(),
+  says: str.optional(),
+  goal: str.optional(),
+  meeting: str.optional(),
+  anchor: str.optional(),
+  taughtOn: str.optional(),
+  leadIn: z.array(str).optional(),
+  segments: z.array(segment).min(1),
+  frameworks: z.array(framework).min(1),
+  homework: nonEmpty,
+});
+
+/* ---------------- interview question bank ---------------- */
+
+const bankQuestion = z.looseObject({
+  id: nonEmpty, text: nonEmpty, mandatory: z.boolean().optional(), framework: str.optional(),
+  slots: z.array(z.looseObject({ name: nonEmpty, fromIntake: str.optional() })).optional(),
+});
+const bankGroup = z.looseObject({ id: nonEmpty, name: nonEmpty, framework: str.optional(), questions: z.array(bankQuestion) });
+const bankRound = z.looseObject({
+  id: nonEmpty, name: nonEmpty, pick: z.number().int().min(1), usesIntake: z.boolean().optional(),
+  groups: z.array(bankGroup).min(1),
+});
+const interviewBank = z.looseObject({
+  intake: z.array(z.looseObject({ key: nonEmpty, label: nonEmpty, required: z.boolean().optional() })),
+  rounds: z.array(bankRound).min(1),
+});
+
 export const hubSchema = z.looseObject({
   course: z.looseObject({ name: nonEmpty, classSize: z.number().int().positive().optional() }),
   project: z.looseObject({ name: nonEmpty, oneLine: str, modules: z.array(str), timeline: z.array(z.looseObject({ wh: str, wt: str })) }),
@@ -120,14 +177,20 @@ export const hubSchema = z.looseObject({
   tracks: z.array(nonEmpty).min(1),
   soon: z.record(z.string(), z.array(z.tuple([z.number(), str]))),
   rules: z.looseObject({ teacher: str, welcome: str, rules: z.array(z.looseObject({ title: str, text: str })), reminders: z.array(str) }),
+  interviewBanks: z.record(z.string(), interviewBank).optional(),
 });
 
 function zodErrors(err: z.ZodError): string[] {
   return err.issues.map(i => `${i.path.join('.') || '(root)'}: ${i.message}`);
 }
 
+type HubRefs = Pick<Hub, 'tracks'> & Partial<Pick<Hub, 'phases' | 'interviewBanks'>>;
+
+export const isInterviewTopic = (t: unknown) => !!(t && typeof t === 'object' && (t as Topic).kind === 'interview');
+
 /** Structural + cross-reference checks. Returns a list of readable problems (empty = valid). */
-export function validateTopic(topic: unknown, hub?: Pick<Hub, 'tracks'> | null): string[] {
+export function validateTopic(topic: unknown, hub?: HubRefs | null): string[] {
+  if (isInterviewTopic(topic)) return validateInterviewTopic(topic, hub);
   const t = topic as Topic;
   const isPron = !!(t && typeof t === 'object' && 'rounds' in t && t.rounds);
   const parsed = (isPron ? pronTopicSchema : speakingTopicSchema).safeParse(topic);
@@ -202,17 +265,88 @@ const normWord = (w: string) => w.toLowerCase().replace(/\s+/g, ' ').trim();
 const normFrame = (f: string) => f.toLowerCase().replace(/[\u2018\u2019]/g, "'").replace(/\[[^\]]*\]/g, '[]')
   .replace(/\s+/g, ' ').trim().replace(/[.?!]+$/, '');
 
+/** Every sentence frame a topic teaches, with where it sits: speaking structures and interview framework frames alike. */
+function framesOf(t: Topic): { structure: string; where: string }[] {
+  return [
+    ...(t.structures ?? []).map((f, i) => ({ structure: f.structure, where: `structures.${i}` })),
+    ...(t.frameworks ?? []).flatMap((fw, i) => (fw.steps ?? []).flatMap((s, j) => (s.frames ?? []).map((f, k) =>
+      ({ structure: f.structure, where: `frameworks.${i}.steps.${j}.frames.${k} (${fw.id} · ${s.name})` })))),
+  ];
+}
+
+/**
+ * Interview topics: segments in place of the fixed plan, frameworks in place of vocabulary,
+ * structures and dialogue. Bank references are checked against the hub's bank for the track.
+ */
+function validateInterviewTopic(topic: unknown, hub?: HubRefs | null): string[] {
+  const parsed = interviewTopicSchema.safeParse(topic);
+  if (!parsed.success) return zodErrors(parsed.error);
+  const t = topic as Topic;
+  const errors: string[] = [];
+  if (hub && !hub.tracks.includes(t.track)) {
+    errors.push(`track: "${t.track}" is not one of ${hub.tracks.map(x => `"${x}"`).join(', ')}`);
+  }
+  const bank = hub?.interviewBanks?.[t.track];
+  const fws = t.frameworks!;
+  const fwIds = new Set<string>();
+  fws.forEach((f, i) => {
+    if (fwIds.has(f.id)) errors.push(`frameworks.${i}: id "${f.id}" is used twice in this topic`);
+    fwIds.add(f.id);
+  });
+
+  const used = new Set<string>();
+  t.segments!.forEach((s, i) => {
+    const at = `segments.${i} ("${s.title}")`;
+    if (s.phase && hub?.phases && !(s.phase in hub.phases)) {
+      errors.push(`${at}: phase "${s.phase}" is not one of the hub's phases (${Object.keys(hub.phases).join(', ')})`);
+    }
+    const u = s.uses as string;
+    if (u.startsWith('framework:')) {
+      const id = u.slice('framework:'.length);
+      if (!fwIds.has(id)) errors.push(`${at}: uses framework "${id}", which is not in this topic's frameworks (${[...fwIds].join(', ')})`);
+      used.add(id);
+    } else if (u === 'questionBank') {
+      if (hub && !bank) errors.push(`${at}: uses the question bank, but the hub has no interviewBanks entry for "${t.track}"`);
+    } else if (u === 'leadIn') {
+      if (!t.leadIn?.length) errors.push(`${at}: uses leadIn, but the topic has no leadIn questions`);
+    } else if (u !== 'homework') {
+      errors.push(`${at}: uses must be leadIn, questionBank, framework:<id> or homework, not "${u}"`);
+    }
+  });
+  fws.forEach((f, i) => {
+    if (!used.has(f.id)) errors.push(`frameworks.${i} ("${f.id}"): no segment uses it; add a segment with uses "framework:${f.id}"`);
+    if (f.modelQuestion && hub) {
+      if (!bank) errors.push(`frameworks.${i}.modelQuestion: "${f.modelQuestion}" needs a question bank for "${t.track}"`);
+      else if (!bank.rounds.some(r => r.groups.some(g => g.questions.some(q => q.id === f.modelQuestion)))) {
+        errors.push(`frameworks.${i}.modelQuestion: "${f.modelQuestion}" is not a question in the ${t.track} bank`);
+      }
+    }
+  });
+
+  const seen = new Map<string, string>();
+  framesOf(t).forEach(f => {
+    const k = normFrame(f.structure);
+    const first = seen.get(k);
+    if (first) errors.push(`${f.where}: the same frame ("${f.structure}") is already at ${first} in this topic`);
+    else seen.set(k, f.where);
+  });
+  return errors;
+}
+
 /**
  * House rules: within a track, a word is taught once and a frame is used once. Frames may be
- * paraphrased but not repeated word for word. Tracks are separate cohorts, so repeats across
- * tracks are fine. `others` is every saved topic; the topic itself is skipped.
+ * paraphrased but not repeated word for word, whether they sit in a speaking topic's structures
+ * or an interview framework. An interview framework is taught in one topic only. Tracks are
+ * separate cohorts, so repeats across tracks are fine. `others` is every saved topic; the topic
+ * itself is skipped.
  */
 export function trackDuplicates(topic: Topic, others: Topic[]): string[] {
-  const wordIn = new Map<string, string>(), frameIn = new Map<string, string>();
+  const wordIn = new Map<string, string>(), frameIn = new Map<string, string>(), fwIn = new Map<string, string>();
   for (const o of others) {
     if (o.id === topic.id || o.track !== topic.track) continue;
     for (const v of o.vocabulary ?? []) wordIn.set(normWord(v.word), o.id);
-    for (const f of o.structures ?? []) frameIn.set(normFrame(f.structure), o.id);
+    for (const f of framesOf(o)) frameIn.set(normFrame(f.structure), o.id);
+    for (const f of o.frameworks ?? []) fwIn.set(f.id, o.id);
   }
   const where = `same track, ${topic.track}`;
   return [
@@ -220,17 +354,84 @@ export function trackDuplicates(topic: Topic, others: Topic[]): string[] {
       const other = wordIn.get(normWord(v.word));
       return other ? [`vocabulary: "${v.word}" is already taught in ${other} (${where}). Pick a different word, or remove it from ${other} first.`] : [];
     }),
-    ...(topic.structures ?? []).flatMap(f => {
+    ...framesOf(topic).flatMap(f => {
       const other = frameIn.get(normFrame(f.structure));
-      return other ? [`structures: "${f.structure}" is already used in ${other} (${where}). Paraphrase it, or change it in ${other} first.`] : [];
+      return other ? [`${f.where}: "${f.structure}" is already used in ${other} (${where}). Paraphrase it, or change it in ${other} first.`] : [];
+    }),
+    ...(topic.frameworks ?? []).flatMap(f => {
+      const other = fwIn.get(f.id);
+      return other ? [`frameworks: "${f.id}" is already taught in ${other} (${where}). A framework is taught in one topic; give this one a new id.`] : [];
     }),
   ];
+}
+
+/** Question bank rules, per track. */
+export function validateBanks(banks: Record<string, InterviewBank>, tracks?: string[]): string[] {
+  const errors: string[] = [];
+  for (const [track, bank] of Object.entries(banks)) {
+    const at = `interviewBanks.${track}`;
+    if (tracks && !tracks.includes(track)) errors.push(`${at}: "${track}" is not one of the hub's tracks (${tracks.join(', ')})`);
+    const intakeKeys = new Set<string>();
+    bank.intake.forEach((f, i) => {
+      if (intakeKeys.has(f.key)) errors.push(`${at}.intake.${i}: key "${f.key}" is listed twice`);
+      intakeKeys.add(f.key);
+    });
+    const qIds = new Map<string, string>();
+    const roundIds = new Set<string>();
+    bank.rounds.forEach((r, ri) => {
+      const rAt = `${at}.rounds.${ri} ("${r.id}")`;
+      if (roundIds.has(r.id)) errors.push(`${rAt}: round id is used twice`);
+      roundIds.add(r.id);
+      const groupIds = new Set<string>();
+      let mandatory = 0;
+      r.groups.forEach((g, gi) => {
+        const gAt = `${rAt}.groups.${gi} ("${g.id}")`;
+        if (groupIds.has(g.id)) errors.push(`${gAt}: group id is used twice in this round`);
+        groupIds.add(g.id);
+        g.questions.forEach((q, qi) => {
+          const qAt = `${gAt}.questions.${qi} ("${q.id}")`;
+          const prev = qIds.get(q.id);
+          if (prev) errors.push(`${qAt}: id is already used at ${prev}; question ids are unique across both rounds`);
+          else qIds.set(q.id, qAt);
+          if (q.mandatory) mandatory++;
+          if (!g.framework && !q.framework) errors.push(`${qAt}: the group has no framework, so the question needs its own "framework"`);
+          const markers = [...q.text.matchAll(/\[([^\]]+)\]/g)].map(m => m[1]);
+          const slots = (q.slots ?? []).map(s => s.name);
+          if (markers.length !== slots.length || markers.some((m, k) => m !== slots[k])) {
+            errors.push(`${qAt}: the [slot] markers in the text (${markers.map(m => `[${m}]`).join(', ') || 'none'}) must match slots, in the same order (${slots.map(s => `[${s}]`).join(', ') || 'none'})`);
+          }
+          (q.slots ?? []).forEach((s, si) => {
+            if (s.fromIntake && !intakeKeys.has(s.fromIntake)) {
+              errors.push(`${qAt}.slots.${si}: fromIntake "${s.fromIntake}" is not an intake key (${[...intakeKeys].join(', ') || 'none'})`);
+            }
+          });
+        });
+      });
+      if (mandatory >= r.pick) errors.push(`${rAt}: ${mandatory} mandatory question(s) but learners pick only ${r.pick}; mandatory must be fewer than pick`);
+    });
+  }
+  return errors;
+}
+
+/** Not errors: bank groups may point at frameworks whose topic isn't written yet. */
+export function bankWarnings(banks: Record<string, InterviewBank>, topics: Topic[]): string[] {
+  const out: string[] = [];
+  for (const [track, bank] of Object.entries(banks)) {
+    const built = new Set(topics.filter(t => t.track === track).flatMap(t => (t.frameworks ?? []).map(f => f.id)));
+    const wanted = new Set(bank.rounds.flatMap(r => r.groups.flatMap(g => [g.framework, ...g.questions.map(q => q.framework)])).filter(Boolean) as string[]);
+    const missing = [...wanted].filter(f => !built.has(f)).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    if (missing.length) out.push(`${track}: frameworks not built in any topic yet: ${missing.join(', ')}`);
+  }
+  return out;
 }
 
 export function validateHub(hub: unknown): string[] {
   const parsed = hubSchema.safeParse(hub);
   if (!parsed.success) return zodErrors(parsed.error);
   const h = hub as Hub;
-  return h.plan.flatMap((r, i) => r.phase in h.phases ? []
-    : [`plan.${i}.phase: "${r.phase}" is not one of the hub's phases (${Object.keys(h.phases).join(', ')})`]);
+  return [
+    ...h.plan.flatMap((r, i) => r.phase in h.phases ? []
+      : [`plan.${i}.phase: "${r.phase}" is not one of the hub's phases (${Object.keys(h.phases).join(', ')})`]),
+    ...(h.interviewBanks ? validateBanks(h.interviewBanks, h.tracks) : []),
+  ];
 }

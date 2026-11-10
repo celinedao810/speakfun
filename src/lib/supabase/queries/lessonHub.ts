@@ -19,6 +19,17 @@ export async function saveHub(supabase: SupabaseClient, teacherId: string, hub: 
   if (error) throw new Error(`Saving hub failed: ${error.message}`);
 }
 
+/** Replace one top-level hub key atomically; the hub as it was is kept as a revision. Validate first. */
+export async function saveHubKey(
+  supabase: SupabaseClient, teacherId: string, key: keyof Hub, value: unknown, source: Source, note: string | null,
+): Promise<Hub> {
+  const { data, error } = await supabase.rpc('put_lesson_hub_key', {
+    p_teacher: teacherId, p_key: key, p_value: value, p_source: source, p_note: note,
+  });
+  if (error) throw new Error(`Saving hub failed: ${error.message}`);
+  return data as Hub;
+}
+
 export async function fetchTopics(supabase: SupabaseClient, teacherId: string): Promise<StoredTopic[]> {
   const { data, error } = await supabase
     .from('lesson_topics')

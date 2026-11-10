@@ -13,11 +13,15 @@ export interface DlgState {
   revealed: number[];    // "Which frame?" answers revealed one at a time (all shown when answers is on)
 }
 
+/** A class the interview links can open the selection screen for. */
+export interface HubClass { id: string; name: string; track?: string | null }
+
 interface HubCtx {
   hub: Hub;
   topic: Topic | null;
   dlg: DlgState;
   setDlg: (patch: Partial<DlgState>) => void;
+  classes?: HubClass[];
 }
 
 const Ctx = createContext<HubCtx | null>(null);

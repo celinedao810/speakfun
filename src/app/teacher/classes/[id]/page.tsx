@@ -18,7 +18,7 @@ import EnrollmentList from '@/components/teacher/EnrollmentList';
 import CourseAssigner from '@/components/teacher/CourseAssigner';
 import ScheduleConfigurator from '@/components/teacher/ScheduleConfigurator';
 import LessonList from '@/components/teacher/LessonList';
-import { ArrowLeft, Pencil, Check, X, Copy, Video, BarChart2, ClipboardList } from 'lucide-react';
+import { ArrowLeft, Pencil, Check, X, Copy, Video, BarChart2, ClipboardList, MessagesSquare } from 'lucide-react';
 import Link from 'next/link';
 import HomeworkSettingsPanel from '@/components/homework/teacher/HomeworkSettingsPanel';
 import HomeworkProgressView from '@/components/homework/teacher/HomeworkProgressView';
@@ -251,6 +251,13 @@ export default function ClassDetailPage() {
             )}
           </button>
           <span className="text-xs text-slate-400">{cls.student_count} students</span>
+          <Link
+            href={`/teacher/classes/${classId}/interview`}
+            className="flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-700 transition"
+          >
+            <MessagesSquare className="w-3.5 h-3.5" />
+            Interview prep{cls.track ? ` · ${cls.track}` : ''}
+          </Link>
           {cls.google_meet_url && (
             <a
               href={cls.google_meet_url}
