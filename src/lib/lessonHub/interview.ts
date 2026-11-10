@@ -183,15 +183,11 @@ export interface FrameworkAnswer { question: ListedQuestion; answer: ModelAnswer
 
 /**
  * A framework's model answers for this class: one per question on the class's list that the
- * framework answers, with null where none is written yet. When the class picked nothing for it,
- * the bank's first answered question in the framework stands in, so the lesson still has an example.
+ * framework answers, with null where none is written yet. Only the class's picks: answers to
+ * questions the class didn't pick never show.
  */
-export function answersForFramework(p: InterviewPicks | null | undefined, bank: InterviewBank, f: Framework): FrameworkAnswer[] {
-  const picked = picksForFramework(p, bank, f.id).map(q => ({ question: q, answer: q.requested ? null : modelAnswerOf(q.id, bank, f) }));
-  if (picked.length) return picked;
-  const stand = [...bankIndex(bank).values()].find(e => e.framework === f.id && modelAnswerOf(e.q.id, bank, f));
-  return stand ? [{ question: { id: stand.q.id, text: stand.q.text, framework: f.id }, answer: modelAnswerOf(stand.q.id, bank, f) }] : [];
-}
+export const answersForFramework = (p: InterviewPicks | null | undefined, bank: InterviewBank, f: Framework): FrameworkAnswer[] =>
+  picksForFramework(p, bank, f.id).map(q => ({ question: q, answer: q.requested ? null : modelAnswerOf(q.id, bank, f) }));
 
 export interface FrameworkGroup { framework: string | null; label: string; questions: ListedQuestion[] }
 
