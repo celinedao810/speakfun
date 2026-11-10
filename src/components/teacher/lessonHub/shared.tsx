@@ -22,6 +22,8 @@ export interface InterviewApi {
   removeRequested: (track: string, id: string) => void;
   /** Resolves to an error message, or null when the question is in the bank. */
   promote: (track: string, requestedId: string, roundId: string, groupId: string, framework?: string) => Promise<string | null>;
+  /** Takes the question out of the bank and off the class's list. Resolves to an error message, or null. */
+  removeFromBank: (track: string, questionId: string) => Promise<string | null>;
   clear: (track: string) => Promise<void>;
 }
 

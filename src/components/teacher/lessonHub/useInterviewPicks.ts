@@ -4,7 +4,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import { fetchHub, saveHubKey } from '@/lib/supabase/queries/lessonHub';
 import { clearInterviewPicks, fetchInterviewPicks, saveInterviewPicks } from '@/lib/supabase/queries/interviewPicks';
-import { addRequested, emptyPicks, promoteToBank, removeRequested, togglePick, withMandatory } from '@/lib/lessonHub/interview';
+import {
+  addRequested, bankIndex, dropPick, emptyPicks, isPicked, promoteToBank, removeFromBank, removeRequested, togglePick, withMandatory,
+} from '@/lib/lessonHub/interview';
 import { validateBanks } from '@/lib/lessonHub/schema';
 import type { Hub, InterviewPicks } from '@/lib/lessonHub/types';
 import type { InterviewApi } from './shared';
@@ -103,6 +105,25 @@ export function useInterviewPicks(teacherId: string | undefined, hub: Hub | null
           pending.current[tr] = res.picks;
           clearTimeout(timers.current[tr]);
           await flush(tr);
+          return null;
+        } catch (e) {
+          return (e as Error).message;
+        }
+      },
+      removeFromBank: async (tr, questionId) => {
+        try {
+          const fresh = await fetchHub(supabase, teacherId);
+          const bank = fresh?.interviewBanks?.[tr];
+          if (!fresh || !bank) return 'The question bank is gone — reload the page.';
+          const text = bankIndex(bank).get(questionId)?.q.text ?? questionId;
+          const next = removeFromBank(bank, questionId);
+          if ('error' in next) return next.error;
+          const nextBanks = { ...fresh.interviewBanks, [tr]: next };
+          const errs = validateBanks(nextBanks, fresh.tracks);
+          if (errs.length) return errs[0];
+          setHub(await saveHubKey(supabase, teacherId, 'interviewBanks', nextBanks, 'web',
+            `Removed ${questionId} ("${text.slice(0, 60)}") from the ${tr} bank`));
+          if (isPicked(latest.current[tr], questionId)) change(tr, p => dropPick(p, questionId, now()));
           return null;
         } catch (e) {
           return (e as Error).message;

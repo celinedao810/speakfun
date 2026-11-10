@@ -6,7 +6,7 @@
 // can add questions it asks for, and every later session follows the list.
 
 import type {
-  BankGroup, BankQuestion, BankRound, Framework, InterviewBank, InterviewPicks, RequestedQuestion, Topic,
+  BankGroup, BankQuestion, BankRound, Framework, InterviewBank, InterviewPicks, ModelAnswer, RequestedQuestion, Topic,
 } from './types';
 
 /* ---------------- the bank ---------------- */
@@ -93,10 +93,13 @@ export function promoteToBank(
   if (!round || !group) return { error: 'Pick a round and a group.' };
   const fw = framework || r.framework;
   if (!group.framework && !fw) return { error: `"${group.name}" has no framework of its own, so the question needs one.` };
+  // an id still on the class's list (its question since removed from the bank) is never reused,
+  // or that pick would quietly become the new question
   const idx = bankIndex(bank);
+  const taken = (id: string) => idx.has(id) || p.picks.some(x => x.questionId === id);
   const prefix = roundId.charAt(0);
   let n = group.questions.length + 1;
-  while (idx.has(`${prefix}-${groupId}-${n}`)) n++;
+  while (taken(`${prefix}-${groupId}-${n}`)) n++;
   const questionId = `${prefix}-${groupId}-${n}`;
   const q: BankQuestion = { id: questionId, text: r.text };
   if (!group.framework) q.framework = fw;
@@ -116,6 +119,23 @@ export function promoteToBank(
     },
   };
 }
+
+/** Take a question out of the bank. Mandatory questions can't be removed here. */
+export function removeFromBank(bank: InterviewBank, questionId: string): InterviewBank | { error: string } {
+  const e = bankIndex(bank).get(questionId);
+  if (!e) return { error: 'That question is no longer in the bank.' };
+  if (e.q.mandatory) return { error: 'Everyone answers this question, so it stays in the bank.' };
+  return {
+    ...bank,
+    rounds: bank.rounds.map(r => ({
+      ...r, groups: r.groups.map(g => ({ ...g, questions: g.questions.filter(q => q.id !== questionId) })),
+    })),
+  };
+}
+
+/** Take a question off the class's list, whether or not it's still in the bank. */
+export const dropPick = (p: InterviewPicks, questionId: string, now: string): InterviewPicks =>
+  ({ ...p, picks: p.picks.filter(x => x.questionId !== questionId), updatedAt: now });
 
 /* ---------------- the resolved list ---------------- */
 
@@ -151,6 +171,27 @@ export function picksByRound(p: InterviewPicks | null | undefined, bank: Intervi
 /** The class's questions a framework answers, for that framework's section and slides. */
 export const picksForFramework = (p: InterviewPicks | null | undefined, bank: InterviewBank, fw: string) =>
   picksByRound(p, bank).flatMap(r => r.questions).filter(q => q.framework === fw);
+
+/** A question's model answer: its own in the bank, else (older topics) the framework's answer for its modelQuestion. */
+export function modelAnswerOf(questionId: string, bank: InterviewBank | null | undefined, f?: Framework | null): ModelAnswer | null {
+  const own = bankIndex(bank).get(questionId)?.q.modelAnswer;
+  if (own) return own;
+  return f && f.modelQuestion === questionId && f.modelAnswer ? f.modelAnswer : null;
+}
+
+export interface FrameworkAnswer { question: ListedQuestion; answer: ModelAnswer | null }
+
+/**
+ * A framework's model answers for this class: one per question on the class's list that the
+ * framework answers, with null where none is written yet. When the class picked nothing for it,
+ * the bank's first answered question in the framework stands in, so the lesson still has an example.
+ */
+export function answersForFramework(p: InterviewPicks | null | undefined, bank: InterviewBank, f: Framework): FrameworkAnswer[] {
+  const picked = picksForFramework(p, bank, f.id).map(q => ({ question: q, answer: q.requested ? null : modelAnswerOf(q.id, bank, f) }));
+  if (picked.length) return picked;
+  const stand = [...bankIndex(bank).values()].find(e => e.framework === f.id && modelAnswerOf(e.q.id, bank, f));
+  return stand ? [{ question: { id: stand.q.id, text: stand.q.text, framework: f.id }, answer: modelAnswerOf(stand.q.id, bank, f) }] : [];
+}
 
 export interface FrameworkGroup { framework: string | null; label: string; questions: ListedQuestion[] }
 

@@ -660,6 +660,12 @@
 .e4it .ivtick{flex:0 0 1.1em;height:1.1em;border:1px solid var(--ink);display:inline-flex;align-items:center;justify-content:center;
   font-family:var(--sans);font-size:.8em;line-height:1;align-self:center}
 .e4it .ivgroup li.on .ivtick{background:var(--ink);color:var(--paper)}
+.e4it .ivqtext{flex:1 1 auto}
+.e4it .ivremove{background:none;border:0;padding:0 .2rem;cursor:pointer;font-family:var(--sans);font-size:.75rem;color:var(--muted);
+  text-decoration:underline;opacity:0;flex:0 0 auto}
+.e4it .ivgroup li:hover .ivremove,.e4it .ivremove:focus-visible{opacity:1}
+.e4it .ivremove:hover{color:#9A4A2F}
+@media (hover:none){.e4it .ivremove{opacity:1}}
 .e4it .ivfwid{font-family:var(--mono);font-size:.68rem;color:var(--teal);border:1px solid var(--teal);padding:0 .3rem;margin-left:.4rem;
   text-transform:none;letter-spacing:0}
 .e4it .ivmust,.e4it .ivreq{font-family:var(--mono);font-size:.66rem;background:var(--mark);padding:.05rem .35rem;margin-left:.5rem}
@@ -673,6 +679,8 @@
 .e4it .ivboxhd{font-family:var(--mono);font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:.4rem}
 .e4it .ivmodel p{font-family:var(--serif);font-size:1.02rem;line-height:1.5;margin:.4rem 0}
 .e4it .ivmodel .ivmq{font-family:var(--sans);font-weight:600;font-size:.95rem}
+.e4it .ivmodel.missing{border-style:dashed;background:transparent}
+.e4it .ivnone{font-family:var(--sans)!important;font-size:.85rem!important;color:#9A4A2F}
 .e4it .ivclass li,.e4it .ivbyfw li,.e4it .ivplain li{font-family:var(--serif);font-size:1rem;line-height:1.4;padding:.2rem 0}
 
 /* the pick list view */

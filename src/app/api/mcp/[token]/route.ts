@@ -12,7 +12,9 @@ import { z } from 'zod';
 import { bankWarnings, trackDuplicates, validateHub, validateTopic } from '@/lib/lessonHub/schema';
 import type { Hub, InterviewBank, Topic } from '@/lib/lessonHub/types';
 import { topicKind } from '@/lib/lessonHub/engine';
-import { allFrameworkNames, bankIndex, emptyPicks, frameworkNames, picksByFramework, picksByRound, withMandatory } from '@/lib/lessonHub/interview';
+import {
+  allFrameworkNames, bankIndex, emptyPicks, frameworkNames, modelAnswerOf, picksByFramework, picksByRound, withMandatory,
+} from '@/lib/lessonHub/interview';
 import {
   fetchHub, fetchRevision, fetchRevisions, fetchTopic, fetchTopics, patchTopic, putTopic, saveHubKey,
 } from '@/lib/supabase/queries/lessonHub';
@@ -63,7 +65,10 @@ Rules: every framework is used by a segment and taught in one topic only (framew
 same no-word-for-word-reuse rule as speaking structures, across interview and speaking topics alike.
 The question bank is shared by the whole interview series of a track: get_hub → interviewBanks[track] = {rounds:[{id, name,
 groups:[{id, name, framework?, questions:[{id, text (may hold [slot] markers learners fill from their own project), mandatory?,
-framework?}]}]}]}. Save it with update_hub key "interviewBanks" (the whole map). Question ids are permanent once a class has picked
+framework?, modelAnswer?: {persona, paragraphs}}]}]}]}. Save it with update_hub key "interviewBanks" (the whole map).
+Model answers live on bank questions, one per question, written with the framework that answers it (the group's framework, or
+the question's own); keep one persona across the track's answers so they tell one consistent story. A framework's slides show the
+model answers of the class's picked questions. (Older topics may still carry one modelAnswer on a framework for its modelQuestion.) Question ids are permanent once a class has picked
 them: add new ids rather than reusing one; update_hub warns when a change drops a question on the class's list.
 The class being taught picks as many questions from the bank as it wants (mandatory ones are always on the list) and may ask for
 extra ones; the teacher records this in the lesson hub and clears it when the series ends. Every later interview session follows
@@ -225,7 +230,8 @@ function buildServer(db: SupabaseClient, teacherId: string, origin: string) {
   server.registerTool('get_interview_picks', {
     title: 'Get the class\'s interview questions',
     description: 'The questions the class picked from the track\'s interview bank, per round and grouped by the framework that answers them, '
-      + 'including questions learners asked for that aren\'t in the bank yet ("requested"). Every interview session follows this list. Read-only.',
+      + 'including questions learners asked for that aren\'t in the bank yet ("requested"), and whether each has a model answer yet '
+      + '(hasModelAnswer). Every interview session follows this list. Read-only.',
     inputSchema: { track: z.string().describe('e.g. "Developer"') },
     annotations: { readOnlyHint: true },
   }, async ({ track }) => {
@@ -234,10 +240,16 @@ function buildServer(db: SupabaseClient, teacherId: string, origin: string) {
     if (!bank) return fail(`No interview question bank for "${track}". Banks exist for: ${Object.keys(hub?.interviewBanks ?? {}).join(', ') || 'none'}.`);
     const p = withMandatory(lists[track] ?? emptyPicks(track), bank);
     const names = allFrameworkNames(bank, frameworkNames(topics.map(r => r.data), track));
+    const fws = new Map(topics.filter(r => r.track === track).flatMap(r => r.data.frameworks ?? []).map(f => [f.id, f]));
     return text({
       track, updatedAt: p.updatedAt,
       ...(lists[track] ? {} : { note: 'Nothing picked yet: only the mandatory questions are on the list.' }),
-      rounds: picksByRound(p, bank).map(r => ({ id: r.round.id, name: r.round.name, questions: r.questions })),
+      rounds: picksByRound(p, bank).map(r => ({
+        id: r.round.id, name: r.round.name,
+        questions: r.questions.map(q => ({
+          ...q, hasModelAnswer: !q.requested && !!modelAnswerOf(q.id, bank, q.framework ? fws.get(q.framework) : null),
+        })),
+      })),
       byFramework: picksByFramework(p, bank, names).map(g => ({ framework: g.framework, label: g.label, questions: g.questions.map(q => q.text) })),
     });
   });

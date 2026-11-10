@@ -1,14 +1,15 @@
 "use client";
 
 import React, { useEffect, useLayoutEffect, useRef } from 'react';
-import type { ExplainItem, Hub, StressWord, Structure, Topic } from '@/lib/lessonHub/types';
+import type { ExplainItem, Hub, InterviewPicks, StressWord, Structure, Topic } from '@/lib/lessonHub/types';
 import {
   allMoves, chunk, dialoguePages, isInterview, isPron, pairRows, promptAnswer, promptOrder,
   segmentFramework, segmentPlan, sub,
 } from '@/lib/lessonHub/engine';
 import { ExampleLines, GapLine, HintRows, MarkedPassage, Slots, Toggle, useHub } from './shared';
 import { ExplainExamples, IpaText, RhythmLine, StressTry, VoicedLegend, YouGlishLink, choiceDims, toggleReveal } from './rounds';
-import { BankRoundList, ClassQuestions, FlowChips, FrameworkFrames, modelQuestionText } from './interviewRounds';
+import { BankRoundList, ClassQuestions, FlowChips, FrameworkFrames } from './interviewRounds';
+import { answersForFramework } from '@/lib/lessonHub/interview';
 import FlowSketch from './FlowSketch';
 
 /* One round becomes one or more slides. Nothing scrolls: anything too long for a
@@ -217,7 +218,7 @@ function pronSlides(t: Topic): Slide[] {
  * class's questions it answers, every step and frame on one slide, the model answer and
  * build-your-own; homework last.
  */
-function interviewSlides(t: Topic, hub: Hub): Slide[] {
+function interviewSlides(t: Topic, hub: Hub, picks?: InterviewPicks): Slide[] {
   const S: Slide[] = [];
   const bank = hub.interviewBanks?.[t.track];
   S.push({ kicker: `${t.track} · interview prep ${t.order}`, title: t.title, body: <>
@@ -253,9 +254,15 @@ function interviewSlides(t: Topic, hub: Hub): Slide[] {
       {f.notes?.map((n, i) => <p key={i} className="sl-ivnote">{n}</p>)}
       <ClassQuestions track={t.track} fw={f.id} slide /></div> });
     addF({ title: 'The steps, in order', fit: true, body: <div className="fit iv-fit"><FrameworkFrames f={f} slide /></div> });
-    const mq = modelQuestionText(f, bank);
-    addF({ title: 'Model answer', fit: true, tell: [mq, f.modelAnswer.persona].filter(Boolean).join(' · ') || undefined,
-      body: <div className="fit iv-fit sl-ivmodel">{f.modelAnswer.paragraphs.map((p, i) => <p key={i}>{p}</p>)}</div> });
+    // one model answer slide per question on the class's list that has one written
+    const answers = bank ? answersForFramework(picks, bank, f)
+      : f.modelAnswer ? [{ question: { id: f.id, text: '', framework: f.id }, answer: f.modelAnswer }] : [];
+    const written = answers.filter(x => x.answer);
+    written.forEach(({ question: q, answer: a }, i) => addF({
+      title: 'Model answer', part: written.length > 1 ? [i + 1, written.length] : undefined, fit: true,
+      tell: [q.text, a!.persona].filter(Boolean).join(' · ') || undefined,
+      body: <div className="fit iv-fit sl-ivmodel">{a!.paragraphs.map((p, k) => <p key={k}>{p}</p>)}</div>,
+    }));
     addF({ title: 'Build your own', fit: true, tell: f.buildOwn,
       body: <div className="fit iv-fit sl-ivbuild">{f.steps.map((s, i) => (
         <div key={i} className="sl-ivbstep"><div className="sl-movehd"><span className="mn">{i + 1}</span>{s.name}</div>
@@ -378,15 +385,15 @@ function useFitText(main: React.RefObject<HTMLDivElement | null>, on: boolean, d
   }, [on, ...deps]);
 }
 
-export function slidesFor(t: Topic, hub: Hub): Slide[] {
-  return isInterview(t) ? interviewSlides(t, hub) : isPron(t) ? pronSlides(t) : speakingSlides(t, hub);
+export function slidesFor(t: Topic, hub: Hub, picks?: Record<string, InterviewPicks>): Slide[] {
+  return isInterview(t) ? interviewSlides(t, hub, picks?.[t.track]) : isPron(t) ? pronSlides(t) : speakingSlides(t, hub);
 }
 
 export default function PresentMode({ t, slide, setSlide, onExit }: {
   t: Topic; slide: number; setSlide: (n: number) => void; onExit: () => void;
 }) {
-  const { hub, dlg, setDlg } = useHub();
-  const S = slidesFor(t, hub);
+  const { hub, dlg, setDlg, interview } = useHub();
+  const S = slidesFor(t, hub, interview?.picks);
   const i = Math.max(0, Math.min(slide, S.length - 1));
   const s = S[i];
   const showHint = s.hint && dlg.hint;

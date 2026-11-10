@@ -2,9 +2,10 @@
 
 import React, { useState } from 'react';
 import type { BankRound, Framework, InterviewBank, PlanRound, Topic } from '@/lib/lessonHub/types';
+import type { FrameworkAnswer } from '@/lib/lessonHub/interview';
 import { segmentFramework } from '@/lib/lessonHub/engine';
 import {
-  allFrameworkNames, bankIndex, frameworkLabel, frameworkNames, isPicked, picksByFramework, picksByRound,
+  allFrameworkNames, answersForFramework, frameworkLabel, frameworkNames, isPicked, picksByFramework, picksByRound,
   picksForFramework, picksText,
 } from '@/lib/lessonHub/interview';
 import { Slots, useHub } from './shared';
@@ -16,9 +17,17 @@ import { Slots, useHub } from './shared';
 
 /* ---------------- the bank, clickable ---------------- */
 
-/** A bank round with the class's picks ticked. Click a question to add or remove it (mandatory ones stay). */
-export function BankRoundList({ round, track, slide }: { round: BankRound; track: string; slide?: boolean }) {
+/**
+ * A bank round with the class's picks ticked. Click a question to add or remove it (mandatory ones stay).
+ * With `editable` (the pick list view only, never on slides) each question also gets "Remove from bank".
+ */
+export function BankRoundList({ round, track, slide, editable }: { round: BankRound; track: string; slide?: boolean; editable?: boolean }) {
   const { interview } = useHub();
+  const remove = interview && editable ? async (id: string, text: string) => {
+    if (!confirm(`Remove "${text}" from the ${track} bank?\n\nIt also comes off the class's list. Future classes won't see it. The hub keeps the previous version.`)) return;
+    const err = await interview.removeFromBank(track, id);
+    if (err) alert(err);
+  } : undefined;
   const p = interview?.picks[track];
   const requested = (p?.requested ?? []).filter(r => r.round === round.id);
   const n = round.groups.reduce((k, g) => k + g.questions.length, 0) + requested.length;
@@ -28,7 +37,8 @@ export function BankRoundList({ round, track, slide }: { round: BankRound; track
         <div key={g.id} className="ivgroup">
           <div className="ivgrouphd">{g.name}{g.framework && <span className="ivfwid">{g.framework}</span>}</div>
           <ul>{g.questions.map(q => <Q key={q.id} text={q.text} on={!!q.mandatory || isPicked(p, q.id)} locked={q.mandatory}
-            fw={g.framework ? null : q.framework} onClick={interview ? () => interview.toggle(track, q.id) : undefined} />)}</ul>
+            fw={g.framework ? null : q.framework} onClick={interview ? () => interview.toggle(track, q.id) : undefined}
+            onRemove={remove && !q.mandatory ? () => remove(q.id, q.text) : undefined} />)}</ul>
         </div>
       ))}
       {requested.length > 0 && <div className="ivgroup">
@@ -39,11 +49,15 @@ export function BankRoundList({ round, track, slide }: { round: BankRound; track
   );
 }
 
-function Q({ text, on, locked, fw, onClick }: { text: string; on: boolean; locked?: boolean; fw?: string | null; onClick?: () => void }) {
+function Q({ text, on, locked, fw, onClick, onRemove }: {
+  text: string; on: boolean; locked?: boolean; fw?: string | null; onClick?: () => void; onRemove?: () => void;
+}) {
   return (
     <li className={`${on ? 'on' : ''}${onClick && !locked ? ' can' : ''}`} onClick={locked ? undefined : onClick}>
       <span className="ivtick" aria-hidden>{on ? '✓' : ''}</span>
-      <span><Slots text={text} />{locked && <span className="ivmust">everyone</span>}{fw && <span className="ivfwid">{fw}</span>}</span>
+      <span className="ivqtext"><Slots text={text} />{locked && <span className="ivmust">everyone</span>}{fw && <span className="ivfwid">{fw}</span>}</span>
+      {onRemove && <button type="button" className="ivremove" title="Remove from bank"
+        onClick={e => { e.stopPropagation(); onRemove(); }}>Remove</button>}
     </li>
   );
 }
@@ -56,8 +70,12 @@ export function FlowChips({ flow, slide }: { flow: string; slide?: boolean }) {
   ))}</div>;
 }
 
-export function modelQuestionText(f: Framework, bank: InterviewBank | undefined) {
-  return f.modelQuestion ? bankIndex(bank).get(f.modelQuestion)?.q.text ?? null : null;
+/** The framework's model answers for the class's questions (see answersForFramework). */
+export function useFrameworkAnswers(track: string, f: Framework): FrameworkAnswer[] {
+  const { hub, interview } = useHub();
+  const bank = hub.interviewBanks?.[track];
+  if (!bank) return f.modelAnswer ? [{ question: { id: f.modelQuestion ?? f.id, text: '', framework: f.id }, answer: f.modelAnswer }] : [];
+  return answersForFramework(interview?.picks[track], bank, f);
 }
 
 /** The class's questions this framework answers. */
@@ -101,8 +119,7 @@ export function FrameworkFrames({ f, slide }: { f: Framework; slide?: boolean })
 /* ---------------- plan page ---------------- */
 
 function FrameworkBlock({ t, f }: { t: Topic; f: Framework }) {
-  const { hub } = useHub();
-  const mq = modelQuestionText(f, hub.interviewBanks?.[t.track]);
+  const answers = useFrameworkAnswers(t.track, f);
   return (
     <div className="ivfw">
       <FlowChips flow={f.flow} />
@@ -110,11 +127,16 @@ function FrameworkBlock({ t, f }: { t: Topic; f: Framework }) {
       {f.notes?.map((n, i) => <p key={i} className="ivnote">{n}</p>)}
       <ClassQuestions track={t.track} fw={f.id} />
       <FrameworkFrames f={f} />
-      <div className="ivmodel">
-        <div className="ivboxhd">Model answer{f.modelAnswer.persona && ` · ${f.modelAnswer.persona}`}</div>
-        {mq && <p className="ivmq">{mq}</p>}
-        {f.modelAnswer.paragraphs.map((p, i) => <p key={i}>{p}</p>)}
-      </div>
+      {answers.map(({ question: q, answer: a }) => (
+        <div key={q.id} className={`ivmodel${a ? '' : ' missing'}`}>
+          <div className="ivboxhd">Model answer{a?.persona && ` · ${a.persona}`}</div>
+          {q.text && <p className="ivmq"><Slots text={q.text} /></p>}
+          {a ? a.paragraphs.map((p, i) => <p key={i}>{p}</p>)
+            : <p className="ivnone">{q.requested
+              ? 'Not written yet. Add this question to the bank first (Interview picks), then ask Claude for a model answer.'
+              : 'Not written yet. Ask Claude to write one with the SpeakFun connector before this session.'}</p>}
+        </div>
+      ))}
       {f.buildOwn && <p className="how"><b>Build your own. </b>{f.buildOwn}</p>}
     </div>
   );
@@ -186,7 +208,7 @@ export function PicksView({ topics, track, setTrack, back }: {
       {bank.rounds.map(round => (
         <div key={round.id} className="msec">
           <h3>{round.name}</h3>
-          <BankRoundList round={round} track={track} />
+          <BankRoundList round={round} track={track} editable />
           <RequestedEditor track={track} round={round} bank={bank} names={names} />
         </div>
       ))}

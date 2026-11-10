@@ -114,6 +114,7 @@ export const pronTopicSchema = z.looseObject({
 /* ---------------- interview topics ---------------- */
 
 const frame = z.looseObject({ structure: nonEmpty, example: nonEmpty, alternative: str.nullable().optional() });
+const modelAnswer = z.looseObject({ persona: str.optional(), paragraphs: z.array(nonEmpty).min(1, 'a model answer needs at least one paragraph') });
 const frameworkStep = z.looseObject({
   name: nonEmpty, purpose: str.optional(),
   frames: z.array(frame).min(1, 'every step needs at least one frame'),
@@ -122,7 +123,7 @@ const framework = z.looseObject({
   id: nonEmpty, name: nonEmpty, flow: nonEmpty,
   length: str.optional(), why: str.optional(), notes: z.array(str).optional(), modelQuestion: str.optional(),
   steps: z.array(frameworkStep).min(1, 'a framework needs at least one step'),
-  modelAnswer: z.looseObject({ persona: str.optional(), paragraphs: z.array(nonEmpty).min(1, 'the model answer needs at least one paragraph') }),
+  modelAnswer: modelAnswer.optional(),
   buildOwn: str.optional(),
 });
 const segment = z.looseObject({
@@ -154,7 +155,9 @@ export const interviewTopicSchema = z.looseObject({
 
 /* ---------------- interview question bank ---------------- */
 
-const bankQuestion = z.looseObject({ id: nonEmpty, text: nonEmpty, mandatory: z.boolean().optional(), framework: str.optional() });
+const bankQuestion = z.looseObject({
+  id: nonEmpty, text: nonEmpty, mandatory: z.boolean().optional(), framework: str.optional(), modelAnswer: modelAnswer.optional(),
+});
 const bankGroup = z.looseObject({ id: nonEmpty, name: nonEmpty, framework: str.optional(), questions: z.array(bankQuestion) });
 const bankRound = z.looseObject({ id: nonEmpty, name: nonEmpty, groups: z.array(bankGroup).min(1) });
 const interviewBank = z.looseObject({ rounds: z.array(bankRound).min(1) });

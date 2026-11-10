@@ -99,11 +99,14 @@ export interface Hub {
 
 /* ---------------- interview prep ---------------- */
 
+export interface ModelAnswer { persona?: string; paragraphs: string[] }
 export interface BankQuestion {
   id: string;                 // permanent once a class has picked it
   text: string;               // [slot] markers make it a template learners fill from their own project
   mandatory?: boolean;        // always on the class's list
   framework?: string;         // only in groups without a framework of their own
+  /** A worked answer to this question, built with its framework. Lives here so it exists before the framework's lesson does. */
+  modelAnswer?: ModelAnswer;
 }
 export interface BankGroup { id: string; name: string; framework?: string; questions: BankQuestion[] }
 export interface BankRound { id: string; name: string; groups: BankGroup[] }
@@ -118,9 +121,10 @@ export interface Framework {
   length?: string;
   why?: string;
   notes?: string[];
-  modelQuestion?: string;     // a question id in the track's bank
+  /** Older topics: one model answer on the framework, for this bank question. Bank questions' own answers come first. */
+  modelQuestion?: string;
   steps: FrameworkStep[];
-  modelAnswer: { persona?: string; paragraphs: string[] };
+  modelAnswer?: ModelAnswer;
   buildOwn?: string;
 }
 
