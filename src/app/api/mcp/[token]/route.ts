@@ -10,13 +10,13 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import { z } from 'zod';
 import { bankWarnings, trackDuplicates, validateHub, validateTopic } from '@/lib/lessonHub/schema';
-import type { Hub, InterviewBank, InterviewSelection, Topic } from '@/lib/lessonHub/types';
+import type { Hub, InterviewBank, Topic } from '@/lib/lessonHub/types';
 import { topicKind } from '@/lib/lessonHub/engine';
-import { bankIndex, emptySelection, flagLabels, flagsFor, frameworkNames, resolveRounds, withMandatory } from '@/lib/lessonHub/interview';
+import { allFrameworkNames, bankIndex, emptyPicks, frameworkNames, picksByFramework, picksByRound, withMandatory } from '@/lib/lessonHub/interview';
 import {
   fetchHub, fetchRevision, fetchRevisions, fetchTopic, fetchTopics, patchTopic, putTopic, saveHubKey,
 } from '@/lib/supabase/queries/lessonHub';
-import { fetchInterviewSelections } from '@/lib/supabase/queries/interviewSelections';
+import { fetchInterviewPicks } from '@/lib/supabase/queries/interviewPicks';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -61,12 +61,13 @@ frameworks [{id, name, flow, length, why, notes?, modelQuestion (a bank question
 [slot] markers, example, alternative|null}]}], modelAnswer {persona, paragraphs}, buildOwn}], homework.
 Rules: every framework is used by a segment and taught in one topic only (framework ids are unique across the track); frames follow the
 same no-word-for-word-reuse rule as speaking structures, across interview and speaking topics alike.
-The question bank is shared by the whole interview series of a track: get_hub → interviewBanks[track] = {intake:[{key,label,required}],
-rounds:[{id, name, pick, usesIntake?, groups:[{id, name, framework?, questions:[{id, text, mandatory?, slots?:[{name, fromIntake?}],
-framework?}]}]}]}. Save it with update_hub key "interviewBanks" (the whole map). Question ids are permanent once learners have picked them:
-add new ids rather than reusing one, and update_hub warns about learners whose picks a change would orphan.
-Learners' picks, project intake and the teacher's extra questions are learner data, read-only here: use list_classes to find a class,
-then get_interview_selections to prepare model answers and follow-up questions for later sessions.`;
+The question bank is shared by the whole interview series of a track: get_hub → interviewBanks[track] = {rounds:[{id, name,
+groups:[{id, name, framework?, questions:[{id, text (may hold [slot] markers learners fill from their own project), mandatory?,
+framework?}]}]}]}. Save it with update_hub key "interviewBanks" (the whole map). Question ids are permanent once a class has picked
+them: add new ids rather than reusing one; update_hub warns when a change drops a question on the class's list.
+The class being taught picks as many questions from the bank as it wants (mandatory ones are always on the list) and may ask for
+extra ones; the teacher records this in the lesson hub and clears it when the series ends. Every later interview session follows
+that list: read it with get_interview_picks (read-only) to choose which frameworks and model answers to prepare.`;
 
 function text(value: unknown) {
   return { content: [{ type: 'text' as const, text: typeof value === 'string' ? value : JSON.stringify(value, null, 2) }] };
@@ -211,94 +212,34 @@ function buildServer(db: SupabaseClient, teacherId: string, origin: string) {
     return text({ saved: true, key, ...(warnings.length ? { warnings } : {}) });
   });
 
-  /** Learners whose picks point at a question id the new banks no longer have. */
+  /** Questions on the class's list that the new banks no longer have. */
   async function orphanedPicks(banks: Record<string, InterviewBank>): Promise<string[]> {
-    const { data, error } = await db.from('interview_selections')
-      .select('class_id, learner_id, track, picks').eq('teacher_id', teacherId);
-    if (error || !data?.length) return [];
-    const hits = data.flatMap(r => {
-      const ids = bankIndex(banks[r.track]);
-      const gone = ((r.picks ?? []) as InterviewSelection['picks']).filter(p => !ids.has(p.questionId)).map(p => p.questionId);
-      return gone.length ? [{ ...r, gone }] : [];
+    const lists = await fetchInterviewPicks(db, teacherId).catch(() => ({}));
+    return Object.values(lists).flatMap(p => {
+      const ids = bankIndex(banks[p.track]);
+      return p.picks.filter(x => !ids.has(x.questionId)).map(x =>
+        `${p.track}: the class's list has ${x.questionId}${x.text ? ` ("${x.text}")` : ''}, which is no longer in the bank. It stays on the list as "removed from bank".`);
     });
-    if (!hits.length) return [];
-    const [names, classes] = await Promise.all([
-      learnerNames(hits.map(h => h.learner_id)),
-      db.from('classes').select('id, name').in('id', [...new Set(hits.map(h => h.class_id))]),
-    ]);
-    const cls = new Map((classes.data ?? []).map(c => [c.id as string, c.name as string]));
-    return hits.map(h => `${names.get(h.learner_id) ?? h.learner_id} (${cls.get(h.class_id) ?? h.class_id}, ${h.track}) picked `
-      + `${h.gone.join(', ')}, no longer in the bank. Their picks are kept and shown as "(removed from bank)".`);
   }
 
-  async function learnerNames(ids: string[]): Promise<Map<string, string>> {
-    if (!ids.length) return new Map();
-    const { data } = await db.from('profiles').select('id, full_name').in('id', [...new Set(ids)]);
-    return new Map((data ?? []).map(p => [p.id as string, (p.full_name as string) || 'Unknown']));
-  }
-
-  server.registerTool('list_classes', {
-    title: 'List classes',
-    description: 'The teacher\'s classes: id, name, the lesson-hub track the class follows (null if not set) and number of learners.',
+  server.registerTool('get_interview_picks', {
+    title: 'Get the class\'s interview questions',
+    description: 'The questions the class picked from the track\'s interview bank, per round and grouped by the framework that answers them, '
+      + 'including questions learners asked for that aren\'t in the bank yet ("requested"). Every interview session follows this list. Read-only.',
+    inputSchema: { track: z.string().describe('e.g. "Developer"') },
     annotations: { readOnlyHint: true },
-  }, async () => {
-    const { data, error } = await db.from('classes').select('id, name, track, student_count')
-      .eq('teacher_id', teacherId).order('created_at', { ascending: false });
-    if (error) return fail(`Loading classes failed: ${error.message}`);
-    return text((data ?? []).map(c => ({ id: c.id, name: c.name, track: c.track ?? null, learners: c.student_count })));
-  });
-
-  server.registerTool('get_interview_selections', {
-    title: 'Get interview picks',
-    description: 'Per learner: the project intake, the questions picked in each round (text already filled from the learner\'s project), '
-      + 'the framework that answers each, the teacher\'s requested and follow-up questions (follow-ups carry parentId, the question they follow), '
-      + 'and flags (intake missing, slots to fill, intake changed). For one learner, one class, or every class on the track. Read-only.',
-    inputSchema: {
-      track: z.string().describe('e.g. "Developer"'),
-      classId: z.string().optional().describe('From list_classes; omit for every class on the track'),
-      learnerId: z.string().optional(),
-    },
-    annotations: { readOnlyHint: true },
-  }, async ({ track, classId, learnerId }) => {
-    const hub = await fetchHub(db, teacherId);
+  }, async ({ track }) => {
+    const [hub, lists, topics] = await Promise.all([fetchHub(db, teacherId), fetchInterviewPicks(db, teacherId), fetchTopics(db, teacherId)]);
     const bank = hub?.interviewBanks?.[track];
     if (!bank) return fail(`No interview question bank for "${track}". Banks exist for: ${Object.keys(hub?.interviewBanks ?? {}).join(', ') || 'none'}.`);
-    const [sels, topics, classesRes] = await Promise.all([
-      fetchInterviewSelections(db, teacherId, { track, classId, learnerId }),
-      fetchTopics(db, teacherId),
-      db.from('classes').select('id, name, track').eq('teacher_id', teacherId),
-    ]);
-    if (classesRes.error) return fail(`Loading classes failed: ${classesRes.error.message}`);
-    const withPicks = new Set(sels.map(s => s.classId));
-    const classes = (classesRes.data ?? []).filter(c => classId ? c.id === classId : (c.track === track || withPicks.has(c.id)));
-    if (classId && !classes.length) return fail(`No class "${classId}". Use list_classes.`);
-    const { data: enrolled, error } = classes.length
-      ? await db.from('class_enrollments').select('class_id, learner_id').in('class_id', classes.map(c => c.id))
-      : { data: [], error: null };
-    if (error) return fail(`Loading learners failed: ${error.message}`);
-    const names = await learnerNames([...(enrolled ?? []).map(e => e.learner_id as string), ...sels.map(s => s.learnerId)]);
-    const fwNames = frameworkNames(topics.map(r => r.data), track);
-
-    const out = classes.map(c => {
-      const enrolledIds = (enrolled ?? []).filter(e => e.class_id === c.id).map(e => e.learner_id as string);
-      const ids = [...new Set([...enrolledIds, ...sels.filter(s => s.classId === c.id).map(s => s.learnerId)])]
-        .filter(id => !learnerId || id === learnerId);
-      return {
-        classId: c.id, className: c.name,
-        learners: ids.map(id => {
-          const sel = withMandatory(sels.find(s => s.classId === c.id && s.learnerId === id) ?? emptySelection(c.id, id, track), bank);
-          return {
-            learnerId: id, name: names.get(id) ?? 'Unknown',
-            ...(enrolledIds.includes(id) ? {} : { enrolled: false }),
-            intake: sel.intake, intakeUpdatedAt: sel.intakeUpdatedAt,
-            flags: flagLabels(flagsFor(sel, bank)),
-            rounds: resolveRounds(sel, bank),
-            updatedAt: sel.updatedAt,
-          };
-        }),
-      };
-    }).filter(c => c.learners.length || !learnerId);
-    return text({ track, frameworks: fwNames, classes: out });
+    const p = withMandatory(lists[track] ?? emptyPicks(track), bank);
+    const names = allFrameworkNames(bank, frameworkNames(topics.map(r => r.data), track));
+    return text({
+      track, updatedAt: p.updatedAt,
+      ...(lists[track] ? {} : { note: 'Nothing picked yet: only the mandatory questions are on the list.' }),
+      rounds: picksByRound(p, bank).map(r => ({ id: r.round.id, name: r.round.name, questions: r.questions })),
+      byFramework: picksByFramework(p, bank, names).map(g => ({ framework: g.framework, label: g.label, questions: g.questions.map(q => q.text) })),
+    });
   });
 
   return server;

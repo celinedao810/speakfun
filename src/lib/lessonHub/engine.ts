@@ -27,18 +27,6 @@ export const segmentFramework = (t: Topic, uses?: string) =>
   uses?.startsWith('framework:') ? (t.frameworks || []).find(f => f.id === uses.slice('framework:'.length)) ?? null : null;
 
 /**
- * The topic whose homework is the project pitch shows the intake fields: it teaches the framework
- * that answers the mandatory question of the round that uses the intake (F3 for Developer).
- */
-export function pitchFramework(t: Topic, hub: Hub): string | null {
-  const bank = hub.interviewBanks?.[t.track];
-  const round = bank?.rounds.find(r => r.usesIntake);
-  const g = round?.groups.find(x => x.questions.some(q => q.mandatory));
-  const fw = g ? (g.framework ?? g.questions.find(q => q.mandatory)?.framework) : null;
-  return fw && (t.frameworks || []).some(f => f.id === fw) ? fw : null;
-}
-
-/**
  * Phases in teaching order. Postgres JSONB doesn't keep object key order ("after"
  * sorts before "class"), so the order comes from the plan's rounds, which are an
  * array; phases without rounds follow.

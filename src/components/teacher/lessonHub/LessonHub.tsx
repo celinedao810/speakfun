@@ -4,9 +4,10 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Bricolage_Grotesque, DM_Mono, Newsreader, Noto_Sans } from 'next/font/google';
 import type { Hub, Topic } from '@/lib/lessonHub/types';
 import { dueRound, fmtClock, isInterview, isPron, planFor, talkTime } from '@/lib/lessonHub/engine';
-import { DlgState, HubClass, HubProvider } from './shared';
+import { DlgState, HubProvider, InterviewApi } from './shared';
 import { IpaText, PlanPhases, Rail, ShapeStrip, SoundNotes } from './rounds';
 import PresentMode from './PresentMode';
+import { PicksView } from './interviewRounds';
 import './e4it.css';
 
 const sans = Bricolage_Grotesque({ subsets: ['latin', 'vietnamese'], weight: ['400', '500', '600', '800'], variable: '--e4it-font-sans' });
@@ -14,7 +15,7 @@ const serif = Newsreader({ subsets: ['latin'], weight: ['300', '400', '600'], st
 const mono = DM_Mono({ subsets: ['latin'], weight: ['400', '500'], variable: '--e4it-font-mono' });
 const ipa = Noto_Sans({ subsets: ['latin', 'latin-ext', 'greek', 'vietnamese'], weight: ['400', '500'], variable: '--e4it-font-ipa' });
 
-type View = 'hub' | 'topic' | 'project' | 'rules';
+type View = 'hub' | 'topic' | 'project' | 'rules' | 'picks';
 
 export interface LessonHubNav {
   view: View;
@@ -24,11 +25,11 @@ export interface LessonHubNav {
 // Scroll-spy threshold: the original 140px plus SpeakFun's 64px header.
 const SPY_OFFSET = 204;
 
-export default function LessonHub({ hub, topics, classes, initialTopicId, onNavigate }: {
+export default function LessonHub({ hub, topics, interview, initialTopicId, onNavigate }: {
   hub: Hub;
   topics: Topic[];
-  /** The teacher's classes, for the interview links to the selection screen. */
-  classes?: HubClass[];
+  /** The class's interview pick list and how to change it; without it the lists are read-only. */
+  interview?: InterviewApi;
   initialTopicId?: string | null;
   onNavigate?: (nav: LessonHubNav) => void;
 }) {
@@ -40,6 +41,9 @@ export default function LessonHub({ hub, topics, classes, initialTopicId, onNavi
   const [slide, setSlide] = useState(0);
   const [dlg, setDlgState] = useState<DlgState>({ hide: null, frames: true, hint: false, answers: false, revealed: [] });
   const setDlg = useCallback((p: Partial<DlgState>) => setDlgState(d => ({ ...d, ...p })), []);
+
+  const bankTracks = Object.keys(hub.interviewBanks ?? {});
+  const [picksTrack, setPicksTrack] = useState(bankTracks[0] ?? '');
 
   const topic = useMemo(() => topics.find(t => t.id === topicId) || null, [topics, topicId]);
 
@@ -86,7 +90,7 @@ export default function LessonHub({ hub, topics, classes, initialTopicId, onNavi
   const fonts = `${sans.variable} ${serif.variable} ${mono.variable} ${ipa.variable}`;
 
   return (
-    <HubProvider value={{ hub, topic, dlg, setDlg, classes }}>
+    <HubProvider value={{ hub, topic, dlg, setDlg, interview, openPicks: tr => { setPicksTrack(tr); setPresent(false); go('picks'); } }}>
       <div className={`e4it ${fonts}`}>
         <div className="bar">
           <button type="button" className="code" onClick={() => go('hub')}>
@@ -102,6 +106,8 @@ export default function LessonHub({ hub, topics, classes, initialTopicId, onNavi
                 : `on plan — ${due.title.toLowerCase()}`)}
             </span>
           </div>
+          {bankTracks.length > 0 && <button type="button" className={`proj${view === 'picks' ? ' on' : ''}`}
+            onClick={() => { if (!bankTracks.includes(picksTrack)) setPicksTrack(bankTracks[0]); go('picks'); }}>Interview picks</button>}
           <button type="button" className={`proj${view === 'project' ? ' on' : ''}`} onClick={() => go('project')}>The project</button>
           <button type="button" className={`proj${view === 'rules' ? ' on' : ''}`} onClick={() => go('rules')}>Class rules</button>
         </div>
@@ -109,6 +115,7 @@ export default function LessonHub({ hub, topics, classes, initialTopicId, onNavi
           {view === 'hub' && <HubView hub={hub} topics={topics} track={track} setTrack={setTrack} open={id => go('topic', id)} />}
           {view === 'project' && <ProjectView hub={hub} back={() => go('hub')} />}
           {view === 'rules' && <RulesView hub={hub} back={() => go('hub')} />}
+          {view === 'picks' && <PicksView topics={topics} track={picksTrack} setTrack={setPicksTrack} back={() => go('hub')} />}
           {view === 'topic' && topic && (
             <TopicView hub={hub} t={topic} back={() => go('hub')}
               onPresent={() => { setSlide(0); setPresent(true); }}

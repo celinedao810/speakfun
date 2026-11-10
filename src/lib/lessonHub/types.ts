@@ -99,18 +99,15 @@ export interface Hub {
 
 /* ---------------- interview prep ---------------- */
 
-export interface IntakeField { key: string; label: string; required?: boolean }
-export interface BankSlot { name: string; fromIntake?: string }
 export interface BankQuestion {
-  id: string;                 // permanent once learners have picked it
-  text: string;               // [slot] markers make it a template
-  mandatory?: boolean;
-  slots?: BankSlot[];
+  id: string;                 // permanent once a class has picked it
+  text: string;               // [slot] markers make it a template learners fill from their own project
+  mandatory?: boolean;        // always on the class's list
   framework?: string;         // only in groups without a framework of their own
 }
 export interface BankGroup { id: string; name: string; framework?: string; questions: BankQuestion[] }
-export interface BankRound { id: string; name: string; pick: number; usesIntake?: boolean; groups: BankGroup[] }
-export interface InterviewBank { intake: IntakeField[]; rounds: BankRound[] }
+export interface BankRound { id: string; name: string; groups: BankGroup[] }
+export interface InterviewBank { rounds: BankRound[] }
 
 export interface Frame { structure: string; example: string; alternative?: string | null }
 export interface FrameworkStep { name: string; purpose?: string; frames: Frame[] }
@@ -138,34 +135,18 @@ export interface Segment {
   say?: string;
 }
 
-export type IntakeValues = Record<string, string>;
 /** text: the question as it was when picked, shown if the bank later drops it. */
-export interface QuestionPick {
-  questionId: string;
-  slotValues?: Record<string, string>;
-  pickedAt?: string;
-  round?: string;
-  text?: string;
-}
-export interface CustomQuestion {
-  id: string;
-  round: string;
-  kind: 'requested' | 'follow-up';
-  text: string;
-  framework?: string;
-  parentId?: string;          // follow-ups in the technical round: the picked question they follow
-}
-/** One record per class × learner × track, kept for the whole interview series. Teacher-only data. */
-export interface InterviewSelection {
-  classId: string;
-  learnerId: string;
+export interface QuestionPick { questionId: string; text?: string }
+/** A question a learner asked for that isn't in the bank (yet). */
+export interface RequestedQuestion { id: string; round: string; text: string; framework?: string }
+/**
+ * The questions the class being taught picked from the track's bank. One list per track;
+ * every interview session follows it, and it's cleared when the series ends.
+ */
+export interface InterviewPicks {
   track: string;
-  intake: IntakeValues;
-  intakeUpdatedAt: string | null;
-  /** The intake changed after slots were filled from it; cleared when the teacher has checked. */
-  intakeChanged: boolean;
   picks: QuestionPick[];
-  custom: CustomQuestion[];
+  requested: RequestedQuestion[];
   updatedAt: string | null;
 }
 

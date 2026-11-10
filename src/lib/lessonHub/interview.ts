@@ -1,12 +1,12 @@
-// Interview prep: the rules for a learner's picks, shared by the teacher screens and the
-// MCP connector. Pure functions over the track's bank and one learner's selection record.
+// Interview prep: the class's pick list over the track's question bank, shared by the
+// lesson hub and the MCP connector. Pure functions.
 //
-// The technical round is a chain per learner: project intake → mandatory project pitch →
-// picked drill-down questions filled from that project → the teacher's follow-ups.
+// One bank per track serves the whole interview series. The class being taught picks
+// as many questions from it as it wants (the mandatory ones are always on the list),
+// can add questions it asks for, and every later session follows the list.
 
 import type {
-  BankGroup, BankQuestion, BankRound, CustomQuestion, Framework, InterviewBank, InterviewSelection,
-  IntakeValues, QuestionPick, Topic,
+  BankGroup, BankQuestion, BankRound, Framework, InterviewBank, InterviewPicks, RequestedQuestion, Topic,
 } from './types';
 
 /* ---------------- the bank ---------------- */
@@ -21,24 +21,6 @@ export function bankIndex(bank: InterviewBank | null | undefined): Map<string, B
     m.set(q.id, { q, round, group, framework: frameworkOf(q, group) }))));
   return m;
 }
-
-/** The [slot] names in a question, in order. */
-export const slotMarkers = (text: string) => [...text.matchAll(/\[([^\]]+)\]/g)].map(m => m[1]);
-
-/** Question text split for display: plain text, and slots with their value when one is filled in. */
-export function questionParts(text: string, values?: Record<string, string>): ({ text: string } | { slot: string; value: string | null })[] {
-  return text.split(/\[([^\]]+)\]/g).map((p, i) => {
-    if (i % 2 === 0) return { text: p };
-    const v = values?.[p]?.trim();
-    return { slot: p, value: v || null };
-  }).filter(p => !('text' in p) || p.text);
-}
-
-/** The question as a sentence: filled slots replaced by their values, empty ones left as [slot]. */
-export const fillQuestion = (text: string, values?: Record<string, string>) =>
-  questionParts(text, values).map(p => 'text' in p ? p.text : p.value ?? `[${p.slot}]`).join('');
-
-const isEmpty = (s: string | undefined | null) => !s || !s.trim();
 
 /** Natural order for framework ids: F2 before F10. */
 export const byFrameworkId = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true });
@@ -63,295 +45,131 @@ export function allFrameworkNames(bank: InterviewBank | null | undefined, names:
 
 export const frameworkLabel = (id: string, names: Record<string, string>) => names[id] ? `${id} · ${names[id]}` : id;
 
-export function frameworkOptions(bank: InterviewBank | null | undefined, names: Record<string, string>): { id: string; label: string }[] {
-  const all = allFrameworkNames(bank, names);
-  return Object.keys(all).sort(byFrameworkId).map(id => ({ id, label: frameworkLabel(id, all) }));
+/* ---------------- the class's picks ---------------- */
+
+export const emptyPicks = (track: string): InterviewPicks => ({ track, picks: [], requested: [], updatedAt: null });
+
+/** Mandatory questions are always on the list. */
+export function withMandatory(p: InterviewPicks, bank: InterviewBank): InterviewPicks {
+  const have = new Set(p.picks.map(x => x.questionId));
+  const missing = [...bankIndex(bank).values()].filter(e => e.q.mandatory && !have.has(e.q.id))
+    .map(e => ({ questionId: e.q.id, text: e.q.text }));
+  return missing.length ? { ...p, picks: [...missing, ...p.picks] } : p;
 }
 
-/* ---------------- one learner's selection ---------------- */
+export const isPicked = (p: InterviewPicks | null | undefined, questionId: string) =>
+  !!p?.picks.some(x => x.questionId === questionId);
 
-export function emptySelection(classId: string, learnerId: string, track: string): InterviewSelection {
-  return { classId, learnerId, track, intake: {}, intakeUpdatedAt: null, intakeChanged: false, picks: [], custom: [], updatedAt: null };
-}
-
-/** Mandatory questions are always picked, first in their round. */
-export function withMandatory(sel: InterviewSelection, bank: InterviewBank): InterviewSelection {
-  const have = new Set(sel.picks.map(p => p.questionId));
-  const missing: QuestionPick[] = [];
-  bank.rounds.forEach(r => r.groups.forEach(g => g.questions.forEach(q => {
-    if (q.mandatory && !have.has(q.id)) missing.push({ questionId: q.id, round: r.id, text: q.text });
-  })));
-  return missing.length ? { ...sel, picks: [...missing, ...sel.picks] } : sel;
-}
-
-const roundOfPick = (p: QuestionPick, idx: Map<string, BankEntry>) => idx.get(p.questionId)?.round.id ?? p.round ?? null;
-
-/** Items that take one of a round's places: mandatory + bank picks + requested questions. */
-export function roundCount(sel: InterviewSelection, bank: InterviewBank, roundId: string): number {
-  const idx = bankIndex(bank);
-  return sel.picks.filter(p => roundOfPick(p, idx) === roundId).length
-    + sel.custom.filter(c => c.round === roundId && c.kind === 'requested').length;
-}
-
-/** Null when one more item fits in the round, otherwise the message to show. */
-export function roundFull(sel: InterviewSelection, bank: InterviewBank, roundId: string): string | null {
-  const r = bank.rounds.find(x => x.id === roundId);
-  if (!r) return `No round "${roundId}" in the bank.`;
-  return roundCount(sel, bank, roundId) >= r.pick ? `${r.name} already has ${r.pick} questions — remove one first` : null;
-}
-
-const touch = (sel: InterviewSelection, now: string): InterviewSelection => ({ ...sel, updatedAt: now });
-
-/** Slot values to start a template with: the ones that come from the learner's intake. */
-function slotsFromIntake(q: BankQuestion, intake: IntakeValues): Record<string, string> | undefined {
-  if (!q.slots?.length) return undefined;
-  const out: Record<string, string> = {};
-  q.slots.forEach(s => { out[s.name] = s.fromIntake && !isEmpty(intake[s.fromIntake]) ? intake[s.fromIntake].trim() : ''; });
-  return out;
-}
-
-export type Result = { sel: InterviewSelection; error?: string };
-
-/** Tick or untick a bank question. Mandatory questions stay; a full round refuses one more. */
-export function togglePick(sel: InterviewSelection, bank: InterviewBank, questionId: string, now: string): Result {
+/** Tick or untick a bank question. Mandatory questions stay. */
+export function togglePick(p: InterviewPicks, bank: InterviewBank, questionId: string, now: string): InterviewPicks {
   const e = bankIndex(bank).get(questionId);
-  const picked = sel.picks.some(p => p.questionId === questionId);
-  if (e?.q.mandatory) return { sel };
-  if (picked) return { sel: touch({ ...sel, picks: sel.picks.filter(p => p.questionId !== questionId) }, now) };
-  if (!e) return { sel, error: `Question ${questionId} is not in the bank.` };
-  const full = roundFull(sel, bank, e.round.id);
-  if (full) return { sel, error: full };
-  const pick: QuestionPick = { questionId, round: e.round.id, text: e.q.text, pickedAt: now };
-  const slotValues = slotsFromIntake(e.q, sel.intake);
-  if (slotValues) pick.slotValues = slotValues;
-  return { sel: touch({ ...sel, picks: [...sel.picks, pick] }, now) };
+  if (e?.q.mandatory) return p;
+  if (isPicked(p, questionId)) return { ...p, picks: p.picks.filter(x => x.questionId !== questionId), updatedAt: now };
+  if (!e) return p;
+  return { ...p, picks: [...p.picks, { questionId, text: e.q.text }], updatedAt: now };
 }
 
-export function setSlot(sel: InterviewSelection, questionId: string, slot: string, value: string, now: string): InterviewSelection {
-  return touch({ ...sel, picks: sel.picks.map(p => p.questionId !== questionId ? p
-    : { ...p, slotValues: { ...p.slotValues, [slot]: value } }) }, now);
+export function addRequested(p: InterviewPicks, round: string, text: string, framework: string | undefined, now: string): InterviewPicks {
+  const used = new Set(p.requested.map(r => r.id));
+  let n = p.requested.length + 1;
+  while (used.has(`r-${n}`)) n++;
+  const r: RequestedQuestion = { id: `r-${n}`, round, text: text.trim() };
+  if (framework) r.framework = framework;
+  return { ...p, requested: [...p.requested, r], updatedAt: now };
 }
 
-/**
- * Save the learner's project intake. Empty slots that come from the intake are filled from it;
- * slots that already have a value are never overwritten. If an intake field that filled slots
- * changes, the record is flagged so the teacher can check those questions.
- */
-export function saveIntake(sel: InterviewSelection, bank: InterviewBank, intake: IntakeValues, now: string): InterviewSelection {
-  const clean: IntakeValues = {};
-  Object.entries(intake).forEach(([k, v]) => { if (!isEmpty(v)) clean[k] = v.trim(); });
-  const prev = sel.intake;
-  const idx = bankIndex(bank);
-  let changed = false;
-  const picks = sel.picks.map(p => {
-    const q = idx.get(p.questionId)?.q;
-    if (!q?.slots?.some(s => s.fromIntake)) return p;
-    const values = { ...p.slotValues };
-    q.slots.forEach(s => {
-      if (!s.fromIntake) return;
-      const next = clean[s.fromIntake] ?? '';
-      if (isEmpty(values[s.name])) { if (next) values[s.name] = next; return; }
-      const before = prev[s.fromIntake] ?? '';
-      if (before && before !== next && values[s.name].trim() !== next) changed = true;
-    });
-    return { ...p, slotValues: values };
-  });
-  const fieldsChanged = [...new Set([...Object.keys(prev), ...Object.keys(clean)])]
-    .some(k => (prev[k] ?? '') !== (clean[k] ?? ''));
-  return {
-    ...sel, intake: clean, picks,
-    intakeUpdatedAt: fieldsChanged ? now : sel.intakeUpdatedAt,
-    intakeChanged: sel.intakeChanged || changed,
-    updatedAt: now,
-  };
-}
+export const removeRequested = (p: InterviewPicks, id: string, now: string): InterviewPicks =>
+  ({ ...p, requested: p.requested.filter(r => r.id !== id), updatedAt: now });
 
-export interface CustomInput { round: string; kind: CustomQuestion['kind']; text: string; framework?: string; parentId?: string }
-
-export function addCustom(sel: InterviewSelection, bank: InterviewBank, input: CustomInput): Result & { id?: string } {
-  const text = input.text.trim();
-  if (!text) return { sel, error: 'Write the question first.' };
-  if (input.kind === 'requested') {
-    const full = roundFull(sel, bank, input.round);
-    if (full) return { sel, error: full };
-  }
-  const used = new Set(sel.custom.map(c => c.id));
-  let n = sel.custom.length + 1;
-  while (used.has(`c-${n}`)) n++;
-  const c: CustomQuestion = { id: `c-${n}`, round: input.round, kind: input.kind, text };
-  if (input.framework) c.framework = input.framework;
-  if (input.kind === 'follow-up' && input.parentId) c.parentId = input.parentId;
-  return { sel: { ...sel, custom: [...sel.custom, c] }, id: c.id };
-}
-
-export const removeCustom = (sel: InterviewSelection, id: string, now: string) =>
-  touch({ ...sel, custom: sel.custom.filter(c => c.id !== id) }, now);
-
-/** A requested question becomes a bank question: a new id in the chosen group, and a normal pick for this learner. */
+/** A requested question becomes a bank question (new id in the chosen group) and a normal pick. */
 export function promoteToBank(
-  bank: InterviewBank, sel: InterviewSelection, customId: string, roundId: string, groupId: string,
+  bank: InterviewBank, p: InterviewPicks, requestedId: string, roundId: string, groupId: string,
   framework: string | undefined, now: string,
-): { bank: InterviewBank; sel: InterviewSelection; questionId: string } | { error: string } {
-  const c = sel.custom.find(x => x.id === customId && x.kind === 'requested');
-  if (!c) return { error: 'Only a requested question can be added to the bank.' };
-  const round = bank.rounds.find(r => r.id === roundId);
+): { bank: InterviewBank; picks: InterviewPicks; questionId: string } | { error: string } {
+  const r = p.requested.find(x => x.id === requestedId);
+  if (!r) return { error: 'That question is no longer on the list.' };
+  const round = bank.rounds.find(x => x.id === roundId);
   const group = round?.groups.find(g => g.id === groupId);
   if (!round || !group) return { error: 'Pick a round and a group.' };
-  if (!group.framework && !(framework || c.framework)) return { error: `"${group.name}" has no framework of its own, so the question needs one.` };
-  if (roundId !== c.round) {
-    const full = roundFull(sel, bank, roundId);
-    if (full) return { error: full };
-  }
+  const fw = framework || r.framework;
+  if (!group.framework && !fw) return { error: `"${group.name}" has no framework of its own, so the question needs one.` };
   const idx = bankIndex(bank);
   const prefix = roundId.charAt(0);
   let n = group.questions.length + 1;
   while (idx.has(`${prefix}-${groupId}-${n}`)) n++;
   const questionId = `${prefix}-${groupId}-${n}`;
-  const q: BankQuestion = { id: questionId, text: c.text };
-  if (!group.framework) q.framework = framework || c.framework;
-  const next: InterviewBank = {
-    ...bank,
-    rounds: bank.rounds.map(r => r.id !== roundId ? r : {
-      ...r, groups: r.groups.map(g => g.id !== groupId ? g : { ...g, questions: [...g.questions, q] }),
-    }),
-  };
+  const q: BankQuestion = { id: questionId, text: r.text };
+  if (!group.framework) q.framework = fw;
   return {
-    bank: next,
     questionId,
-    sel: touch({
-      ...sel,
-      custom: sel.custom.filter(x => x.id !== customId)
-        // follow-ups that hung off the requested question now hang off the bank question
-        .map(x => x.parentId === customId ? { ...x, parentId: questionId } : x),
-      picks: [...sel.picks, { questionId, round: roundId, text: c.text, pickedAt: now }],
-    }, now),
+    bank: {
+      ...bank,
+      rounds: bank.rounds.map(x => x.id !== roundId ? x : {
+        ...x, groups: x.groups.map(g => g.id !== groupId ? g : { ...g, questions: [...g.questions, q] }),
+      }),
+    },
+    picks: {
+      ...p,
+      requested: p.requested.filter(x => x.id !== requestedId),
+      picks: [...p.picks, { questionId, text: r.text }],
+      updatedAt: now,
+    },
   };
 }
 
-/* ---------------- flags and the resolved view ---------------- */
+/* ---------------- the resolved list ---------------- */
 
-export const requiredIntake = (bank: InterviewBank) => bank.intake.filter(f => f.required ?? true);
-
-export interface Flags { intakeMissing: boolean; slotsToFill: boolean; intakeChanged: boolean; removedFromBank: number }
-
-export function flagsFor(sel: InterviewSelection, bank: InterviewBank): Flags {
-  const idx = bankIndex(bank);
-  return {
-    intakeMissing: bank.rounds.some(r => r.usesIntake) && requiredIntake(bank).some(f => isEmpty(sel.intake[f.key])),
-    slotsToFill: sel.picks.some(p => (idx.get(p.questionId)?.q.slots ?? []).some(s => isEmpty(p.slotValues?.[s.name]))),
-    intakeChanged: sel.intakeChanged,
-    removedFromBank: sel.picks.filter(p => !idx.has(p.questionId)).length,
-  };
-}
-
-export function flagLabels(f: Flags): string[] {
-  return [
-    f.intakeMissing && 'intake missing',
-    f.slotsToFill && 'slots to fill',
-    f.intakeChanged && 'intake changed',
-    f.removedFromBank && `${f.removedFromBank} removed from bank`,
-  ].filter(Boolean) as string[];
-}
-
-export interface ResolvedQuestion {
-  id: string;                    // bank question id, or the custom id
-  source: 'bank' | 'requested' | 'follow-up';
-  text: string;                  // filled from the slot values
-  template?: string;
+export interface ListedQuestion {
+  id: string;
+  text: string;
   framework: string | null;
   mandatory?: boolean;
+  requested?: boolean;
   removedFromBank?: boolean;
-  emptySlots?: string[];
-  parentId?: string;
 }
 
-export interface ResolvedRound {
-  id: string; name: string; pick: number; count: number;
-  questions: ResolvedQuestion[];   // the items that count: mandatory, bank picks and requested ones
-  followUps: ResolvedQuestion[];
-}
-
-export function resolveRound(sel: InterviewSelection, bank: InterviewBank, round: BankRound): ResolvedRound {
+/** The class's questions per round, in bank order, then requested ones; picks of removed questions last. */
+export function picksByRound(p: InterviewPicks | null | undefined, bank: InterviewBank): { round: BankRound; questions: ListedQuestion[] }[] {
   const idx = bankIndex(bank);
-  const picks = sel.picks.filter(p => roundOfPick(p, idx) === round.id).map((p): ResolvedQuestion => {
-    const e = idx.get(p.questionId);
-    if (!e) return { id: p.questionId, source: 'bank', text: p.text ? fillQuestion(p.text, p.slotValues) : p.questionId, framework: null, removedFromBank: true };
-    const empty = (e.q.slots ?? []).filter(s => isEmpty(p.slotValues?.[s.name])).map(s => s.name);
-    return {
-      id: p.questionId, source: 'bank', text: fillQuestion(e.q.text, p.slotValues), framework: e.framework,
-      ...(e.q.slots?.length ? { template: e.q.text } : {}),
-      ...(e.q.mandatory ? { mandatory: true } : {}),
-      ...(empty.length ? { emptySlots: empty } : {}),
-    };
-  });
-  // mandatory first, the rest in the order they were picked
-  picks.sort((a, b) => Number(!!b.mandatory) - Number(!!a.mandatory));
-  const custom = (kind: CustomQuestion['kind']) => sel.custom.filter(c => c.round === round.id && c.kind === kind)
-    .map((c): ResolvedQuestion => ({ id: c.id, source: kind, text: c.text, framework: c.framework ?? null, ...(c.parentId ? { parentId: c.parentId } : {}) }));
-  const questions = [...picks, ...custom('requested')];
-  return { id: round.id, name: round.name, pick: round.pick, count: questions.length, questions, followUps: custom('follow-up') };
-}
-
-export const resolveRounds = (sel: InterviewSelection, bank: InterviewBank) => bank.rounds.map(r => resolveRound(sel, bank, r));
-
-/**
- * The technical chain: the mandatory pitch at the root, each picked question under it,
- * follow-ups under the question they follow. Follow-ups without a parent hang off the pitch;
- * ones whose parent was removed are listed apart.
- */
-export function chainFor(r: ResolvedRound) {
-  const root = r.questions.find(q => q.mandatory) ?? null;
-  const children = r.questions.filter(q => q !== root);
-  const ids = new Set(r.questions.map(q => q.id));
-  const under = (id: string) => r.followUps.filter(f => f.parentId === id);
-  return {
-    root,
-    rootFollowUps: r.followUps.filter(f => !f.parentId || (root && f.parentId === root.id)),
-    children: children.map(q => ({ q, followUps: under(q.id) })),
-    orphans: r.followUps.filter(f => f.parentId && !ids.has(f.parentId)),
-  };
-}
-
-/* ---------------- class overview ---------------- */
-
-export interface OverviewItem { key: string; text: string; tag?: 'custom' | 'custom · follow-up'; learners: string[] }
-export interface OverviewGroup { framework: string | null; label: string; items: OverviewItem[] }
-
-/** Every picked question in the class grouped by the framework that answers it, most picked first. */
-export function overviewByFramework(
-  rows: { name: string; sel: InterviewSelection }[], bank: InterviewBank, names: Record<string, string>,
-): OverviewGroup[] {
-  const groups = new Map<string | null, Map<string, OverviewItem>>();
-  const order = new Map<string, number>();
-  [...bankIndex(bank).keys()].forEach((id, i) => order.set(id, i));
-  const add = (fw: string | null, key: string, item: Omit<OverviewItem, 'learners'>, learner: string) => {
-    if (!groups.has(fw)) groups.set(fw, new Map());
-    const g = groups.get(fw)!;
-    if (!g.has(key)) g.set(key, { ...item, learners: [] });
-    if (!g.get(key)!.learners.includes(learner)) g.get(key)!.learners.push(learner);
-  };
-  rows.forEach(({ name, sel }) => resolveRounds(sel, bank).forEach(r => {
-    r.questions.forEach(q => q.source === 'bank'
-      ? add(q.framework, q.id, { key: q.id, text: (q.template ?? q.text) + (q.removedFromBank ? ' (removed from bank)' : '') }, name)
-      : add(q.framework, `${name}:${q.id}`, { key: `${name}:${q.id}`, text: q.text, tag: 'custom' }, name));
-    r.followUps.forEach(q => add(q.framework, `${name}:${q.id}`, { key: `${name}:${q.id}`, text: q.text, tag: 'custom · follow-up' }, name));
+  const picked = new Set(p?.picks.map(x => x.questionId));
+  const removed: ListedQuestion[] = (p?.picks ?? []).filter(x => !idx.has(x.questionId))
+    .map(x => ({ id: x.questionId, text: x.text ?? x.questionId, framework: null, removedFromBank: true }));
+  return bank.rounds.map((round, i) => ({
+    round,
+    questions: [
+      ...round.groups.flatMap(g => g.questions.filter(q => q.mandatory || picked.has(q.id)).map(q => ({
+        id: q.id, text: q.text, framework: frameworkOf(q, g), ...(q.mandatory ? { mandatory: true } : {}),
+      }))),
+      ...(p?.requested ?? []).filter(r => r.round === round.id)
+        .map(r => ({ id: r.id, text: r.text, framework: r.framework ?? null, requested: true })),
+      // a removed question's round is unknown; list it with the last round
+      ...(i === bank.rounds.length - 1 ? removed : []),
+    ],
   }));
-  const fws = [...groups.keys()].filter((k): k is string => k !== null).sort(byFrameworkId);
+}
+
+/** The class's questions a framework answers, for that framework's section and slides. */
+export const picksForFramework = (p: InterviewPicks | null | undefined, bank: InterviewBank, fw: string) =>
+  picksByRound(p, bank).flatMap(r => r.questions).filter(q => q.framework === fw);
+
+export interface FrameworkGroup { framework: string | null; label: string; questions: ListedQuestion[] }
+
+/** The class's questions grouped by the framework that answers them; untagged ones last. */
+export function picksByFramework(p: InterviewPicks | null | undefined, bank: InterviewBank, names: Record<string, string>): FrameworkGroup[] {
   const all = allFrameworkNames(bank, names);
-  const out: OverviewGroup[] = fws.map(fw => ({ framework: fw, label: frameworkLabel(fw, all), items: [] }));
-  if (groups.has(null)) out.push({ framework: null, label: 'No framework yet', items: [] });
-  out.forEach(g => {
-    g.items = [...groups.get(g.framework)!.values()].sort((a, b) =>
-      b.learners.length - a.learners.length || (order.get(a.key) ?? 1e9) - (order.get(b.key) ?? 1e9));
-  });
+  const qs = picksByRound(p, bank).flatMap(r => r.questions);
+  const ids = [...new Set(qs.map(q => q.framework).filter((x): x is string => !!x))].sort(byFrameworkId);
+  const out: FrameworkGroup[] = ids.map(id => ({ framework: id, label: frameworkLabel(id, all), questions: qs.filter(q => q.framework === id) }));
+  const none = qs.filter(q => !q.framework);
+  if (none.length) out.push({ framework: null, label: 'No framework yet', questions: none });
   return out;
 }
 
-export function overviewText(className: string, track: string, groups: OverviewGroup[]): string {
-  const lines = [`Interview picks — ${className} (${track})`, ''];
+export function picksText(track: string, groups: FrameworkGroup[]): string {
+  const lines = [`Interview questions picked by the class (${track})`, ''];
   groups.forEach(g => {
     lines.push(g.label);
-    g.items.forEach(i => lines.push(`- ${i.text}${i.tag ? ` [${i.tag}]` : ''} — ${i.learners.length}: ${i.learners.join(', ')}`));
+    g.questions.forEach(q => lines.push(`- ${q.text}${q.requested ? ' [requested]' : ''}${q.removedFromBank ? ' [removed from bank]' : ''}`));
     lines.push('');
   });
   return lines.join('\n').trim() + '\n';

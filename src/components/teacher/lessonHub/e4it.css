@@ -641,12 +641,9 @@
 .e4it .sl-copts.grid .sl-cword{grid-column:1/-1}
 
 /* ---------------- interview prep ----------------
-   Plan page: the bank, each framework's flow, steps, model answer; the intake fields in the pitch session.
+   The bank (ticked = on the class's list; click to change), each framework's flow, steps and model answer,
+   the class's questions per framework, and the pick list view.
    Slides: .iv-fit sets one font size scaled by --fit (see useFitText); everything inside is in em. */
-.e4it .ivlink{display:flex;flex-wrap:wrap;align-items:center;gap:.6rem;margin:.6rem 0 .4rem;font-size:.85rem}
-.e4it .ivlink select{font:inherit;padding:.2rem .4rem;border:1px solid var(--rule);background:var(--card)}
-.e4it .ivlink a{color:var(--teal);font-weight:600}
-.e4it .ivlinkoff{color:var(--muted)}
 .e4it .ivround{margin-top:1.1rem}
 .e4it .ivround h5{font-size:.95rem;margin:0 0 .5rem}
 .e4it .ivround h5 span{font-family:var(--mono);font-size:.72rem;font-weight:400;color:var(--muted);margin-left:.4rem}
@@ -654,46 +651,77 @@
 .e4it .ivgroup{break-inside:avoid;margin:0 0 .9rem}
 .e4it .ivgrouphd{font-family:var(--mono);font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);
   display:flex;gap:.5rem;align-items:baseline;margin-bottom:.2rem}
-.e4it .ivgroup ul{list-style:none;margin:0;padding:0}
-.e4it .ivgroup li{font-family:var(--serif);font-size:1rem;line-height:1.4;padding:.25rem 0;border-top:1px solid var(--rule)}
+.e4it .ivgroup ul,.e4it .ivbyfw ul,.e4it .ivclass ul,.e4it .sl-ivclass ul,.e4it .ivplain{list-style:none;margin:0;padding:0}
+.e4it .ivgroup li{font-family:var(--serif);font-size:1rem;line-height:1.4;padding:.25rem .3rem;border-top:1px solid var(--rule);
+  display:flex;gap:.5rem;align-items:baseline}
+.e4it .ivgroup li.can{cursor:pointer}
+.e4it .ivgroup li.can:hover{background:var(--card)}
+.e4it .ivgroup li.on{background:color-mix(in srgb,var(--mark) 28%,transparent)}
+.e4it .ivtick{flex:0 0 1.1em;height:1.1em;border:1px solid var(--ink);display:inline-flex;align-items:center;justify-content:center;
+  font-family:var(--sans);font-size:.8em;line-height:1;align-self:center}
+.e4it .ivgroup li.on .ivtick{background:var(--ink);color:var(--paper)}
 .e4it .ivfwid{font-family:var(--mono);font-size:.68rem;color:var(--teal);border:1px solid var(--teal);padding:0 .3rem;margin-left:.4rem;
   text-transform:none;letter-spacing:0}
-.e4it .ivmust{font-family:var(--mono);font-size:.66rem;background:var(--mark);padding:.05rem .35rem;margin-left:.5rem}
+.e4it .ivmust,.e4it .ivreq{font-family:var(--mono);font-size:.66rem;background:var(--mark);padding:.05rem .35rem;margin-left:.5rem}
+.e4it .ivreq{background:var(--card);border:1px solid var(--rule)}
 .e4it .ivflow{display:flex;flex-wrap:wrap;align-items:center;gap:.4rem;margin:.6rem 0 .8rem}
 .e4it .ivstep{font-size:.85rem;border:1px solid var(--ink);padding:.15rem .6rem}
-.e4it :is(.ivstep,.sl-ivflow .ivstep) b{font-family:var(--mono);font-weight:500;color:var(--muted);margin-right:.35rem}
+.e4it .ivstep b{font-family:var(--mono);font-weight:500;color:var(--muted);margin-right:.35rem}
 .e4it .ivarrow{color:var(--muted)}
 .e4it .ivnote{font-size:.85rem;color:var(--muted);border-left:2px solid var(--mark);padding-left:.7rem;margin:.4rem 0}
-.e4it .ivbox,.e4it .ivmodel{border:1px solid var(--rule);background:var(--card);padding:.8rem 1rem;margin:1rem 0 1.4rem}
+.e4it .ivmodel,.e4it .ivclass{border:1px solid var(--rule);background:var(--card);padding:.8rem 1rem;margin:1rem 0 1.4rem}
 .e4it .ivboxhd{font-family:var(--mono);font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:.4rem}
 .e4it .ivmodel p{font-family:var(--serif);font-size:1.02rem;line-height:1.5;margin:.4rem 0}
 .e4it .ivmodel .ivmq{font-family:var(--sans);font-weight:600;font-size:.95rem}
-.e4it .ivintake{margin:.3rem 0 0;padding-left:1.3rem;font-size:.95rem}
-.e4it .ivopt,.e4it .sl-ivintake .ivopt{font-family:var(--mono);font-size:.7em;color:var(--muted);margin-left:.5rem}
+.e4it .ivclass li,.e4it .ivbyfw li,.e4it .ivplain li{font-family:var(--serif);font-size:1rem;line-height:1.4;padding:.2rem 0}
 
+/* the pick list view */
+.e4it .ivlinkbtn{background:none;border:0;padding:0;cursor:pointer;color:var(--teal);font-weight:600;text-decoration:underline;font-size:.85rem}
+.e4it .ivlinkbtn.muted{color:var(--muted);font-weight:400}
+.e4it .ivbtn{background:transparent;border:1px solid var(--ink);padding:.25rem .8rem;cursor:pointer;font-size:.82rem;margin-left:.6rem}
+.e4it .ivbtn:disabled{opacity:.4;cursor:default}
+.e4it .ivbtn.danger{border-color:#9A4A2F;color:#9A4A2F;margin-left:0}
+.e4it .ivsaved{border:0!important;color:var(--muted)}
+.e4it .ivbyfw{margin:0 0 1rem}
+.e4it .ivreqed{margin-top:.8rem}
+.e4it .ivreqrow{padding:.35rem 0;border-top:1px solid var(--rule)}
+.e4it .ivreqline{display:flex;flex-wrap:wrap;align-items:baseline;gap:.6rem}
+.e4it .ivreqline .ivreq{margin-left:0}
+.e4it .ivreqtext{font-family:var(--serif);font-size:1rem;flex:1 1 16rem}
+.e4it .ivpromote{display:flex;flex-wrap:wrap;align-items:center;gap:.7rem;margin:.5rem 0 .3rem;padding:.6rem .8rem;background:var(--card);
+  border:1px solid var(--rule);font-size:.85rem}
+.e4it .ivpromote .ivbtn{margin-left:0}
+.e4it .ivhint{color:var(--muted);font-size:.78rem}
+.e4it .iverr{color:#9A4A2F;font-size:.8rem;flex-basis:100%}
+.e4it .ivadd{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;margin-top:.7rem}
+.e4it .ivadd input{flex:1 1 20rem;font:inherit;font-size:.9rem;padding:.35rem .5rem;border:1px solid var(--rule);background:var(--card)}
+.e4it :is(.ivadd,.ivpromote) select{font:inherit;font-size:.85rem;padding:.3rem .4rem;border:1px solid var(--rule);background:var(--card)}
+.e4it .ivadd .ivbtn{margin-left:0}
+
+/* slides */
 .e4it .iv-fit{font-size:calc(clamp(.85rem,2.3vh,1.4rem) * var(--fit,1))}
 .e4it .sl-ivbank .ivgroup{margin-bottom:1.2em}
 .e4it .sl-ivbank .ivgrouphd{font-size:.7em}
-.e4it .sl-ivbank .ivgroup li{font-size:1.15em;padding:.35em 0}
-.e4it .sl-ivlink{font-size:.65em;margin-top:1.4em}
+.e4it .sl-ivbank .ivgroup li{font-size:1.15em;padding:.3em .3em}
 .e4it .sl-ivflow{display:flex;flex-wrap:wrap;align-items:center;gap:.6em;margin:0 0 1.4em}
 .e4it .sl-ivflow .ivstep{font-size:1.15em;padding:.35em .8em}
 .e4it .sl-ivlen{font-family:var(--mono);color:var(--muted);margin:0 0 .8em}
 .e4it .sl-ivwhy{font-family:var(--serif);font-size:1.3em;line-height:1.45;margin:0 0 .9em}
 .e4it .sl-ivnote{font-size:.9em;color:var(--muted);border-left:2px solid var(--mark);padding-left:.8em;margin:.5em 0}
+.e4it .sl-ivclass{margin-top:1.4em;border-top:2px solid var(--ink);padding-top:.6em}
+.e4it .sl-ivclass .ivboxhd{font-size:.7em}
+.e4it .sl-ivclass li{font-family:var(--serif);font-size:1.15em;line-height:1.35;padding:.25em 0;border-top:1px solid var(--rule)}
 .e4it .sl-ivgoal{font-family:var(--serif);font-size:clamp(.95rem,2.6vh,1.6rem);line-height:1.45;margin:3vh 0 0;
   border-left:3px solid var(--teal);padding-left:1rem}
 .e4it .sl-ivgoal b{display:block;font-family:var(--sans);font-size:.6em;color:var(--teal);text-transform:uppercase;letter-spacing:.05em}
-.e4it .sl-ivframes{display:flex;flex-direction:column;gap:1.1em}
-.e4it .sl-ivframe{border-top:1px solid var(--rule);padding-top:.6em}
-.e4it .sl-ivframe .s{font-size:1.45em;line-height:1.3}
-.e4it .sl-ivframe .e{font-family:var(--serif);font-style:italic;color:var(--muted);font-size:1.05em;margin-top:.3em}
-.e4it .sl-ivframe .e.alt .exlabel{margin-right:.5em}
+.e4it .sl-ivsteps.cols{column-count:2;column-gap:3vw}
+.e4it .sl-ivframe{padding:.15em 0 .35em}
+.e4it .sl-ivframe .s{font-size:1.05em;line-height:1.3}
+.e4it .sl-ivframe .e{font-family:var(--serif);font-style:italic;color:var(--muted);font-size:.85em;line-height:1.35;margin-top:.1em}
+.e4it .sl-ivframe .e .exlabel{margin-right:.5em}
 .e4it .sl-ivmodel p{font-family:var(--serif);font-size:1.1em;line-height:1.5;margin:0 0 .7em}
 .e4it .sl-ivbuild{column-count:2;column-gap:3vw}
 .e4it .sl-ivbstep{break-inside:avoid;border-top:1px solid var(--rule);padding:.4em 0 .6em}
 .e4it .sl-ivbstep .sl-movehd{font-size:.7em}
-.e4it .sl-ivbstep .s{font-size:1.05em;line-height:1.35;margin:.2em 0}
-.e4it .sl-ivintake{font-family:var(--serif);font-size:clamp(1.05rem,3.2vh,2rem);line-height:1.5;margin:0;padding-left:1.4em}
-.e4it .sl-ivintake li{padding:.6vh 0}
-@media (max-width:720px){.e4it :is(.ivbank,.sl-ivbank).cols,.e4it .sl-ivbuild{column-count:1}}
+.e4it .sl-ivbuild .sl-ivbstep>.s{font-size:1.05em;line-height:1.35;margin:.2em 0}
+@media (max-width:720px){.e4it :is(.ivbank,.sl-ivbank).cols,.e4it .sl-ivbuild,.e4it .sl-ivsteps.cols{column-count:1}}

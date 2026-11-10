@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext } from 'react';
-import type { DialogueLine, Hub, Structure, Topic } from '@/lib/lessonHub/types';
+import type { DialogueLine, Hub, InterviewPicks, Structure, Topic } from '@/lib/lessonHub/types';
 import { splitExample } from '@/lib/lessonHub/engine';
 
 // Display toggles shared by the plan page and present mode.
@@ -13,15 +13,25 @@ export interface DlgState {
   revealed: number[];    // "Which frame?" answers revealed one at a time (all shown when answers is on)
 }
 
-/** A class the interview links can open the selection screen for. */
-export interface HubClass { id: string; name: string; track?: string | null }
+/** The class's interview pick list per track, and what the hub can do with it. Absent = read-only. */
+export interface InterviewApi {
+  picks: Record<string, InterviewPicks>;     // by track, mandatory questions included
+  saving: Record<string, 'saving' | 'saved' | 'error' | undefined>;
+  toggle: (track: string, questionId: string) => void;
+  addRequested: (track: string, round: string, text: string, framework?: string) => void;
+  removeRequested: (track: string, id: string) => void;
+  /** Resolves to an error message, or null when the question is in the bank. */
+  promote: (track: string, requestedId: string, roundId: string, groupId: string, framework?: string) => Promise<string | null>;
+  clear: (track: string) => Promise<void>;
+}
 
 interface HubCtx {
   hub: Hub;
   topic: Topic | null;
   dlg: DlgState;
   setDlg: (patch: Partial<DlgState>) => void;
-  classes?: HubClass[];
+  interview?: InterviewApi;
+  openPicks?: (track: string) => void;
 }
 
 const Ctx = createContext<HubCtx | null>(null);

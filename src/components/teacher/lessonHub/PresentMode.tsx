@@ -3,12 +3,12 @@
 import React, { useEffect, useLayoutEffect, useRef } from 'react';
 import type { ExplainItem, Hub, StressWord, Structure, Topic } from '@/lib/lessonHub/types';
 import {
-  allMoves, chunk, dialoguePages, isInterview, isPron, pairRows, pitchFramework, promptAnswer, promptOrder,
+  allMoves, chunk, dialoguePages, isInterview, isPron, pairRows, promptAnswer, promptOrder,
   segmentFramework, segmentPlan, sub,
 } from '@/lib/lessonHub/engine';
 import { ExampleLines, GapLine, HintRows, MarkedPassage, Slots, Toggle, useHub } from './shared';
 import { ExplainExamples, IpaText, RhythmLine, StressTry, VoicedLegend, YouGlishLink, choiceDims, toggleReveal } from './rounds';
-import { BankRoundList, FlowChips, IntakeFields, SelectionLink, modelQuestionText } from './interviewRounds';
+import { BankRoundList, ClassQuestions, FlowChips, FrameworkFrames, modelQuestionText } from './interviewRounds';
 import FlowSketch from './FlowSketch';
 
 /* One round becomes one or more slides. Nothing scrolls: anything too long for a
@@ -212,14 +212,14 @@ function pronSlides(t: Topic): Slide[] {
 }
 
 /**
- * Interview topics, built from segments: title and goal, lead-in, one slide per bank round,
- * the intake fields before the pitch framework, then per framework its flow, one slide per
- * step (every frame of the step on it), the model answer and build-your-own; homework last.
+ * Interview topics, built from segments: title and goal, lead-in, one slide per bank round
+ * (click a question to put it on the class's list), then per framework: its flow with the
+ * class's questions it answers, every step and frame on one slide, the model answer and
+ * build-your-own; homework last.
  */
 function interviewSlides(t: Topic, hub: Hub): Slide[] {
   const S: Slide[] = [];
   const bank = hub.interviewBanks?.[t.track];
-  const pitch = pitchFramework(t, hub);
   S.push({ kicker: `${t.track} · interview prep ${t.order}`, title: t.title, body: <>
     {t.says && <p className="sl-says">{t.says}</p>}
     {t.goal && <p className="sl-ivgoal"><b>You leave with</b>{t.goal}</p>}</> });
@@ -238,32 +238,21 @@ function interviewSlides(t: Topic, hub: Hub): Slide[] {
     if (r.uses === 'questionBank') {
       bank?.rounds.forEach(round => add({
         title: round.name, fit: true,
-        tell: tell || `Pick ${round.pick}, the question everyone answers included.`,
-        body: <div className="fit iv-fit"><BankRoundList round={round} slide /><SelectionLink track={t.track} className="sl-ivlink" /></div>,
+        tell: tell || 'Pick the questions you want to prepare. The ticked ones are the class\u2019s list for every interview session.',
+        body: <div className="fit iv-fit"><BankRoundList round={round} track={t.track} slide /></div>,
       }));
       return;
     }
     const f = segmentFramework(t, r.uses);
     if (!f) return;
-    const fk = `${f.id} · ${f.name}`;
-    const addF = (s: Omit<Slide, 'kicker'>) => S.push({ kicker: fk, ...s });
-    if (f.id === pitch && bank) {
-      addF({ title: 'Your project', tell: 'Your pitch recording answers these. Your technical questions start from it.',
-        body: <IntakeFields bank={bank} slide /> });
-    }
+    const addF = (s: Omit<Slide, 'kicker'>) => S.push({ kicker: `${f.id} · ${f.name}`, ...s });
     addF({ title: f.name, fit: true, body: <div className="fit iv-fit">
       <FlowChips flow={f.flow} slide />
       {f.length && <p className="sl-ivlen">{f.length}</p>}
       {f.why && <p className="sl-ivwhy">{f.why}</p>}
-      {f.notes?.map((n, i) => <p key={i} className="sl-ivnote">{n}</p>)}</div> });
-    f.steps.forEach((s, i) => addF({
-      title: `${i + 1}. ${s.name}`, part: [i + 1, f.steps.length], tell: s.purpose, fit: true,
-      body: <div className="fit iv-fit sl-ivframes">{s.frames.map((fr, k) => (
-        <div key={k} className="sl-ivframe"><div className="s"><Slots text={fr.structure} /></div>
-          <div className="e">{fr.example}</div>
-          {fr.alternative && <div className="e alt"><span className="exlabel">or</span>{fr.alternative}</div>}</div>
-      ))}</div>,
-    }));
+      {f.notes?.map((n, i) => <p key={i} className="sl-ivnote">{n}</p>)}
+      <ClassQuestions track={t.track} fw={f.id} slide /></div> });
+    addF({ title: 'The steps, in order', fit: true, body: <div className="fit iv-fit"><FrameworkFrames f={f} slide /></div> });
     const mq = modelQuestionText(f, bank);
     addF({ title: 'Model answer', fit: true, tell: [mq, f.modelAnswer.persona].filter(Boolean).join(' · ') || undefined,
       body: <div className="fit iv-fit sl-ivmodel">{f.modelAnswer.paragraphs.map((p, i) => <p key={i}>{p}</p>)}</div> });

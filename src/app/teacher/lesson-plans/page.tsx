@@ -5,8 +5,7 @@ import { Check, Copy, History, Loader2, RefreshCw, Upload } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase/client';
 import { fetchHub, fetchTopics } from '@/lib/supabase/queries/lessonHub';
-import { fetchClasses } from '@/lib/supabase/queries/classes';
-import type { HubClass } from '@/components/teacher/lessonHub/shared';
+import { useInterviewPicks } from '@/components/teacher/lessonHub/useInterviewPicks';
 import type { Hub, StoredTopic } from '@/lib/lessonHub/types';
 import LessonHub, { type LessonHubNav } from '@/components/teacher/lessonHub/LessonHub';
 import ImportDialog from '@/components/teacher/lessonHub/ImportDialog';
@@ -16,7 +15,6 @@ export default function LessonPlansPage() {
   const { user } = useAuth();
   const [hub, setHub] = useState<Hub | null>(null);
   const [topics, setTopics] = useState<StoredTopic[]>([]);
-  const [classes, setClasses] = useState<HubClass[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [nav, setNav] = useState<LessonHubNav>({ view: 'hub', topicId: null });
@@ -28,9 +26,8 @@ export default function LessonPlansPage() {
   const load = useCallback(async () => {
     if (!user) return;
     try {
-      const [h, t, c] = await Promise.all([fetchHub(supabase, user.id), fetchTopics(supabase, user.id), fetchClasses(supabase, user.id)]);
+      const [h, t] = await Promise.all([fetchHub(supabase, user.id), fetchTopics(supabase, user.id)]);
       setHub(h); setTopics(t); setError(null);
-      setClasses(c.map(x => ({ id: x.id, name: x.name, track: x.track ?? null })));
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -39,13 +36,14 @@ export default function LessonPlansPage() {
   }, [user]);
 
   useEffect(() => { load(); }, [load]);
+  const { interview, reloadPicks } = useInterviewPicks(user?.id, hub, setHub);
 
   // Claude edits topics from another tab: pick up its changes when the teacher comes back.
   useEffect(() => {
-    const onVisible = () => { if (document.visibilityState === 'visible') load(); };
+    const onVisible = () => { if (document.visibilityState === 'visible') { load(); reloadPicks().catch(() => {}); } };
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);
-  }, [load]);
+  }, [load, reloadPicks]);
 
   // Deep link from the connector's save results: /teacher/lesson-plans?topic=dev-03
   useEffect(() => {
@@ -86,7 +84,7 @@ export default function LessonPlansPage() {
       {error && <div className="mb-4 text-sm text-destructive">{error}</div>}
 
       {hub ? (
-        <LessonHub key={initialTopic ?? 'hub'} hub={hub} topics={topics.map(t => t.data)} classes={classes}
+        <LessonHub key={initialTopic ?? 'hub'} hub={hub} topics={topics.map(t => t.data)} interview={interview}
           initialTopicId={initialTopic} onNavigate={setNav} />
       ) : (
         <div className="border-2 border-dashed border-border rounded-lg p-10 text-center">

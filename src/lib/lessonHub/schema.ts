@@ -154,19 +154,10 @@ export const interviewTopicSchema = z.looseObject({
 
 /* ---------------- interview question bank ---------------- */
 
-const bankQuestion = z.looseObject({
-  id: nonEmpty, text: nonEmpty, mandatory: z.boolean().optional(), framework: str.optional(),
-  slots: z.array(z.looseObject({ name: nonEmpty, fromIntake: str.optional() })).optional(),
-});
+const bankQuestion = z.looseObject({ id: nonEmpty, text: nonEmpty, mandatory: z.boolean().optional(), framework: str.optional() });
 const bankGroup = z.looseObject({ id: nonEmpty, name: nonEmpty, framework: str.optional(), questions: z.array(bankQuestion) });
-const bankRound = z.looseObject({
-  id: nonEmpty, name: nonEmpty, pick: z.number().int().min(1), usesIntake: z.boolean().optional(),
-  groups: z.array(bankGroup).min(1),
-});
-const interviewBank = z.looseObject({
-  intake: z.array(z.looseObject({ key: nonEmpty, label: nonEmpty, required: z.boolean().optional() })),
-  rounds: z.array(bankRound).min(1),
-});
+const bankRound = z.looseObject({ id: nonEmpty, name: nonEmpty, groups: z.array(bankGroup).min(1) });
+const interviewBank = z.looseObject({ rounds: z.array(bankRound).min(1) });
 
 export const hubSchema = z.looseObject({
   course: z.looseObject({ name: nonEmpty, classSize: z.number().int().positive().optional() }),
@@ -371,11 +362,6 @@ export function validateBanks(banks: Record<string, InterviewBank>, tracks?: str
   for (const [track, bank] of Object.entries(banks)) {
     const at = `interviewBanks.${track}`;
     if (tracks && !tracks.includes(track)) errors.push(`${at}: "${track}" is not one of the hub's tracks (${tracks.join(', ')})`);
-    const intakeKeys = new Set<string>();
-    bank.intake.forEach((f, i) => {
-      if (intakeKeys.has(f.key)) errors.push(`${at}.intake.${i}: key "${f.key}" is listed twice`);
-      intakeKeys.add(f.key);
-    });
     const qIds = new Map<string, string>();
     const roundIds = new Set<string>();
     bank.rounds.forEach((r, ri) => {
@@ -383,7 +369,6 @@ export function validateBanks(banks: Record<string, InterviewBank>, tracks?: str
       if (roundIds.has(r.id)) errors.push(`${rAt}: round id is used twice`);
       roundIds.add(r.id);
       const groupIds = new Set<string>();
-      let mandatory = 0;
       r.groups.forEach((g, gi) => {
         const gAt = `${rAt}.groups.${gi} ("${g.id}")`;
         if (groupIds.has(g.id)) errors.push(`${gAt}: group id is used twice in this round`);
@@ -391,23 +376,11 @@ export function validateBanks(banks: Record<string, InterviewBank>, tracks?: str
         g.questions.forEach((q, qi) => {
           const qAt = `${gAt}.questions.${qi} ("${q.id}")`;
           const prev = qIds.get(q.id);
-          if (prev) errors.push(`${qAt}: id is already used at ${prev}; question ids are unique across both rounds`);
+          if (prev) errors.push(`${qAt}: id is already used at ${prev}; question ids are unique across the track's bank`);
           else qIds.set(q.id, qAt);
-          if (q.mandatory) mandatory++;
           if (!g.framework && !q.framework) errors.push(`${qAt}: the group has no framework, so the question needs its own "framework"`);
-          const markers = [...q.text.matchAll(/\[([^\]]+)\]/g)].map(m => m[1]);
-          const slots = (q.slots ?? []).map(s => s.name);
-          if (markers.length !== slots.length || markers.some((m, k) => m !== slots[k])) {
-            errors.push(`${qAt}: the [slot] markers in the text (${markers.map(m => `[${m}]`).join(', ') || 'none'}) must match slots, in the same order (${slots.map(s => `[${s}]`).join(', ') || 'none'})`);
-          }
-          (q.slots ?? []).forEach((s, si) => {
-            if (s.fromIntake && !intakeKeys.has(s.fromIntake)) {
-              errors.push(`${qAt}.slots.${si}: fromIntake "${s.fromIntake}" is not an intake key (${[...intakeKeys].join(', ') || 'none'})`);
-            }
-          });
         });
       });
-      if (mandatory >= r.pick) errors.push(`${rAt}: ${mandatory} mandatory question(s) but learners pick only ${r.pick}; mandatory must be fewer than pick`);
     });
   }
   return errors;

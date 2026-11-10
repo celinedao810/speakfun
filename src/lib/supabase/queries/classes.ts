@@ -61,7 +61,7 @@ export async function insertClass(
 export async function updateClass(
   supabase: SupabaseClient,
   classId: string,
-  updates: { name?: string; description?: string; schedule_config?: ScheduleConfig | null; google_meet_url?: string; track?: string | null }
+  updates: { name?: string; description?: string; schedule_config?: ScheduleConfig | null; google_meet_url?: string }
 ): Promise<boolean> {
   const { error } = await supabase
     .from('classes')

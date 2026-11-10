@@ -292,8 +292,6 @@ export interface Class {
   student_count: number;
   schedule_config: ScheduleConfig | null;
   google_meet_url: string;
-  /** Lesson-hub track the class follows, e.g. "Developer"; picks its interview question bank. */
-  track?: string | null;
   created_at: string;
   updated_at: string;
 }
