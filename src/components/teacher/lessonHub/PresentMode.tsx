@@ -7,7 +7,7 @@ import {
   segmentFramework, segmentPlan, sub,
 } from '@/lib/lessonHub/engine';
 import { ExampleLines, GapLine, HintRows, MarkedPassage, Slots, Toggle, useHub } from './shared';
-import { ExplainExamples, IpaText, RhythmLine, StressTry, VoicedLegend, YouGlishLink, choiceDims, toggleReveal } from './rounds';
+import { ExplainExamples, IpaText, PartLink, RevealPrompt, RhythmLine, StressTry, VoicedLegend, YouGlishLink, choiceDims, toggleReveal } from './rounds';
 import { BankRoundList, ClassQuestions, FlowChips, FrameworkFrames } from './interviewRounds';
 import { answersForFramework } from '@/lib/lessonHub/interview';
 import FlowSketch from './FlowSketch';
@@ -136,6 +136,7 @@ function pronSlides(t: Topic): Slide[] {
         case 'reveal': {
           let n = 0;
           chunk(p.items, p.perSlide || 6).forEach((g, i, a) => add({ title: T, part: partOf(i, a), answers: true, revealCount: g.length, body: <>
+            {p.link && <p style={{ margin: '0 0 2vh' }}><PartLink link={p.link} label={p.linkLabel} /></p>}
             {p.chips && <div className="sl-cats">{p.chips.map((c, k) => <span key={k} className="ipa">{c}</span>)}</div>}
             <RevealRows items={g} start={(n += g.length) - g.length} promptIpa={p.promptIpa} answerIpa={p.answerIpa} /></> }));
           break;
@@ -294,12 +295,12 @@ function useItemReveal() {
 }
 
 function RevealRows({ items, start, promptIpa, answerIpa }: {
-  items: { prompt: string; answer: string }[]; start: number; promptIpa?: boolean; answerIpa?: boolean;
+  items: { prompt: string; answer: string; link?: string }[]; start: number; promptIpa?: boolean; answerIpa?: boolean;
 }) {
   const { shown, toggle } = useItemReveal();
   return <div className="sl-reveal">{items.map((x, k) => (
     <div key={k} className="rv"><button type="button" className={`n${shown(k) ? ' done' : ''}`} onClick={() => toggle(k)}>{start + k + 1}</button>
-      <span className={`p${promptIpa ? ' ipa' : ''}`}>{x.prompt}</span>
+      <RevealPrompt x={x} cls={`p${promptIpa ? ' ipa' : ''}`} />
       {shown(k) && <span className={`a${answerIpa ? ' ipa' : ''}`}>{x.answer}</span>}</div>
   ))}</div>;
 }

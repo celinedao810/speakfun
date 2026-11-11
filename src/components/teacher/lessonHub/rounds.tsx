@@ -218,15 +218,27 @@ export function YouGlishLink({ link, className = 'clisten', children }: { link: 
   return <a className={className} href={link} onClick={e => { e.preventDefault(); openYouGlish(link); }}>{children}</a>;
 }
 
+/** A part-level link (columns, reveal) in the ylink style; it opens in a new tab. */
+export function PartLink({ link, label }: { link: string; label?: string }) {
+  return <a className="ylink" href={link} target="_blank" rel="noopener noreferrer">Listen ▸ {label || 'YouGlish'}</a>;
+}
+
+/** A reveal item's prompt, with its Listen link beside it when the item has one. */
+export function RevealPrompt({ x, cls }: { x: { prompt: string; link?: string }; cls: string }) {
+  if (!x.link) return <span className={cls}>{x.prompt}</span>;
+  return <span className="rvpl"><span className={cls}>{x.prompt}</span><YouGlishLink link={x.link}>Listen ▸</YouGlishLink></span>;
+}
+
 function PronPartView({ p }: { p: PronPart }) {
   const { dlg } = useHub();
   const label = p.label ? <div className="partlabel"><IpaText text={p.label} /></div> : null;
   switch (p.kind) {
     case 'reveal': return <>{label}
+      {p.link && <p style={{ margin: '.2rem 0 .6rem' }}><PartLink link={p.link} label={p.linkLabel} /></p>}
       {p.chips && <Bank items={p.chips} className="ipa" />}
       <div className="reveal">{p.items.map((x, i) => (
         <div key={i} className="rv"><span className="pnum">{i + 1}</span>
-          <span className={`rvp${p.promptIpa ? ' ipa' : ''}`}>{x.prompt}</span>
+          <RevealPrompt x={x} cls={`rvp${p.promptIpa ? ' ipa' : ''}`} />
           {dlg.answers && <span className={`rva${p.answerIpa ? ' ipa' : ''}`}>{x.answer}</span>}</div>
       ))}</div></>;
     case 'pairs': return <>{label}

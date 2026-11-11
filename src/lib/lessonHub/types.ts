@@ -40,7 +40,8 @@ export interface Game {
 
 // Pronunciation round parts
 export type PronPart =
-  | { kind: 'reveal'; label?: string; tell?: string; chips?: string[]; promptIpa?: boolean; answerIpa?: boolean; perSlide?: number; items: { prompt: string; answer: string }[] }
+  // link/linkLabel: a part-level listening link (as on columns); items[].link: a Listen link beside the prompt (as on choice)
+  | { kind: 'reveal'; label?: string; tell?: string; link?: string; linkLabel?: string; chips?: string[]; promptIpa?: boolean; answerIpa?: boolean; perSlide?: number; items: { prompt: string; answer: string; link?: string }[] }
   | { kind: 'pairs'; label?: string; tell?: string; pairs: { sounds: string; words: [string, string][] }[] }
   | { kind: 'rules'; label?: string; tell?: string; sounds?: { unvoiced: string[]; voiced: string[] }; rules: { ending: string; rows: { sound: string; after: string; ex: string }[] }[] }
   | { kind: 'passage'; label?: string; tell?: string; text: string; marks?: { word: string; sound: string }[] }
