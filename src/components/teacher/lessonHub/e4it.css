@@ -60,7 +60,8 @@
 .e4it .timeline .wh{font-family:var(--mono);font-size:.78rem;color:var(--muted)}
 .e4it .timeline .wt{font-family:var(--serif)}
 .e4it .e4main{padding:0 clamp(1rem,5vw,4rem) 6rem;max-width:1080px;margin:0 auto}
-.e4it .withrail{display:grid;grid-template-columns:12.5rem 1fr;gap:2.5rem;align-items:start}
+/* minmax(0,1fr): a long unbreakable line inside the plan must not widen the column past the page */
+.e4it .withrail{display:grid;grid-template-columns:12.5rem minmax(0,1fr);gap:2.5rem;align-items:start}
 .e4it .rail{position:sticky;top:calc(var(--e4it-top) + 4.2rem);max-height:calc(100vh - var(--e4it-top) - 5.5rem);overflow:auto;padding-right:.5rem}
 .e4it .railgroup{font-size:.7rem;color:var(--muted);margin:1.1rem 0 .4rem;letter-spacing:.04em}
 .e4it .railgroup:first-child{margin-top:0}
@@ -116,7 +117,7 @@
 .e4it .phase h3{font-size:1.15rem;font-weight:600;margin:0;letter-spacing:-.02em}
 .e4it .phase .ph{font-family:var(--serif);color:var(--muted);margin:.35rem 0 1.25rem;max-width:56ch}
 
-.e4it .round{display:grid;grid-template-columns:5.5rem 1fr;gap:1.5rem;padding:1.4rem 0;border-top:1px solid var(--rule)}
+.e4it .round{display:grid;grid-template-columns:5.5rem minmax(0,1fr);gap:1.5rem;padding:1.4rem 0;border-top:1px solid var(--rule)}
 .e4it .round .clock{font-family:var(--mono);font-size:.8rem;color:var(--muted);line-height:1.6}
 .e4it .round .clock b{display:block;color:var(--ink);font-size:1.15rem;font-weight:500}
 .e4it .round h4{margin:0;font-size:1.05rem;font-weight:600;display:flex;flex-wrap:wrap;gap:.6rem;align-items:baseline}
@@ -297,7 +298,7 @@
 .e4it .vurow{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;padding:.25rem 0}
 .e4it .vulabel{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);width:5.2rem;flex:0 0 auto}
 .e4it .vuchip{border:1px solid var(--rule);border-radius:6px;padding:.15rem .55rem;font-size:.95rem}
-.e4it .rules2{display:grid;grid-template-columns:repeat(auto-fit,minmax(16rem,1fr));gap:1.4rem;margin-top:.6rem}
+.e4it .rules2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,16rem),1fr));gap:1.4rem;margin-top:.6rem}
 .e4it .rules2 h5{margin:0 0 .3rem;font-size:.9rem}
 .e4it .rules2 .rr{display:grid;grid-template-columns:3.2rem 1fr;gap:.5rem;padding:.35rem 0;border-top:1px solid var(--rule);align-items:baseline}
 .e4it .rules2 .rs{font-weight:500}
@@ -553,8 +554,10 @@
 .e4it .expl .et{font-family:var(--serif);max-width:60ch;margin-top:.2rem}
 .e4it .expl .eexs{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,var(--ew)),1fr));gap:.3rem 1.2rem;
   margin-top:.4rem;font-family:var(--mono);font-size:.82rem}
-.e4it .expl .eex{white-space:nowrap;color:var(--teal);margin:0}
-.e4it .cols2{display:grid;grid-template-columns:repeat(auto-fit,minmax(16rem,1fr));gap:1.4rem;margin-top:.5rem}
+/* columns are already as wide as the longest example (--ew), so short ones stay on one line;
+   a sentence-long example wraps instead of running off the page */
+.e4it .expl .eex{color:var(--teal);margin:0}
+.e4it .cols2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,16rem),1fr));gap:1.4rem;margin-top:.5rem}
 .e4it .cols2 h5{margin:0;font-size:.95rem;border-bottom:2px solid var(--ink);padding-bottom:.35rem}
 .e4it .cols2 .cn2{font-family:var(--serif);color:var(--muted);font-size:.95rem;margin:.45rem 0 .5rem}
 .e4it .cols2 .cl,.e4it .sl-cols .scl{font-family:var(--mono);padding:.6rem 0;border-top:1px solid var(--rule);font-size:.95rem}
@@ -587,8 +590,7 @@
 .e4it .sl-expl .set{font-family:var(--serif);font-size:clamp(1rem,2.8vh,1.7rem);margin-top:.6vh;line-height:1.4}
 .e4it .sl-expl .seexs{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,var(--ew)),1fr));gap:.8vh 2vw;
   margin-top:1vh;font-family:var(--mono);font-size:clamp(.9rem,2.5vh,1.5rem)}
-.e4it .sl-expl .seex{white-space:nowrap;color:var(--teal);margin:0}
-@media (max-width:600px){.e4it .expl .eex,.e4it .sl-expl .seex{white-space:normal}}
+.e4it .sl-expl .seex{color:var(--teal);margin:0}
 .e4it .sl-cols{display:flex;gap:3vw}
 .e4it .sl-cols>div{flex:1 1 0;min-width:0}
 .e4it .sl-cols h3{font-size:clamp(1.1rem,3.4vh,2rem);margin:0 0 1vh;border-bottom:2px solid var(--ink);padding-bottom:.6vh}
