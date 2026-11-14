@@ -1753,7 +1753,8 @@ Steps:
       vocabularyFeedback: result.vocabularyFeedback || '',
       deliveryFeedback: result.deliveryFeedback || '',
     };
-  });
+  // 3 tries with 2s + 4s waits: worst case ~3 long passes, inside the route's 120s limit
+  }, 3);
 };
 
 // ============================================================================

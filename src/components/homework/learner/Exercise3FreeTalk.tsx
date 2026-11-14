@@ -31,14 +31,23 @@ export default function Exercise3FreeTalk({ vocabWords, structures, topic, durat
   const [bestScore, setBestScore] = useState(0);
   const [result, setResult] = useState<FreeTalkScoringResult | null>(null);
   const [recordingUrl, setRecordingUrl] = useState<string | null>(null);
-  const [attemptCount, setAttemptCount] = useState(0);
   const [attemptHistory, setAttemptHistory] = useState<{ attempt: number; score: number }[]>([]);
   const [answerGuide, setAnswerGuide] = useState<string[] | null>(null);
   const [guideLoading, setGuideLoading] = useState(false);
-  const [scoreError, setScoreError] = useState(false);
+  /** Why the last take produced no score. Shown next to the mic; the take doesn't count as an attempt. */
+  const [takeError, setTakeError] = useState<string | null>(null);
+
+  // Only takes that came back with a score count toward the attempt limit
+  const attemptCount = attemptHistory.length;
 
   const recorderRef = useRef<AudioRecorderHandle>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const errorRef = useRef<HTMLDivElement>(null);
+
+  // A failed take lands back on the long READY screen; bring the message into view
+  useEffect(() => {
+    if (takeError) errorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [takeError]);
 
   // Countdown only while actively recording
   useEffect(() => {
@@ -72,13 +81,19 @@ export default function Exercise3FreeTalk({ vocabWords, structures, topic, durat
 
   const handleRecordingStateChange = useCallback((recording: boolean) => {
     setIsRecording(recording);
-    if (recording) setAttemptCount(a => a + 1);
+    if (recording) setTakeError(null);
   }, []);
 
-  const handleRecordingComplete = useCallback(async (base64: string) => {
+  const handleRecordingError = useCallback((message: string) => {
     if (timerRef.current) clearInterval(timerRef.current);
-    setRecordingUrl(`data:audio/webm;base64,${base64}`);
-    setScoreError(false);
+    setTakeError(message);
+    setPhase('READY');
+  }, []);
+
+  const handleRecordingComplete = useCallback(async (base64: string, blobUrl: string) => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    setRecordingUrl(blobUrl);
+    setTakeError(null);
     setPhase('SCORING');
 
     try {
@@ -98,10 +113,11 @@ export default function Exercise3FreeTalk({ vocabWords, structures, topic, durat
         onAiUnavailable(err instanceof Error ? err.message : '');
         return;
       }
-      setScoreError(true);
+      console.error('[Exercise3FreeTalk] Scoring failed:', err);
+      setTakeError("We couldn't score that recording. The scoring service may be busy. This take doesn't count as an attempt, so please record again.");
       setPhase('READY');
     }
-  }, [vocabWords, structures, topic, onAiUnavailable]);
+  }, [vocabWords, structures, topic, deductedPointsPerError, onAiUnavailable]);
 
   const handleReRecord = () => {
     setResult(null);
@@ -236,12 +252,16 @@ export default function Exercise3FreeTalk({ vocabWords, structures, topic, durat
               <span className="text-sm font-medium">Recording...</span>
             </div>
           )}
-          {scoreError && !isRecording && (
-            <p className="text-xs text-destructive mb-1">Couldn&apos;t score that recording. Please try again.</p>
+          {takeError && !isRecording && (
+            <div ref={errorRef} role="alert" className="w-full mb-2 flex items-start gap-2 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+              <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+              <p className="text-sm text-red-700 leading-relaxed">{takeError}</p>
+            </div>
           )}
           <AudioRecorder
             ref={recorderRef}
             onRecordingComplete={handleRecordingComplete}
+            onRecordingError={handleRecordingError}
             onRecordingStateChange={handleRecordingStateChange}
             isProcessing={false}
             maxDuration={RECORD_DURATION + 1}

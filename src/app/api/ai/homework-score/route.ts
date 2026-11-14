@@ -15,7 +15,9 @@ import {
   AI_UNAVAILABLE,
 } from '@/lib/services/geminiService';
 
-export const maxDuration = 60;
+// Free talk sends up to 2 minutes of audio; one Gemini pass on that takes ~15-25s, and a retry
+// after a 5xx needs room too. At 60s the platform killed the request mid-retry and the learner got no score.
+export const maxDuration = 120;
 
 export async function POST(request: NextRequest) {
   try {

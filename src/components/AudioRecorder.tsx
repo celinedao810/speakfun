@@ -4,7 +4,9 @@ import { useState, useRef, useEffect, useImperativeHandle, forwardRef } from 're
 import { Mic, Square, Trash2, Loader2, Clock, XCircle } from 'lucide-react';
 
 interface AudioRecorderProps {
-  onRecordingComplete: (base64: string, blobUrl: string) => void;
+  onRecordingComplete: (base64: string, blobUrl: string, mimeType: string) => void;
+  /** Called when a recording ends with no usable audio (mic dropped, recorder error). Without it, such a recording is dropped silently. */
+  onRecordingError?: (message: string) => void;
   isProcessing: boolean;
   maxDuration?: number;
   onTimeout?: () => void;
@@ -22,6 +24,7 @@ export interface AudioRecorderHandle {
 
 const AudioRecorder = forwardRef<AudioRecorderHandle, AudioRecorderProps>(({
   onRecordingComplete,
+  onRecordingError,
   isProcessing,
   maxDuration,
   onTimeout,
@@ -76,15 +79,37 @@ const AudioRecorder = forwardRef<AudioRecorderHandle, AudioRecorderProps>(({
       mediaRecorderRef.current = recorder;
       chunksRef.current = [];
       recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
+      recorder.onerror = () => {
+        if (recorder.state !== 'inactive') recorder.stop();
+      };
+      // The mic can drop mid-recording (device switched, another app took it): end the take
+      // so onstop reports what was captured instead of the UI waiting on a dead stream.
+      stream.getAudioTracks().forEach(track => {
+        track.onended = () => { if (recorder.state === 'recording') recorder.stop(); };
+      });
       recorder.onstop = () => {
-        if (chunksRef.current.length === 0) return;
-        const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
+        // The recorder can stop on its own (error, mic lost), not only via stopRecording()
+        setIsRecording(false);
+        stream.getTracks().forEach(track => track.stop());
+        const mimeType = recorder.mimeType || 'audio/webm';
+        const blob = new Blob(chunksRef.current, { type: mimeType });
+        if (blob.size === 0) {
+          onRecordingError?.("We didn't catch any audio. Check that your microphone is connected and allowed, then try again. If it keeps happening, reload the page.");
+          return;
+        }
         const url = URL.createObjectURL(blob);
         setAudioUrl(url);
         const reader = new FileReader();
         reader.onloadend = () => {
           const base64 = (reader.result as string).split(',')[1];
-          onRecordingComplete(base64, url);
+          if (!base64) {
+            onRecordingError?.("We couldn't read that recording. Please try again. If it keeps happening, reload the page.");
+            return;
+          }
+          onRecordingComplete(base64, url, mimeType);
+        };
+        reader.onerror = () => {
+          onRecordingError?.("We couldn't read that recording. Please try again. If it keeps happening, reload the page.");
         };
         reader.readAsDataURL(blob);
       };
@@ -92,6 +117,7 @@ const AudioRecorder = forwardRef<AudioRecorderHandle, AudioRecorderProps>(({
       setIsRecording(true);
     } catch (err) {
       console.error('Recording failed:', err);
+      onRecordingError?.("We couldn't start your microphone. Allow microphone access for this site, then try again.");
     } finally {
       setIsPending(false);
     }
