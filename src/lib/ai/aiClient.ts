@@ -16,15 +16,23 @@ import { AI_UNAVAILABLE } from '@/lib/services/geminiService';
 export const isAiUnavailable = (err: unknown): boolean =>
   (err as { code?: string } | null)?.code === AI_UNAVAILABLE;
 
+/** Code on errors where the request never got a response (connection dropped, Safari's "Load failed"). */
+export const NETWORK_ERROR = 'NETWORK_ERROR';
+
 async function post<T>(url: string, body: Record<string, unknown>): Promise<T> {
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  } catch (err) {
+    throw Object.assign(new Error(`Connection lost (${err instanceof Error ? err.message : String(err)})`), { code: NETWORK_ERROR });
+  }
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw Object.assign(new Error(err.error || `Request failed: ${res.status}`), { code: err.code });
+    throw Object.assign(new Error(err.error || `Request failed: ${res.status}`), { code: err.code, status: res.status });
   }
   return res.json();
 }
@@ -249,8 +257,9 @@ export const scoreFreeTalk = (
   structurePatterns: string[],
   topic?: string,
   deductedPointsPerError?: number,
+  mimeType?: string,
 ): Promise<FreeTalkScoringResult> =>
-  post('/api/ai/homework-score', { type: 'free-talk', audioBase64, vocabWords, structurePatterns, topic, deductedPointsPerError });
+  post('/api/ai/homework-score', { type: 'free-talk', audioBase64, mimeType, vocabWords, structurePatterns, topic, deductedPointsPerError });
 
 export const generateFreeTalkTopic = (
   vocabWords: string[],

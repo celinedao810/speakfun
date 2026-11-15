@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { CheckCircle, AlertCircle, RotateCcw, ChevronRight, MicOff } from 'lucide-react';
 import { VocabExerciseItem, StructureExerciseItem, FreeTalkScoringResult } from '@/lib/types';
-import { scoreFreeTalk, generateAnswerGuide, isAiUnavailable } from '@/lib/ai/aiClient';
+import { scoreFreeTalk, generateAnswerGuide, isAiUnavailable, NETWORK_ERROR } from '@/lib/ai/aiClient';
 import AudioRecorder, { AudioRecorderHandle } from '@/components/AudioRecorder';
 import { itemKey } from '@/lib/homework/itemKeys';
 
@@ -23,6 +23,15 @@ interface Exercise3FreeTalkProps {
 
 type Phase = 'READY' | 'SCORING' | 'FEEDBACK';
 
+interface Take { base64: string; blobUrl: string; mimeType: string }
+
+/** No response reached us, or a gateway in between gave up: worth one quiet resend before telling the learner */
+const isTransient = (err: unknown) => {
+  if (isAiUnavailable(err)) return false;
+  const { code, status } = (err ?? {}) as { code?: string; status?: number };
+  return code === NETWORK_ERROR || (status !== undefined && status >= 502);
+};
+
 export default function Exercise3FreeTalk({ vocabWords, structures, topic, durationMins = 2, deductedPointsPerError = 0.1, onComplete, onAiUnavailable }: Exercise3FreeTalkProps) {
   const RECORD_DURATION = durationMins * 60;
   const [phase, setPhase] = useState<Phase>('READY');
@@ -36,6 +45,10 @@ export default function Exercise3FreeTalk({ vocabWords, structures, topic, durat
   const [guideLoading, setGuideLoading] = useState(false);
   /** Why the last take produced no score. Shown next to the mic; the take doesn't count as an attempt. */
   const [takeError, setTakeError] = useState<string | null>(null);
+  /** The raw error behind takeError, shown small so a learner's screenshot tells us what failed */
+  const [errorDetail, setErrorDetail] = useState<string | null>(null);
+  /** A take that recorded fine but couldn't be scored: kept so the learner can resend it instead of speaking again */
+  const [unscoredTake, setUnscoredTake] = useState<Take | null>(null);
 
   // Only takes that came back with a score count toward the attempt limit
   const attemptCount = attemptHistory.length;
@@ -81,29 +94,47 @@ export default function Exercise3FreeTalk({ vocabWords, structures, topic, durat
 
   const handleRecordingStateChange = useCallback((recording: boolean) => {
     setIsRecording(recording);
-    if (recording) setTakeError(null);
+    if (recording) {
+      // A new take replaces the one that couldn't be scored
+      setTakeError(null);
+      setErrorDetail(null);
+      setUnscoredTake(null);
+    }
   }, []);
 
   const handleRecordingError = useCallback((message: string) => {
     if (timerRef.current) clearInterval(timerRef.current);
     setTakeError(message);
+    setErrorDetail(null);
     setPhase('READY');
   }, []);
 
-  const handleRecordingComplete = useCallback(async (base64: string, blobUrl: string) => {
-    if (timerRef.current) clearInterval(timerRef.current);
-    setRecordingUrl(blobUrl);
+  const scoreTake = useCallback(async (take: Take) => {
+    setRecordingUrl(take.blobUrl);
     setTakeError(null);
+    setErrorDetail(null);
     setPhase('SCORING');
 
+    const send = () => scoreFreeTalk(
+      take.base64,
+      vocabWords.map(v => v.word),
+      structures.map(s => s.pattern),
+      topic,
+      deductedPointsPerError,
+      take.mimeType,
+    );
+
     try {
-      const r = await scoreFreeTalk(
-        base64,
-        vocabWords.map(v => v.word),
-        structures.map(s => s.pattern),
-        topic,
-        deductedPointsPerError,
-      );
+      let r: FreeTalkScoringResult;
+      try {
+        r = await send();
+      } catch (err) {
+        if (!isTransient(err)) throw err;
+        console.warn('[Exercise3FreeTalk] Scoring request dropped, resending once:', err);
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        r = await send();
+      }
+      setUnscoredTake(null);
       setBestScore(prev => Math.max(prev, r.score));
       setAttemptHistory(prev => [...prev, { attempt: prev.length + 1, score: r.score }]);
       setResult(r);
@@ -114,10 +145,17 @@ export default function Exercise3FreeTalk({ vocabWords, structures, topic, durat
         return;
       }
       console.error('[Exercise3FreeTalk] Scoring failed:', err);
-      setTakeError("We couldn't score that recording. The scoring service may be busy. This take doesn't count as an attempt, so please record again.");
+      setUnscoredTake(take);
+      setTakeError("We couldn't score your recording, but it's saved. Tap “Score my recording again” to resend it, no need to speak again. This doesn't count as an attempt.");
+      setErrorDetail((err instanceof Error ? err.message : String(err)).slice(0, 160));
       setPhase('READY');
     }
   }, [vocabWords, structures, topic, deductedPointsPerError, onAiUnavailable]);
+
+  const handleRecordingComplete = useCallback((base64: string, blobUrl: string, mimeType: string) => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    void scoreTake({ base64, blobUrl, mimeType });
+  }, [scoreTake]);
 
   const handleReRecord = () => {
     setResult(null);
@@ -255,7 +293,23 @@ export default function Exercise3FreeTalk({ vocabWords, structures, topic, durat
           {takeError && !isRecording && (
             <div ref={errorRef} role="alert" className="w-full mb-2 flex items-start gap-2 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
               <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
-              <p className="text-sm text-red-700 leading-relaxed">{takeError}</p>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm text-red-700 leading-relaxed">{takeError}</p>
+                {unscoredTake && (
+                  <button
+                    onClick={() => void scoreTake(unscoredTake)}
+                    className="mt-3 inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg"
+                  >
+                    <RotateCcw className="w-4 h-4" /> Score my recording again
+                  </button>
+                )}
+                {unscoredTake && (
+                  <p className="text-xs text-red-600/80 mt-2">Or tap the mic below to record a new take.</p>
+                )}
+                {errorDetail && (
+                  <p className="text-[10px] text-red-400 mt-2 break-words">Details: {errorDetail}</p>
+                )}
+              </div>
             </div>
           )}
           <AudioRecorder

@@ -19,6 +19,14 @@ import {
 // after a 5xx needs room too. At 60s the platform killed the request mid-retry and the learner got no score.
 export const maxDuration = 120;
 
+const AUDIO_MIME_TYPES = new Set(['audio/webm', 'audio/mp4', 'audio/ogg', 'audio/wav', 'audio/mpeg', 'audio/aac']);
+
+/** The recorder's MIME type without codec parameters, or WebM (Chrome's format) when missing or unknown. */
+function audioMimeType(value: unknown): string {
+  const base = typeof value === 'string' ? value.split(';')[0].trim().toLowerCase() : '';
+  return AUDIO_MIME_TYPES.has(base) ? base : 'audio/webm';
+}
+
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createServerClient();
@@ -99,8 +107,15 @@ export async function POST(request: NextRequest) {
       if (!audioBase64) {
         return NextResponse.json({ error: 'audioBase64 is required' }, { status: 400 });
       }
-      const result = await scoreFreeTalk(audioBase64, vocabWords ?? [], structurePatterns ?? [], topic, deductedPointsPerError ?? 0.1);
-      return NextResponse.json(result);
+      // Safari/iPad records MP4 (AAC), other browsers WebM: tell Gemini which one it's getting
+      const mimeType = audioMimeType(body.mimeType);
+      try {
+        const result = await scoreFreeTalk(audioBase64, vocabWords ?? [], structurePatterns ?? [], topic, deductedPointsPerError ?? 0.1, mimeType);
+        return NextResponse.json(result);
+      } catch (err) {
+        console.error(`[ai/homework-score] free-talk failed (${mimeType}, ${Math.round(audioBase64.length * 0.75 / 1024)} KB):`, err);
+        throw err;
+      }
     }
 
     if (type === 'free-talk-topic') {

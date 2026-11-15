@@ -1676,6 +1676,7 @@ export const scoreFreeTalk = async (
   structurePatterns: string[],
   topic?: string,
   deductedPointsPerError: number = 0.1,
+  mimeType: string = 'audio/webm',
 ): Promise<FreeTalkScoringResult> => {
   return safeExecute(async () => {
     const ai = new GoogleGenAI({ apiKey: getApiKey() });
@@ -1722,7 +1723,7 @@ Steps:
 8. Write vocabularyFeedback IN VIETNAMESE: mention which target word(s) were used (praise if at least one was used), and optionally suggest 1–2 others that could have fit naturally. Do NOT criticise for not using all words.
 9. Write deliveryFeedback IN VIETNAMESE on fluency and pacing.`,
           },
-          { inlineData: { mimeType: 'audio/webm', data: audioBase64 } }
+          { inlineData: { mimeType, data: audioBase64 } }
         ]
       },
       config: {
